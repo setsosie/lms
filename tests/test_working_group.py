@@ -245,6 +245,72 @@ class TestWorkingGroupState:
         assert data["blackboard"] == "some code"
         assert data["status"] == "discussing"
 
+    def test_from_dict(self):
+        """Test deserialization from dict."""
+        data = {
+            "config": {
+                "group_id": 1,
+                "task_tag": "TEST",
+                "task_name": "Test Task",
+                "task_content": "Content here",
+                "guidance": "Guidance here",
+                "max_turns": 5,
+                "members_per_role": {"chair": 1, "scribe": 1, "researcher": 2},
+            },
+            "messages": [
+                {
+                    "sender_id": "agent-1",
+                    "role": "chair",
+                    "content": "Hello",
+                    "turn": 0,
+                    "timestamp": 1234567890.0,
+                }
+            ],
+            "blackboard": "def Category",
+            "current_turn": 1,
+            "status": "discussing",
+            "final_artifact": None,
+        }
+        state = WorkingGroupState.from_dict(data)
+
+        assert state.config.group_id == 1
+        assert state.config.task_tag == "TEST"
+        assert len(state.messages) == 1
+        assert state.messages[0].sender_id == "agent-1"
+        assert state.messages[0].role == Role.CHAIR
+        assert state.blackboard == "def Category"
+        assert state.current_turn == 1
+        assert state.status == GroupStatus.DISCUSSING
+
+    def test_state_roundtrip(self):
+        """Test WorkingGroupState survives serialization roundtrip."""
+        config = WorkingGroupConfig(
+            group_id=5,
+            task_tag="CH4-YONEDA",
+            task_name="Yoneda Lemma",
+            task_content="Prove the Yoneda lemma",
+            guidance="Use NatTrans from Foundation",
+            max_turns=7,
+        )
+        state = WorkingGroupState(config=config)
+        state.add_message("agent-1", Role.CHAIR, "Let's begin")
+        state.add_message("agent-2", Role.RESEARCHER, "I propose...")
+        state.blackboard = "structure Yoneda"
+        state.status = GroupStatus.DRAFTING
+        state.current_turn = 3
+
+        # Roundtrip
+        data = state.to_dict()
+        restored = WorkingGroupState.from_dict(data)
+
+        assert restored.config.group_id == 5
+        assert restored.config.task_tag == "CH4-YONEDA"
+        assert len(restored.messages) == 2
+        assert restored.messages[0].content == "Let's begin"
+        assert restored.blackboard == "structure Yoneda"
+        assert restored.status == GroupStatus.DRAFTING
+        assert restored.current_turn == 3
+
 
 class TestWorkingGroupParsing:
     """Tests for WorkingGroup parsing methods."""
