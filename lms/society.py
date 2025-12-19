@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import random
 from dataclasses import dataclass, asdict
@@ -10,12 +11,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from lms.agent import Agent, AgentResponse, ReviewResult, IterativeResponse
-from lms.artifacts import ArtifactLibrary, ReviewQueue, PendingReview
+from lms.artifacts import ArtifactLibrary, ReviewQueue, PendingReview, Artifact, ArtifactType
+from lms.dependency import DependencyGraph, TaskStatus
 from lms.foundation import FoundationFile
 from lms.lean.interface import LeanVerifier
+from lms.planning import PlanningPanel, create_default_assignments
 from lms.providers.base import BaseLLMProvider
 from lms.textbook import Textbook
 from lms.traces import TraceStore, ConversationLog, ReasoningTrace
+from lms.working_group import WorkingGroup, WorkingGroupConfig, Role
 
 if TYPE_CHECKING:
     from lms.goals import Goal
@@ -102,6 +106,13 @@ class Society:
         self.iterative_mode: bool = False  # Enable iterative proposals (5 attempts per agent)
         self.max_attempts: int = 5  # Max attempts per agent in iterative mode
         self.trace_store = TraceStore()  # Full conversation logs and reasoning traces
+
+        # Working Group settings
+        self.use_working_groups: bool = False  # Enable working group mode
+        self.n_working_groups: int = 3  # Number of parallel groups
+        self.max_turns_per_group: int = 5  # Max turns per group
+        self.use_planning_panel: bool = True  # Use planning panel for allocation
+        self.dependency_graph: DependencyGraph | None = None  # Task dependencies
 
         # Foundation file for accumulated verified definitions
         if foundation_path:
@@ -553,6 +564,245 @@ class Society:
         )
         self.results.append(result)
         return result
+
+    async def run_generation_with_groups(self, generation: int) -> GenerationResult:
+        """Run a generation using the Working Group architecture.
+
+        This method uses:
+        1. PlanningPanel to allocate tasks to groups
+        2. WorkingGroups for synchronous agent collaboration
+        3. LEAN verification of final artifacts
+        4. Foundation.lean accumulation of verified code
+
+        Args:
+            generation: Current generation number
+
+        Returns:
+            GenerationResult with metrics for this generation
+        """
+        # Check budget before starting
+        if self.max_tokens and self.total_tokens_used >= self.max_tokens:
+            raise BudgetExceeded(
+                f"Token budget exceeded: {self.total_tokens_used}/{self.max_tokens}"
+            )
+
+        # Initialize dependency graph from goal if not already done
+        if self.dependency_graph is None and self.goal:
+            self.dependency_graph = DependencyGraph.from_goal(self.goal)
+
+        if self.dependency_graph is None:
+            # Fallback to regular generation if no goal/graph
+            return await self.run_generation(generation)
+
+        # Initialize counters
+        artifacts_created = 0
+        artifacts_verified = 0
+        artifacts_referenced = 0
+        fresh_creations = 0
+        generation_tokens = 0
+
+        # Get Foundation summary for context
+        foundation_summary = self._get_foundation_summary()
+
+        # ===== PHASE 1: PLANNING =====
+        if self.use_planning_panel:
+            panel = PlanningPanel(
+                provider=self.provider,
+                graph=self.dependency_graph,
+                textbook=self.textbook,
+                foundation_summary=foundation_summary,
+                n_groups=self.n_working_groups,
+            )
+            assignments = await panel.run_session(generation)
+        else:
+            # Use default assignments without LLM
+            available = self.dependency_graph.available_tasks()
+            assignments = create_default_assignments(available, self.n_working_groups)
+
+        if not assignments:
+            # No tasks available
+            result = GenerationResult(
+                generation=generation,
+                artifacts_created=0,
+                artifacts_verified=0,
+                artifacts_referenced=0,
+                fresh_creations=0,
+                tokens_used=0,
+            )
+            self.results.append(result)
+            return result
+
+        # Mark assigned tasks as in progress
+        for assignment in assignments:
+            self.dependency_graph.update_status(
+                assignment.task_tag, TaskStatus.IN_PROGRESS
+            )
+
+        # ===== PHASE 2: WORKING GROUPS (parallel) =====
+        groups = []
+        for assignment in assignments:
+            task_content = self._get_task_content(assignment.task_tag)
+            config = WorkingGroupConfig(
+                group_id=assignment.group_id,
+                task_tag=assignment.task_tag,
+                task_name=assignment.task_name,
+                task_content=task_content,
+                guidance=assignment.guidance,
+                max_turns=self.max_turns_per_group,
+            )
+            group = WorkingGroup(
+                config=config,
+                provider=self.provider,
+                foundation_summary=foundation_summary,
+            )
+            groups.append(group)
+
+        # Run all groups in parallel
+        group_results = await asyncio.gather(*[g.run_session() for g in groups])
+
+        # ===== PHASE 3: VERIFICATION =====
+        for group_result, group in zip(group_results, groups):
+            if not group_result:
+                # Group failed to produce artifact
+                self.dependency_graph.update_status(
+                    group.config.task_tag, TaskStatus.AVAILABLE
+                )
+                continue
+
+            artifacts_created += 1
+
+            # Extract lean code from group result
+            lean_code = group_result.get("lean", group_result.get("blackboard", ""))
+            if not lean_code:
+                self.dependency_graph.update_status(
+                    group.config.task_tag, TaskStatus.AVAILABLE
+                )
+                continue
+
+            # Create artifact
+            artifact_name = group_result.get("name", f"group_{group.config.group_id}")
+            artifact_id = f"{artifact_name}-{hashlib.sha1(lean_code.encode()).hexdigest()[:8]}"
+            artifact = Artifact(
+                id=artifact_id,
+                type=ArtifactType(group_result.get("type", "definition")),
+                natural_language=group_result.get("description", group.config.task_name),
+                lean_code=lean_code,
+                stacks_tag=group_result.get("stacks_tag", group.config.task_tag),
+                created_by=f"group-{group.config.group_id}",
+                generation=generation,
+                notes=group_result.get("notes"),
+            )
+
+            # Verify with LEAN
+            if self.verifier:
+                # Check import restrictions first
+                if self.goal and (self.goal.allowed_imports or self.goal.forbidden_imports):
+                    valid, error = self.goal.validate_code(lean_code)
+                    if not valid:
+                        artifact.verified = False
+                        artifact.verification_error = f"Import restriction: {error}"
+                        self.library.add(artifact)
+                        self.dependency_graph.update_status(
+                            group.config.task_tag, TaskStatus.AVAILABLE
+                        )
+                        continue
+
+                verify_result = await self.verifier.verify(lean_code)
+                artifact.verified = verify_result.success
+
+                if verify_result.success:
+                    artifacts_verified += 1
+
+                    # Add to foundation
+                    try:
+                        self.foundation.add_artifact(artifact)
+                    except ValueError:
+                        pass
+
+                    # Update dependency graph
+                    self.dependency_graph.update_status(
+                        group.config.task_tag, TaskStatus.DONE, artifact.id
+                    )
+
+                    # Update goal progress
+                    if self.goal and artifact.stacks_tag:
+                        self.goal.mark_formalized(artifact.stacks_tag, artifact.id)
+
+                    # Add to textbook
+                    self.textbook.add(
+                        content=f"Verified: {artifact.natural_language}\n\n{artifact.notes or ''}",
+                        author=artifact.created_by,
+                        generation=generation,
+                        topics=[group.config.task_tag, "verified"],
+                        title=f"[VERIFIED] {group.config.task_name}",
+                        entry_type="success",
+                    )
+                else:
+                    artifact.verification_error = verify_result.error
+                    self.dependency_graph.update_status(
+                        group.config.task_tag, TaskStatus.AVAILABLE
+                    )
+
+                    # Add failure to textbook for learning
+                    self.textbook.add(
+                        content=f"Failed: {artifact.natural_language}\n\nError: {verify_result.error}",
+                        author=artifact.created_by,
+                        generation=generation,
+                        topics=[group.config.task_tag, "error"],
+                        title=f"[FAILED] {group.config.task_name}",
+                        entry_type="error",
+                    )
+
+            # Add to library
+            self.library.add(artifact)
+
+            # Add group transcript to textbook
+            transcript = group.get_transcript()
+            self.textbook.add(
+                content=transcript,
+                author=f"group-{group.config.group_id}",
+                generation=generation,
+                topics=[group.config.task_tag, "transcript"],
+                title=f"[GROUP {group.config.group_id}] {group.config.task_name}",
+                entry_type="transcript",
+            )
+
+        self.current_generation = generation + 1
+
+        result = GenerationResult(
+            generation=generation,
+            artifacts_created=artifacts_created,
+            artifacts_verified=artifacts_verified,
+            artifacts_referenced=artifacts_referenced,
+            fresh_creations=fresh_creations,
+            tokens_used=generation_tokens,
+        )
+        self.results.append(result)
+        return result
+
+    def _get_foundation_summary(self) -> str:
+        """Get a summary of what's in Foundation.lean."""
+        if not self.foundation or len(self.foundation) == 0:
+            return "Foundation.lean is empty. You must define everything from scratch."
+
+        entries = list(self.foundation.entries.values())
+        summary_lines = ["Foundation.lean contains:"]
+        for entry in entries[:10]:  # Limit to first 10
+            summary_lines.append(f"- {entry.tag}: {entry.name}")
+        if len(entries) > 10:
+            summary_lines.append(f"  ... and {len(entries) - 10} more definitions")
+        return "\n".join(summary_lines)
+
+    def _get_task_content(self, task_tag: str) -> str:
+        """Get the full content for a task from the goal."""
+        if not self.goal:
+            return f"Define {task_tag}"
+
+        for defn in self.goal.definitions:
+            if defn.tag == task_tag:
+                return defn.content
+
+        return f"Define {task_tag}"
 
     async def run(self, n_generations: int) -> list[GenerationResult]:
         """Run the society for multiple generations.
