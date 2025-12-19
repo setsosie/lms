@@ -272,6 +272,15 @@ class PlanningPanel:
                 failures.append(f"{title}: {str(content)[:200]}...")
         return failures[:5]  # Limit to 5 most recent
 
+    def _extract_content(self, response) -> str:
+        """Extract content string from provider response.
+
+        Handles both raw strings and GenerationResponse objects.
+        """
+        if hasattr(response, "content"):
+            return response.content
+        return str(response)
+
     async def _get_chair_proposal(
         self, session: PlanningSession
     ) -> PlanningProposal:
@@ -284,7 +293,8 @@ class PlanningPanel:
             ]
         )
 
-        return self._parse_proposal(response, session.available_tasks)
+        content = self._extract_content(response)
+        return self._parse_proposal(content, session.available_tasks)
 
     async def _get_member_vote(
         self, session: PlanningSession, member_id: str, proposal: PlanningProposal
@@ -298,7 +308,8 @@ class PlanningPanel:
             ]
         )
 
-        return self._parse_vote(response, member_id)
+        content = self._extract_content(response)
+        return self._parse_vote(content, member_id)
 
     async def _get_revised_proposal(
         self, session: PlanningSession
@@ -312,7 +323,8 @@ class PlanningPanel:
             ]
         )
 
-        return self._parse_proposal(response, session.available_tasks)
+        content = self._extract_content(response)
+        return self._parse_proposal(content, session.available_tasks)
 
     def _build_chair_prompt(self, session: PlanningSession) -> str:
         """Build the prompt for the Chair."""

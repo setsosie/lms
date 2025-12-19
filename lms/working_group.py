@@ -298,7 +298,8 @@ Do NOT write code. Facilitate the discussion."""
             ]
         )
 
-        self.state.add_message(chair_id, Role.CHAIR, response)
+        content = self._extract_content(response)
+        self.state.add_message(chair_id, Role.CHAIR, content)
 
     async def _discussion_round(self) -> None:
         """One round of discussion among all members."""
@@ -330,11 +331,12 @@ If you have changes, provide the updated code in ```lean blocks."""
                 ]
             )
 
-            self.state.add_message(member_id, Role.RESEARCHER, response)
+            content = self._extract_content(response)
+            self.state.add_message(member_id, Role.RESEARCHER, content)
 
             # Update blackboard if code was proposed
-            if "```lean" in response:
-                self._update_blackboard(response)
+            if "```lean" in content:
+                self._update_blackboard(content)
 
         # Chair summarizes
         await self._chair_summary()
@@ -365,7 +367,8 @@ If not, pose the next question to resolve."""
             ]
         )
 
-        self.state.add_message(chair_id, Role.CHAIR, response)
+        content = self._extract_content(response)
+        self.state.add_message(chair_id, Role.CHAIR, content)
 
     async def _scribe_finalize(self) -> None:
         """Scribe compiles the final artifact."""
@@ -395,10 +398,11 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
             ]
         )
 
-        self.state.add_message(scribe_id, Role.SCRIBE, response)
+        content = self._extract_content(response)
+        self.state.add_message(scribe_id, Role.SCRIBE, content)
 
         # Parse the artifact
-        self.state.final_artifact = self._parse_artifact(response)
+        self.state.final_artifact = self._parse_artifact(content)
 
     def _get_member_by_role(self, role: Role) -> str | None:
         """Get the first member with the given role."""
@@ -406,6 +410,15 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
             if member_role == role:
                 return member_id
         return None
+
+    def _extract_content(self, response) -> str:
+        """Extract content string from provider response.
+
+        Handles both raw strings and GenerationResponse objects.
+        """
+        if hasattr(response, "content"):
+            return response.content
+        return str(response)
 
     def _build_context(self) -> str:
         """Build context from conversation history."""
