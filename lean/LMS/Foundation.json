@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "artifact_id": "theorem-goal_theorem-3a7ebcff",
+      "name": "goal_thm",
+      "entry_type": "theorem",
+      "signature": "theorem goal_thm: True := trivial",
+      "lean_code": "theorem goal_thm : True := trivial",
+      "generation": 0,
+      "author": "agent-0-mock"
+    }
+  ],
+  "artifact_ids": [
+    "theorem-goal_theorem-3a7ebcff"
+  ]
+}

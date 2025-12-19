@@ -48,6 +48,12 @@ lake-packages/
 .env
 .env.local
 
+# Experiments (run data, checkpoints)
+experiments/
+
+# MCP config (may contain local paths)
+.mcp.json
+
 # OS
 .DS_Store
 Thumbs.db

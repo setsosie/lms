@@ -1,0 +1,15 @@
+name = "LMS"
+version = "0.1.0"
+defaultTargets = ["lms"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "master"
+
+[[lean_lib]]
+name = "LMS"
+
+[[lean_exe]]
+name = "lms"
+root = "Main"
