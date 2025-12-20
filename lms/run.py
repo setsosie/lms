@@ -22,6 +22,62 @@ from lms.providers import create_provider
 from lms.society import Society, BudgetExceeded
 
 
+def write_status(
+    output_dir: Path,
+    society: Society,
+    current_gen: int,
+    target_gen: int,
+    goal: Goal | None = None,
+    start_time: datetime | None = None,
+) -> None:
+    """Write status.json for remote monitoring.
+
+    Args:
+        output_dir: Experiment directory
+        society: Society instance
+        current_gen: Current generation number
+        target_gen: Target generation to reach
+        goal: Optional goal being worked on
+        start_time: When the experiment started
+    """
+    now = datetime.now()
+    elapsed = (now - start_time).total_seconds() if start_time else 0
+    gens_per_hour = (current_gen / elapsed * 3600) if elapsed > 60 else 0
+
+    status = {
+        "updated": now.isoformat(),
+        "generation": {
+            "current": current_gen,
+            "target": target_gen,
+            "progress": f"{100 * current_gen / target_gen:.1f}%" if target_gen > 0 else "0%",
+        },
+        "tokens": {
+            "used": society.total_tokens_used,
+            "max": society.max_tokens,
+        },
+        "artifacts": {
+            "total": len(society.library),
+            "verified": len(society.library.get_verified()),
+        },
+        "timing": {
+            "elapsed_hours": round(elapsed / 3600, 2),
+            "gens_per_hour": round(gens_per_hour, 1),
+            "eta_hours": round((target_gen - current_gen) / gens_per_hour, 1) if gens_per_hour > 0 else None,
+        },
+    }
+
+    if goal:
+        status["goal"] = {
+            "name": goal.name,
+            "progress": f"{goal.progress():.0%}",
+            "formalized": sum(1 for d in goal.definitions if d.formalized),
+            "total": len(goal.definitions),
+        }
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "status.json").write_text(json.dumps(status, indent=2))
+
+
 def setup_signal_handlers(
     society: Society,
     output_dir: Path,
@@ -164,6 +220,7 @@ async def run_experiment(
 
     # Initialize crash recovery log
     crash_log = CrashRecoveryLog(output_dir)
+    start_time = datetime.now()
 
     # Run experiment
     print(f"Running generations (checkpoint every {checkpoint_interval})...")
@@ -193,6 +250,9 @@ async def run_experiment(
                 )
             output += f", Tokens: {result.tokens_used:,}"
             print(output)
+
+            # Update status file for remote monitoring
+            write_status(output_dir, society, gen + 1, n_generations, goal, start_time)
 
             # Periodic checkpoint
             if (gen + 1) % checkpoint_interval == 0:
@@ -415,6 +475,7 @@ async def resume_experiment(
     # Initialize crash recovery log (appends to existing log)
     crash_log = CrashRecoveryLog(checkpoint_dir)
     mode = "iterative" if iterative_mode else "standard"
+    start_time = datetime.now()
 
     # Continue running with periodic checkpoints
     print(f"Continuing from generation {society.current_generation} (checkpoint every {checkpoint_interval})...")
@@ -434,6 +495,10 @@ async def resume_experiment(
                 f"Verified: {result.artifacts_verified}, "
                 f"Tokens: {result.tokens_used:,}"
             )
+
+            # Update status file for remote monitoring
+            write_status(checkpoint_dir, society, gen + 1, target_generations, society.goal, start_time)
+
             # Periodic checkpoint
             if (gen + 1) % checkpoint_interval == 0:
                 society.save(checkpoint_dir)
