@@ -4,11 +4,14 @@ import argparse
 import asyncio
 import json
 import math
+import signal
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from lms.agent import Agent
 from lms.config import Config
+from lms.crash_log import CrashRecoveryLog
 from lms.goals import get_goal, list_goals, Goal
 from lms.lean.mock import MockLeanVerifier
 from lms.lean.mcp import MCPLeanVerifier
@@ -17,6 +20,89 @@ from lms.metrics import analyze_library, print_analysis
 from lms.prompts import get_all_versions
 from lms.providers import create_provider
 from lms.society import Society, BudgetExceeded
+
+
+def write_status(
+    output_dir: Path,
+    society: Society,
+    current_gen: int,
+    target_gen: int,
+    goal: Goal | None = None,
+    start_time: datetime | None = None,
+) -> None:
+    """Write status.json for remote monitoring.
+
+    Args:
+        output_dir: Experiment directory
+        society: Society instance
+        current_gen: Current generation number
+        target_gen: Target generation to reach
+        goal: Optional goal being worked on
+        start_time: When the experiment started
+    """
+    now = datetime.now()
+    elapsed = (now - start_time).total_seconds() if start_time else 0
+    gens_per_hour = (current_gen / elapsed * 3600) if elapsed > 60 else 0
+
+    status = {
+        "updated": now.isoformat(),
+        "generation": {
+            "current": current_gen,
+            "target": target_gen,
+            "progress": f"{100 * current_gen / target_gen:.1f}%" if target_gen > 0 else "0%",
+        },
+        "tokens": {
+            "used": society.total_tokens_used,
+            "max": society.max_tokens,
+        },
+        "artifacts": {
+            "total": len(society.library),
+            "verified": len(society.library.get_verified()),
+        },
+        "timing": {
+            "elapsed_hours": round(elapsed / 3600, 2),
+            "gens_per_hour": round(gens_per_hour, 1),
+            "eta_hours": round((target_gen - current_gen) / gens_per_hour, 1) if gens_per_hour > 0 else None,
+        },
+    }
+
+    if goal:
+        status["goal"] = {
+            "name": goal.name,
+            "progress": f"{goal.progress():.0%}",
+            "formalized": sum(1 for d in goal.definitions if d.formalized),
+            "total": len(goal.definitions),
+        }
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "status.json").write_text(json.dumps(status, indent=2))
+
+
+def setup_signal_handlers(
+    society: Society,
+    output_dir: Path,
+    goal: Goal | None = None,
+) -> None:
+    """Setup handlers for graceful shutdown on SIGINT/SIGTERM.
+
+    Args:
+        society: Society instance to save
+        output_dir: Directory to save checkpoint
+        goal: Optional goal to save
+    """
+    def handle_signal(signum, frame):
+        sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+        print(f"\n[{sig_name}] Graceful shutdown requested...")
+        print(f"Saving checkpoint to {output_dir}...")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        society.save(output_dir)
+        if goal:
+            goal.save(output_dir / "goal.json")
+        print("Checkpoint saved. Exiting.")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
 
 
 async def run_experiment(
@@ -32,6 +118,7 @@ async def run_experiment(
     verifier_type: str = "mock",
     iterative_mode: bool = False,
     max_attempts: int = 5,
+    checkpoint_interval: int = 10,
 ) -> None:
     """Run an LMS experiment.
 
@@ -48,6 +135,7 @@ async def run_experiment(
         verifier_type: Verifier to use: "mock", "real", or "mcp"
         iterative_mode: If True, each agent gets multiple verification attempts
         max_attempts: Max attempts per agent in iterative mode
+        checkpoint_interval: Save checkpoint every N generations
     """
     print(f"\nStarting LMS Experiment")
     print(f"  Agents: {n_agents}")
@@ -114,6 +202,9 @@ async def run_experiment(
         society.iterative_mode = True
         society.max_attempts = max_attempts
 
+    # Setup signal handlers for graceful shutdown
+    setup_signal_handlers(society, output_dir, goal)
+
     # Print society members (agents)
     print(f"  Society Members:")
     for i, agent in enumerate(society.agents):
@@ -127,13 +218,24 @@ async def run_experiment(
         print(f"  Mode: ITERATIVE ({max_attempts} attempts/agent)")
     print()
 
+    # Initialize crash recovery log
+    crash_log = CrashRecoveryLog(output_dir)
+    start_time = datetime.now()
+
     # Run experiment
-    print("Running generations...")
-    checkpoint_interval = 5  # Save every N generations
+    print(f"Running generations (checkpoint every {checkpoint_interval})...")
+    mode = "iterative" if iterative_mode else "standard"
     try:
         for gen in range(n_generations):
+            crash_log.log_generation_start(gen, mode)
             print(f"  Generation {gen + 1}/{n_generations}...", end=" ", flush=True)
             result = await society.run_generation(gen)
+            crash_log.log_generation_end(
+                gen,
+                artifacts_created=result.artifacts_created,
+                artifacts_verified=result.artifacts_verified,
+                tokens_used=result.tokens_used,
+            )
             # Basic stats
             score = math.sqrt(result.artifacts_created * result.artifacts_verified) if result.artifacts_verified > 0 else 0
             output = (
@@ -149,15 +251,21 @@ async def run_experiment(
             output += f", Tokens: {result.tokens_used:,}"
             print(output)
 
+            # Update status file for remote monitoring
+            write_status(output_dir, society, gen + 1, n_generations, goal, start_time)
+
             # Periodic checkpoint
             if (gen + 1) % checkpoint_interval == 0:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 society.save(output_dir)
+                crash_log.log_checkpoint(gen)
                 print(f"    [Checkpoint saved at gen {gen + 1}]")
     except BudgetExceeded as e:
+        crash_log.log_error("budget_exceeded", str(e), society.current_generation)
         print(f"\n  Budget exceeded: {e}")
         print("  Saving checkpoint for later resumption...")
     except Exception as e:
+        crash_log.log_error("exception", str(e), society.current_generation)
         print(f"\n  Error: {e}")
         print("  Saving checkpoint before exit...")
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -281,6 +389,7 @@ async def resume_experiment(
     verifier_type: str = "mock",
     iterative_mode: bool = False,
     max_attempts: int = 5,
+    checkpoint_interval: int = 10,
 ) -> None:
     """Resume an experiment from a checkpoint.
 
@@ -293,6 +402,7 @@ async def resume_experiment(
         verifier_type: Verifier to use: "mock", "real", or "mcp"
         iterative_mode: If True, each agent gets multiple verification attempts
         max_attempts: Max attempts per agent in iterative mode
+        checkpoint_interval: Save checkpoint every N generations
     """
     # Load metadata to get provider info
     metadata = json.loads((checkpoint_dir / "metadata.json").read_text())
@@ -359,18 +469,45 @@ async def resume_experiment(
         society.iterative_mode = True
         society.max_attempts = max_attempts
 
-    # Continue running
-    print(f"Continuing from generation {society.current_generation}...")
+    # Setup signal handlers for graceful shutdown
+    setup_signal_handlers(society, checkpoint_dir, society.goal)
+
+    # Initialize crash recovery log (appends to existing log)
+    crash_log = CrashRecoveryLog(checkpoint_dir)
+    mode = "iterative" if iterative_mode else "standard"
+    start_time = datetime.now()
+
+    # Continue running with periodic checkpoints
+    print(f"Continuing from generation {society.current_generation} (checkpoint every {checkpoint_interval})...")
     try:
-        results = await society.run_from_checkpoint(target_generations)
-        for result in results:
+        for gen in range(society.current_generation, target_generations):
+            crash_log.log_generation_start(gen, mode)
+            result = await society.run_generation(gen)
+            crash_log.log_generation_end(
+                gen,
+                artifacts_created=result.artifacts_created,
+                artifacts_verified=result.artifacts_verified,
+                tokens_used=result.tokens_used,
+            )
             print(
                 f"  Generation {result.generation + 1}: "
                 f"Created: {result.artifacts_created}, "
                 f"Verified: {result.artifacts_verified}, "
                 f"Tokens: {result.tokens_used:,}"
             )
+
+            # Update status file for remote monitoring
+            write_status(checkpoint_dir, society, gen + 1, target_generations, society.goal, start_time)
+
+            # Periodic checkpoint
+            if (gen + 1) % checkpoint_interval == 0:
+                society.save(checkpoint_dir)
+                if society.goal:
+                    society.goal.save(checkpoint_dir / "goal.json")
+                crash_log.log_checkpoint(gen)
+                print(f"    [Checkpoint saved at gen {gen + 1}]")
     except BudgetExceeded as e:
+        crash_log.log_error("budget_exceeded", str(e), society.current_generation)
         print(f"\n  Budget exceeded: {e}")
 
     # Analyze and save
@@ -514,6 +651,13 @@ def main() -> None:
         help="Max verification attempts per agent in iterative mode",
     )
 
+    parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=10,
+        help="Save checkpoint every N generations (default: 10)",
+    )
+
     args = parser.parse_args()
 
     # Handle --list-goals
@@ -545,6 +689,7 @@ def main() -> None:
                 verifier_type=args.verifier,
                 iterative_mode=args.iterative,
                 max_attempts=args.max_attempts,
+                checkpoint_interval=args.checkpoint_interval,
             )
         )
         return
@@ -604,6 +749,7 @@ def main() -> None:
             verifier_type=args.verifier,
             iterative_mode=args.iterative,
             max_attempts=args.max_attempts,
+            checkpoint_interval=args.checkpoint_interval,
         )
     )
 
