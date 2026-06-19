@@ -6,7 +6,8 @@
 arc (exit on pipeline metrics, not math), and in parallel stand up the
 soft-prompt-genome research arm through its first falsifiable gate — does a
 sparse soft-prefix induce more proof-attempt diversity than a temperature-only
-baseline at matched compute?
+baseline at matched compute? **All work runs on local LLMs** (see Execution
+environment below).
 
 **Status**: 🔄 ACTIVE
 
@@ -19,11 +20,20 @@ baseline at matched compute?
 
 | Metric | Value |
 |--------|-------|
-| Planned points | 21 |
+| Planned points | 24 |
 | Carryover | None (first sprint) |
 | Delivered to date | 0 |
-| Tracks | Formalization (ANT shakedown) ∥ Soft-Prompt Genome (gated) |
+| Tracks | Infrastructure · Formalization (ANT shakedown) ∥ Soft-Prompt Genome (gated) |
+| Execution | **Local-first** — self-hosted OSS models; APIs are an escape hatch |
 | Status | 🔄 ACTIVE |
+
+## Infrastructure Track
+
+Enables local-first execution. Must land before the shakedown runs locally.
+
+| Task | Points | Priority | Epic | Status | PR / Branch | Notes |
+|------|--------|----------|------|--------|-------------|-------|
+| 26Q2-INFRA-01: Local OpenAI-compatible serving path | 3 | CRITICAL | INFRA | 🔲 PENDING | — | Add `base_url` so agents hit a local vLLM/SGLang `/v1`; unblocks ANT-01 on local LLMs |
 
 ## Formalization Track
 
@@ -31,7 +41,7 @@ The active "what do we formalize" work. Source: `specs/ant_shakedown.md`.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q2-ANT-01: ANT Ch. I core-arc shakedown | 8 | HIGH | ANT | 🔄 IN PROGRESS | — | Integrality → Minkowski → class number → units; 2–3 WC cycles, exit on pipeline metrics |
+| 26Q2-ANT-01: ANT Ch. I core-arc shakedown | 8 | HIGH | ANT | 🔄 IN PROGRESS | — | Integrality → Minkowski → class number → units; 2–3 WC cycles, exit on pipeline metrics. **Runs on local LLM** (depends on 26Q2-INFRA-01) |
 
 ## Soft-Prompt Genome Track
 
@@ -64,3 +74,27 @@ Reference rows — not counted in planned points. Promote once SPG-02 is green.
 | `prompt_embeds` unsupported at batch on target engine | Fall back to activation-steering genome (forward hook only) | SPG-01 |
 | ANT shakedown stalls on math, not pipeline | Exit criterion is pipeline metrics; descope math, not the workflow test | 26Q2-ANT-01 |
 | Novelty overclaim (QD-LLM exists) | Differentiate on LEAN fitness + collective framing; dedicated 2025–26 NTP search before any paper claim | SPG Phase 5 |
+| Local model too weak to close proofs | Defined escape-hatch trigger routes the hard sub-task to an API model (see below) | 26Q2-ANT-01 |
+
+## Execution environment (policy, 2026-06-18)
+
+**Local-first.** Default to self-hosted OSS models for *all* agents — the
+formalization committees/WCs and the genome population both run on one frozen
+self-hosted model (full-box continuous batching; cost-model config **B**). This
+makes API spend ~$0 and unifies both tracks on one serving stack (the genome arm
+*requires* self-hosting anyway). The binding constraint becomes box wall-clock,
+not token price.
+
+**Escape hatch — APIs only on a defined roadblock.** Reserve model APIs for when
+local hits a wall. Trigger (route only the *blocked sub-task*, log it, continue):
+
+- a WC cycle fails to close its proofs after a bounded number of local attempts
+  with no Lean-progress, **or**
+- a statement is flagged as exceeding local-model capability.
+
+Then route that sub-task to an API model (cost-model config **C**, "robust mix"
+= mostly local + targeted API). This is surgical, not a wholesale switch; the
+router itself is a follow-up task, built only once a real roadblock appears.
+
+Enablement: `26Q2-INFRA-01` adds the local serving path. Anthropic/Google
+providers stay wired as the escape-hatch route.
