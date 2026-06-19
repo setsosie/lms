@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Snippet for <repo>/.claude/settings.json. Requires CLAUDE_SKILLS_DIR env var. Default mode is warn; set CLAUDE_HOOKS_MODE=block to enforce.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_SKILLS_DIR/claude-hooks/scripts/enforce-uv-run.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_SKILLS_DIR/claude-hooks/scripts/ruff-format-on-edit.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
