@@ -1,5 +1,28 @@
 # Upcoming sprints & program roadmap
 
+> ## ⚠️ SUSPENDED 2026-07-24 — do not cite the numbers below
+>
+> A repo audit found that this roadmap's governing inputs — **~50 statements per
+> WC cycle** and **~400–500K tokens per cycle**, both marked "observed" in
+> *Fixed quantities (high confidence)* — derive from `experiments/stacks_ch4_phase1`,
+> a run verified by `MockLeanVerifier`'s regex rather than by Lean. Every run that
+> used a real verifier landed at **0–6% verification** and **0.0 reuse**, and
+> produced only N0 (already-in-Mathlib) content. The 15-agent run spent **9.0M
+> tokens for ~2 verified artifacts**.
+>
+> Consequently the derived quantities — ~230–280 WC cycles, the cost figures, all
+> three timeline scenarios, and the "~3–4 months" bottom line — are **unsupported**.
+> They are not known to be wrong; they are known to rest on nothing.
+>
+> Evidence: `docs/planning/2026-07-24-feasibility-assessment.md`.
+> Replacement plan: `docs/planning/calibration-program.md` — 10 weeks to one
+> measured cost-per-verified-faithful-novel statement (CVFN), which regenerates
+> this file's inputs or kills the program.
+>
+> **The phased roadmap and critical path below remain structurally sound** — the
+> dependency order (kernel → ART+CNF → Stacks) is unaffected by the calibration
+> error. It is only the rates and dates that are suspended.
+
 Forward planning for LMS. The committed, parsed sprint is always
 `current-sprint.md`; this file is the broad multi-sprint roadmap and the
 next-sprint pre-lock. Generated 2026-06-18.
@@ -21,14 +44,14 @@ Until one real WC cycle on the *local* stack reports tokens + wall-clock + lemma
 reuse, every calendar date below is an estimate on assumed throughput. Fixed
 quantities are stated precisely; time quantities are scenario ranges.
 
-## Fixed quantities (high confidence)
+## Fixed quantities (high confidence) — ⚠️ two rows retracted
 
 | Quantity | Value | Source |
 |---|---|---|
-| Novel statements after Mathlib (all 3 texts) | ~11,600–14,000 | committee synthesis |
-| Statements per WC cycle | ~50 | observed |
-| **→ Total WC cycles** | **~230–280** | derived |
-| Tokens per WC cycle | ~400–500K | observed |
+| Novel statements after Mathlib (all 3 texts) | ~11,600–14,000 | committee synthesis — **stands** (independent of the calibration error) |
+| ~~Statements per WC cycle~~ | ~~~50~~ | ❌ **RETRACTED** — from a mock-verified run; real-verifier runs produced 0–2 per run, all N0 |
+| ~~**→ Total WC cycles**~~ | ~~**~230–280**~~ | ❌ **RETRACTED** — derived from the retracted row above |
+| ~~Tokens per WC cycle~~ | ~~~400–500K~~ | ❌ **RETRACTED** — real-verifier runs ranged 446K–8.99M per run |
 | Formalization cost — **local-first** | ≈ box wall-clock (~$0 if owned; ~$1.4–3.4K if renting @ $12/hr) | cost-model config B |
 | Formalization cost — *if it were all API* | ~$2,000–3,000 (Opus) | reference only |
 | Genome arm, full 500-gen run (self-hosted) | ~$1,700 / ~142 wall-hrs | `scratch/cost_model.py` |
@@ -43,7 +66,17 @@ quantities are stated precisely; time quantities are scenario ranges.
 | **3 — Stacks** | ~85% of the corpus, the long tail | ~180–220 | bulk parallel formalization; watch for the reuse phase transition |
 | **∥ Genome arm** | SPG: INFRA serving → diversity gate → evolution → QD | independent | each gate; off the formalization critical path |
 
-## Timeline scenarios (estimate — pending shakedown calibration)
+## Timeline scenarios — ⚠️ VOID
+
+> All three scenarios below multiply the retracted "~230–280 cycles" figure by an
+> assumed concurrency. Both factors are unmeasured, so the products carry no
+> information. Retained only to show what was assumed. **The `~3–4 months`
+> headline came from this table and should not be repeated anywhere.**
+>
+> Note also that the "high lemma-reuse" premise of the Aggressive column has
+> **measured reuse of 0.0** in every real-verified run to date. The phase
+> transition has not merely failed to fire; at a ~3% per-statement success rate
+> there is not yet enough verified material for reuse to be a meaningful quantity.
 
 Free variable: **parallel WCs × wall-clock per cycle**, both of which the
 shakedown measures. The project thesis (population size matters) argues for high
@@ -82,23 +115,42 @@ INFRA-01 ─→ ANT shakedown ─→ Shared kernel (spectral seq) ─→ ART+CNF
 - **Not the constraint:** money. **The constraints are wall-clock throughput, the
   reuse phase-transition, and local-model capability** (escape hatch absorbs the last).
 
-## Pre-locked next sprint (Sprint 2 — draft)
+## Pre-locked next sprint (Sprint 2 — draft) — ✅ RESOLVED 2026-07-24
 
-Promote into `current-sprint.md` at Sprint 1 close. Contents depend on shakedown
-outcome:
+This section offered three branches. **The third one fired.**
 
-- **If shakedown green** → open Phase 1 shared kernel: `26Q2-SK-01` spectral
-  sequences (acid test), `26Q2-SK-02` fibred categories + descent, `26Q2-SK-03`
-  core algebra — 3-way parallel.
-- **Carryover (likely):** `26Q2-SPG-02` diversity gate (cluster), `26Q2-SPG-03`
-  genome representation if not finished.
-- **If shakedown reveals a pipeline problem** → a fix-the-pipeline sprint instead;
-  do not advance to the shared kernel until metrics are healthy.
+> *"If shakedown reveals a pipeline problem → a fix-the-pipeline sprint instead;
+> do not advance to the shared kernel until metrics are healthy."*
 
-## Bottom line
+The audit found the pipeline problem before the shakedown ran: verification
+itself was not trustworthy, so "metrics are healthy" could not have been assessed.
+Sprint 2 is therefore the fix-the-pipeline sprint — see `current-sprint.md`.
+Credit where due: this file's own gating logic called it correctly.
 
-If the shakedown proves the pipeline on local LLMs and the reuse transition fires,
+Deferred branches, unchanged and still queued behind a green calibration:
+
+- Phase 1 shared kernel: `SK-01` spectral sequences (acid test), `SK-02` fibred
+  categories + descent, `SK-03` core algebra — 3-way parallel.
+- Genome arm `SPG-01/02/03` — pushed to Q4. Its fitness function *is* proof
+  success; evolving against a signal that is ~0 for every genome is a flat
+  landscape by construction.
+
+## Bottom line — ⚠️ REPLACED 2026-07-24
+
+~~If the shakedown proves the pipeline on local LLMs and the reuse transition fires,
 **~3–4 months** is the realistic target for the full three-text program, with a
 credible path to ~6–10 weeks and a downside of ~6–9 months if reuse stays linear
-or the local model needs heavy escape-hatch support. This range gets replaced
-with a real projection once `26Q2-ANT-01` reports its first local cycle metrics.
+or the local model needs heavy escape-hatch support.~~
+
+**Current bottom line**: there is no defensible timeline for the three-text
+program, because there is not yet a single measured data point on the cost of a
+verified *novel* statement. The Q3 calibration program exists to produce exactly
+one number (CVFN) by **2026-09-30**. Three outcomes, all acceptable:
+
+| Outcome | Consequence |
+|---|---|
+| CVFN decent | Re-derive this file's rates from real inputs and restart the program |
+| CVFN bad but finite | Pipeline works, is uneconomic → scope to one tractable target, publish the calibration |
+| CVFN undefined (zero N1) | Thesis untestable at current capability → write it up and shelve |
+
+Until then this file forecasts nothing. See `docs/planning/calibration-program.md`.

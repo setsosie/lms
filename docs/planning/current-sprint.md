@@ -1,100 +1,102 @@
-# Sprint 1: Pipeline shakedown + stand up the soft-prompt-genome arm
+# Sprint 2: Make the harness incapable of lying about verification
 
-**Dates**: Jun 16 - Jun 27, 2026
-**Quarter**: Q2 2026
-**Sprint Goal**: Validate the formalization pipeline on the Neukirch ANT Ch. I core
-arc (exit on pipeline metrics, not math), and in parallel stand up the
-soft-prompt-genome research arm through its first falsifiable gate — does a
-sparse soft-prefix induce more proof-attempt diversity than a temperature-only
-baseline at matched compute? **All work runs on local LLMs** (see Execution
-environment below).
+**Dates**: Jul 27 – Aug 7, 2026
+**Quarter**: Q3 2026 · folder `26Q3-01`
+**Program**: `docs/planning/calibration-program.md` — Phase A
+**Sprint Goal**: Every one of the five machine gates that a statement must clear
+to count toward the go/no-go number is implemented and tested. At sprint close,
+the harness cannot record a mock-verified or Mathlib-duplicate artifact as a
+verified novel statement.
 
 **Status**: 🔄 ACTIVE
 
-> **Bootstrap note (2026-06-18):** this is the first sprint doc in the repo —
-> numbering starts at Sprint 1 / folder `26Q2-01`. Dates are a starting
-> assumption; renumber/rebase as needed. Generated when pulling `lms` up to the
-> IndigiGenius canonical sprint schema (`claude-skills/docs/SPRINT-SCHEMA.md`).
+> **Execution note**: every task below is local Python + Lean-LSP work that Claude
+> executes. Your cost this sprint is **review, not implementation**. The cluster is
+> not needed until Sprint 3.
 
-## Sprint Summary
+---
+
+## Sprint 1 close-out (26Q2-01) — ❌ NOT DELIVERED
 
 | Metric | Value |
 |--------|-------|
+| Dates | Jun 16 – Jun 27, 2026 |
 | Planned points | 24 |
-| Carryover | None (first sprint) |
+| Delivered | **0** |
+| Last commit in window | 2026-06-18 (planning docs only) |
+
+Honest postmortem: the sprint was scaffolded and then never worked. No code
+landed in the window or in the 4 weeks after it. Contributing cause on the
+planning side — `26Q2-ANT-01` was committed as IN PROGRESS while its hard
+dependency (a working Lean oracle, `26Q2-INFRA-01`, a serving box) was PENDING,
+so the sprint had no executable first step.
+
+Disposition of Sprint 1 scope:
+
+| Task | Disposition |
+|---|---|
+| `26Q2-INFRA-01` local serving path | **Carried** → `26Q3-INFRA-01` this sprint |
+| `26Q2-ANT-01` ANT shakedown | **Superseded** by the calibration program, Phases B–D. Rescoped: measures CVFN, not just workflow mechanics |
+| `26Q2-SPG-01/02/03` genome arm | **Deferred to Q4** — see `calibration-program.md` §5. Fitness = proof success; that signal is ~0 today, so the landscape is flat by construction |
+
+## Sprint 2 Summary
+
+| Metric | Value |
+|--------|-------|
+| Planned points | 22 (+3 stretch) |
+| Carryover | 3 (`26Q3-INFRA-01`) |
 | Delivered to date | 0 |
-| Tracks | Infrastructure · Formalization (ANT shakedown) ∥ Soft-Prompt Genome (gated) |
-| Execution | **Local-first** — self-hosted OSS models; APIs are an escape hatch |
+| Track | Harness honesty (Phase A of the calibration program) |
+| Execution | Local, Claude-executed; cluster not required |
 | Status | 🔄 ACTIVE |
 
-## Infrastructure Track
+## Harness Track
 
-Enables local-first execution. Must land before the shakedown runs locally.
-
-| Task | Points | Priority | Epic | Status | PR / Branch | Notes |
-|------|--------|----------|------|--------|-------------|-------|
-| 26Q2-INFRA-01: Local OpenAI-compatible serving path | 3 | CRITICAL | INFRA | 🔲 PENDING | — | Add `base_url` so agents hit a local vLLM/SGLang `/v1`; unblocks ANT-01 on local LLMs |
-
-## Formalization Track
-
-The active "what do we formalize" work. Source: `specs/ant_shakedown.md`.
+Implements the machine gates from `specs/faithfulness_protocol.md`, which the
+harness has never enforced. Gate numbering matches
+`calibration-program.md` §2.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q2-ANT-01: ANT Ch. I core-arc shakedown | 8 | HIGH | ANT | 🔄 IN PROGRESS | — | Integrality → Minkowski → class number → units; 2–3 WC cycles, exit on pipeline metrics. **Runs on local LLM** (depends on 26Q2-INFRA-01) |
+| 26Q3-CHORE-01: Fix test environment | 1 | HIGH | CHORE | 🔲 PENDING | — | `pytest-asyncio` missing from `.venv` → 44 spurious failures. Move to `[dependency-groups] dev` |
+| 26Q3-HARN-01: Verifier provenance + mock can't mark verified | 3 | CRITICAL | HARN | 🔲 PENDING | — | Record verifier in `metadata.json`; mock emits `verified_heuristic`, never `verified`. **Root cause of the bad roadmap numbers** |
+| 26Q3-HARN-02: Fix `lean_code` extraction | 2 | CRITICAL | HARN | 🔲 PENDING | — | Leading `"\|\n  "` YAML block-scalar leak reaches the verifier as source |
+| 26Q3-HARN-03: T2 / T4 machine gates | 5 | CRITICAL | HARN | 🔲 PENDING | — | Gate 2 (no `sorry`/new `axiom`/`native_decide`) + Gate 3 (non-vacuity; reject trivial `example`) |
+| 26Q3-HARN-04: Novelty classifier (N0 / N1) | 5 | CRITICAL | HARN | 🔲 PENDING | — | Gate 4. Mathlib name search + `exact?`/`loogle` via lean-lsp MCP. Every artifact produced to date is N0 |
+| 26Q3-HARN-05: Per-statement cost accounting | 3 | HIGH | HARN | 🔲 PENDING | — | Tokens + wall-clock attributed per statement incl. failed attempts; replaces per-generation totals. This is the CVFN numerator |
+| 26Q3-INFRA-01: Local OpenAI-compatible serving path | 3 | HIGH | INFRA | 🔲 PENDING | — | Carryover. `base_url` on `ProviderConfig`. Also the API-fallback lever for the Aug 21 contingency |
+| 26Q3-HARN-06: D4 side-by-side review view | 3 | STRETCH | HARN | 🔲 PENDING | — | Book quote ‖ Lean statement. If D4 is slow because the format is bad, Phase D measures the wrong thing |
 
-## Soft-Prompt Genome Track
+## Gate A — sprint exit criterion
 
-Parallel "how do we generate diverse minds" research arm. Source:
-`specs/soft_prompt_genome_work_plan.md` (phased + **gated** — do not start a
-phase until the prior gate is green). Phases 0–1 are cluster/serving work the
-user drives; SPG-03 (genome representation) is local code and can start now.
+Re-run the archived `experiments/stacks_ch4_phase1/artifacts.json` through the
+rebuilt pipeline. **It must now report ~0 verified novel statements** (it
+currently reports 48/52 = 92%).
 
-| Task | Points | Priority | Epic | Status | PR / Branch | Notes |
-|------|--------|----------|------|--------|-------------|-------|
-| 26Q2-SPG-01: Serving feasibility (Phase 0) | 3 | HIGH | SPG | 🔲 PENDING | — | `inputs_embeds`/`prompt_embeds` at batch; **user-driven (cluster)**. Gate → SPG-02 |
-| 26Q2-SPG-02: Diversity-knob critical gate (Phase 1) | 5 | CRITICAL | SPG | 🚫 BLOCKED | — | Blocked by SPG-01. Soft-prefix diversity > temperature baseline at matched compute. Gate → evolution |
-| 26Q2-SPG-03: Genome representation + mutation (Phase 2 prep) | 5 | HIGH | SPG | 🔲 PENDING | — | Local code, TDD. Sparse k-hot soft prefix, Gaussian mutation, serialize. No serving needed |
+If the rebuilt gates still score that run highly, the gates do not work and
+Sprint 3 does not start.
 
-### Queued (gated, not in this sprint's committed scope)
-
-Reference rows — not counted in planned points. Promote once SPG-02 is green.
-
-| Task | Points | Priority | Epic | Status | Blocked By | Notes |
-|------|--------|----------|------|--------|-----------|-------|
-| SPG Phase 3: Evolutionary loop under LEAN fitness | — | — | SPG | ⏸️ DEFERRED | SPG-02 | Flat-landscape risk → partial-proof credit / subgoal curriculum |
-| SPG Phase 4: MAP-Elites QD archive | — | — | SPG | ⏸️ DEFERRED | SPG Phase 3 | Behavior descriptor for proof strategies is an open question |
-| SPG Phase 5: Ablations + QD-LLM differentiation | — | — | SPG | ⏸️ DEFERRED | SPG Phase 3 | Baseline = QD-LLM (arXiv:2605.09781); e-/m-geodesic mutation ablation |
+Secondary check: `experiments/run_20251218_105831` (15 agents, 8.99M tokens)
+should report its ~2 verified artifacts as **N0**, with a populated gate-failure
+histogram over the other 73.
 
 ## Risk register
 
 | Risk | Mitigation | Task |
 |------|------------|------|
-| Soft prefix too weak vs long shared math context | Per-layer prompts (P-tuning v2) → steering vectors (RepE/ActAdd/CAA) | SPG-02 |
-| `prompt_embeds` unsupported at batch on target engine | Fall back to activation-steering genome (forward hook only) | SPG-01 |
-| ANT shakedown stalls on math, not pipeline | Exit criterion is pipeline metrics; descope math, not the workflow test | 26Q2-ANT-01 |
-| Novelty overclaim (QD-LLM exists) | Differentiate on LEAN fitness + collective framing; dedicated 2025–26 NTP search before any paper claim | SPG Phase 5 |
-| Local model too weak to close proofs | Defined escape-hatch trigger routes the hard sub-task to an API model (see below) | 26Q2-ANT-01 |
+| Novelty classifier is unreliable (Mathlib search is fuzzy) | Report N0/N1 with a confidence field; anything low-confidence routes to D4 human review rather than being counted | 26Q3-HARN-04 |
+| Non-vacuity checking is undecidable in general | Implement the tractable subset: reject `example` with no new named declaration, reject statements whose hypotheses are unsatisfiable by a witness search. Log what it can't decide | 26Q3-HARN-03 |
+| Gates get built but the archived-run check is skipped | Gate A is the sprint exit criterion, not a nice-to-have | — |
+| Sprint 2 lapses like Sprint 1 | Tasks are Claude-executed and locally verifiable; no external dependency for any of them | — |
 
-## Execution environment (policy, 2026-06-18)
+## Next sprint (Sprint 3, Aug 10 – Aug 21) — pre-lock
 
-**Local-first.** Default to self-hosted OSS models for *all* agents — the
-formalization committees/WCs and the genome population both run on one frozen
-self-hosted model (full-box continuous batching; cost-model config **B**). This
-makes API spend ~$0 and unifies both tracks on one serving stack (the genome arm
-*requires* self-hosting anyway). The binding constraint becomes box wall-clock,
-not token price.
+Phase B of the calibration program. Contents:
 
-**Escape hatch — APIs only on a defined roadblock.** Reserve model APIs for when
-local hits a wall. Trigger (route only the *blocked sub-task*, log it, continue):
-
-- a WC cycle fails to close its proofs after a bounded number of local attempts
-  with no Lean-progress, **or**
-- a statement is flagged as exceeding local-model capability.
-
-Then route that sub-task to an API model (cost-model config **C**, "robust mix"
-= mostly local + targeted API). This is surgical, not a wholesale switch; the
-router itself is a follow-up task, built only once a real roadblock appears.
-
-Enablement: `26Q2-INFRA-01` adds the local serving path. Anthropic/Google
-providers stay wired as the escape-hatch route.
+- `26Q3-CLUSTER-01`: stand up Lean + Mathlib + vLLM on the 4×H100 box (**you drive**,
+  Claude writes `docs/infrastructure/cluster-runbook-calibration.md`)
+- `26Q3-CAL-01`: select the ANT slice by measured N1 density — resolves the open
+  decision in `calibration-program.md` §4 (the committed Ch. I core arc is
+  probably ~all N0, which would make CVFN undefined)
+- **Aug 21 hard checkpoint**: if Gate B isn't green, invoke the pre-committed
+  API fallback ($300 cap) so the Sep 30 verdict date holds
