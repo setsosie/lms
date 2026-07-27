@@ -16,11 +16,36 @@ continuing.
 
 ```bash
 nvidia-smi                       # expect 4x H100 NVL, ~94GB each
-df -h ~                          # need >= 60 GB free (Mathlib cache ~ 15-20 GB + models)
+df -h /scratch                   # need >= 100 GB free (model ~61 GB + Mathlib ~20 GB + toolchain)
 python3 --version                # >= 3.12
 ```
 
-**Checkpoint 0**: 4 GPUs visible, ≥60 GB free.
+**Checkpoint 0**: 4 GPUs visible, ≥100 GB free on the scratch mount.
+
+---
+
+## Step 0.5 — Route heavy artifacts to scratch
+
+Everything bulky (model weights, Mathlib cache, elan toolchain, the repo itself
+with its `.lake/` and `.venv/`) goes on scratch, not home. Substitute the box's
+actual scratch mount if it isn't `/scratch/$USER`.
+
+```bash
+cat >> ~/.bashrc <<'EOF'
+export SCRATCH=/scratch/$USER        # adjust to the real scratch mount
+export HF_HOME=$SCRATCH/hf           # model weights (vLLM downloads land here)
+export XDG_CACHE_HOME=$SCRATCH/cache # Mathlib download cache, uv, vLLM/torch caches
+export ELAN_HOME=$SCRATCH/elan       # Lean toolchains
+EOF
+source ~/.bashrc
+mkdir -p "$HF_HOME" "$XDG_CACHE_HOME" "$ELAN_HOME"
+```
+
+**Checkpoint 0.5**: `echo $HF_HOME` prints a scratch path in a fresh shell.
+
+> If scratch is purged on a schedule, note the purge policy here when you report
+> back — a purged Mathlib cache mid-phase would look like a mysteriously broken
+> toolchain.
 
 ---
 
@@ -28,13 +53,13 @@ python3 --version                # >= 3.12
 
 ```bash
 curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
-source ~/.elan/env
+source "$ELAN_HOME/env"
 elan --version
 lake --version
 ```
 
-**Checkpoint 1**: `lake --version` prints a version. Add `source ~/.elan/env` to
-your shell rc.
+**Checkpoint 1**: `lake --version` prints a version. Add `source $ELAN_HOME/env`
+to your shell rc (elan-init respects `ELAN_HOME` from Step 0.5).
 
 ---
 
@@ -43,8 +68,8 @@ your shell rc.
 The repo pins Lean `v4.27.0-rc1` and Mathlib rev `fe3134f0c3508d` (Dec 2025).
 
 ```bash
-git clone <your-lms-remote> ~/lms   # or rsync the working copy
-cd ~/lms/lean
+git clone git@github.com:setsosie/lms.git "$SCRATCH/lms"   # on scratch: .lake/ and .venv/ are the bulky parts
+cd "$SCRATCH/lms/lean"
 cat lean-toolchain                  # leanprover/lean4:v4.27.0-rc1
 
 time lake exe cache get             # downloads prebuilt Mathlib olean files
@@ -74,7 +99,7 @@ A discrepancy here means the corpus rotted against Mathlib and needs its own tas
 ## Step 3 — Verify Lean is reachable as an oracle from Python
 
 ```bash
-cd ~/lms
+cd "$SCRATCH/lms"
 uv sync
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
@@ -121,6 +146,8 @@ CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --served-model-name lms-generalist
 ```
 
+Run it inside `tmux` (or `nohup`) so it survives your SSH session — the model
+download (~61 GB to `$HF_HOME`) plus startup can take a while on first run.
 Leave it running; use a second shell for the rest.
 
 ```bash
@@ -138,8 +165,12 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 Requires `26Q3-INFRA-01` (Sprint 2) to have landed.
 
+`.env` is gitignored, so the clone starts without one — this creates it. No real
+API keys are needed for local serving (`.env.example` is in the repo for
+reference; do not copy the laptop's `.env` with live keys onto the box).
+
 ```bash
-cd ~/lms
+cd "$SCRATCH/lms"
 cat >> .env <<'EOF'
 LMS_OPENAI_BASE_URL=http://localhost:8000/v1
 LMS_OPENAI_MODEL=lms-generalist
@@ -160,7 +191,7 @@ print(c.openai.base_url, c.openai.model)
 ## Step 6 — Gate B: end-to-end smoke
 
 ```bash
-cd ~/lms
+cd "$SCRATCH/lms"
 uv run lms \
   --provider openai \
   --verifier real \
