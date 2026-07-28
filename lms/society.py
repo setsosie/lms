@@ -596,6 +596,14 @@ class Society:
                 # For now, we trust that individually verified artifacts compile together
                 pass
 
+        # Save per-agent stats for accurate resumption
+        stats_data = {
+            "tokens_by_agent": self.tokens_by_agent,
+            "artifacts_by_agent": self.artifacts_by_agent,
+            "reviews_by_agent": self.reviews_by_agent,
+        }
+        (output_dir / "agent_stats.json").write_text(json.dumps(stats_data, indent=2))
+
         # Save results and checkpoint data
         results_data = {
             "n_agents": self.n_agents,
@@ -669,6 +677,14 @@ class Society:
         foundation_path = output_dir / "LMS" / "Foundation.lean"
         if foundation_path.with_suffix(".json").exists():
             society.foundation = FoundationFile.load(foundation_path)
+
+        # Load per-agent stats if they exist
+        stats_path = output_dir / "agent_stats.json"
+        if stats_path.exists():
+            stats = json.loads(stats_path.read_text())
+            society.tokens_by_agent = stats.get("tokens_by_agent", {})
+            society.artifacts_by_agent = stats.get("artifacts_by_agent", {})
+            society.reviews_by_agent = stats.get("reviews_by_agent", {})
 
         return society
 
