@@ -11,12 +11,6 @@ dependencies = [
     "google-generativeai>=0.8.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
-]
-
 [project.scripts]
 lms = "lms.run:main"
 
@@ -25,6 +19,11 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [dependency-groups]
+# `uv sync` installs dependency-groups.dev but NOT project.optional-dependencies.
+# The test plugins must live here or `asyncio_mode = "auto"` above refers to a
+# plugin that was never installed, and every async test reports a false red.
 dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
     "pytest-cov>=7.0.0",
 ]
