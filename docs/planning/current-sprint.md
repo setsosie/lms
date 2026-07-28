@@ -43,7 +43,7 @@ Disposition of Sprint 1 scope:
 
 | Metric | Value |
 |--------|-------|
-| Planned points | 22 (+3 stretch) |
+| Planned points | 24 (+3 stretch) |
 | Carryover | 3 (`26Q3-INFRA-01`) |
 | Delivered to date | 0 |
 | Track | Harness honesty (Phase A of the calibration program) |
@@ -65,6 +65,7 @@ harness has never enforced. Gate numbering matches
 | 26Q3-HARN-04: Novelty classifier (N0 / N1) | 5 | CRITICAL | HARN | 🔲 PENDING | — | Gate 4. Mathlib name search + `exact?`/`loogle` via lean-lsp MCP. Every artifact produced to date is N0 |
 | 26Q3-HARN-05: Per-statement cost accounting | 3 | HIGH | HARN | 🔲 PENDING | — | Tokens + wall-clock attributed per statement incl. failed attempts; replaces per-generation totals. This is the CVFN numerator |
 | 26Q3-INFRA-01: Local OpenAI-compatible serving path | 3 | HIGH | INFRA | 🔲 PENDING | — | Carryover. `base_url` on `ProviderConfig`. Also the API-fallback lever for the Aug 21 contingency |
+| 26Q3-HARN-07: Verifier must invoke Lean with the project env | 2 | CRITICAL | HARN | 🔲 PENDING | — | Found on the box 2026-07-28. `real.py` runs bare `lean` with no `LEAN_PATH`, so it can only check **import-free** Lean. Every real agent proof imports Mathlib → CVFN numerator is structurally 0 until fixed. Use `lake env lean` |
 | 26Q3-HARN-06: D4 side-by-side review view | 3 | STRETCH | HARN | 🔲 PENDING | — | Book quote ‖ Lean statement. If D4 is slow because the format is bad, Phase D measures the wrong thing |
 
 ## Gate A — sprint exit criterion

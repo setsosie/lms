@@ -1,6 +1,7 @@
 """Real LEAN 4 verifier using the actual LEAN compiler."""
 
 import asyncio
+import os
 import shutil
 from pathlib import Path
 
@@ -41,6 +42,10 @@ class RealLeanVerifier(LeanVerifier):
         if project_dir:
             self.project = LeanProject(project_dir)
 
+        # With a project, Lean runs under `lake env` so that the package's
+        # LEAN_PATH is exported; bare `lean` cannot resolve a single import.
+        self.lake_path = self._find_lake()
+
     def _find_lean(self) -> str:
         """Find the LEAN 4 executable.
 
@@ -50,20 +55,50 @@ class RealLeanVerifier(LeanVerifier):
         Raises:
             FileNotFoundError: If LEAN is not found
         """
-        # Check PATH first
         lean = shutil.which("lean")
         if lean:
             return lean
 
-        # Check common elan installation
-        elan_path = Path.home() / ".elan" / "bin" / "lean"
-        if elan_path.exists():
-            return str(elan_path)
+        for candidate in self._toolchain_candidates("lean"):
+            if candidate.exists():
+                return str(candidate)
 
         raise FileNotFoundError(
-            "LEAN 4 not found. Install via elan: "
-            "https://github.com/leanprover/elan"
+            "LEAN 4 not found. Install via elan: https://github.com/leanprover/elan"
         )
+
+    @staticmethod
+    def _toolchain_candidates(exe: str) -> list[Path]:
+        """Elan bin locations to search, most specific first.
+
+        `ELAN_HOME` is honored by elan at runtime but is undocumented, and on a
+        cluster it routinely points somewhere other than `~/.elan` to keep
+        multi-GB toolchains off the home quota.
+        """
+        roots = []
+        elan_home = os.environ.get("ELAN_HOME")
+        if elan_home:
+            roots.append(Path(elan_home))
+        roots.append(Path.home() / ".elan")
+        return [root / "bin" / exe for root in roots]
+
+    def _find_lake(self) -> str:
+        """Find the `lake` executable.
+
+        Unlike `_find_lean` this does not raise when absent: `lake` is only
+        needed when a project is configured, and failing at construction time
+        would break import-free verification on a machine without a toolchain.
+        An unresolved name surfaces as a clear error at exec time instead.
+        """
+        lake = shutil.which("lake")
+        if lake:
+            return lake
+
+        for candidate in self._toolchain_candidates("lake"):
+            if candidate.exists():
+                return str(candidate)
+
+        return "lake"
 
     async def verify(self, code: str) -> VerificationResult:
         """Verify LEAN code using the real compiler.
@@ -98,6 +133,7 @@ class RealLeanVerifier(LeanVerifier):
         else:
             # Fallback to system temp
             import tempfile
+
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 suffix=".lean",
@@ -106,14 +142,41 @@ class RealLeanVerifier(LeanVerifier):
                 f.write(code)
                 temp_path = Path(f.name)
 
+        # `lake env lean` exports the package's LEAN_PATH so imports resolve.
+        # Bare `lean` has no search path and fails on any import with
+        # "unknown module prefix", which is indistinguishable in the result
+        # from a genuine proof failure.
+        if self.project:
+            command: tuple[str, ...] = (
+                self.lake_path,
+                "env",
+                "lean",
+                str(temp_path),
+            )
+            cwd: Path | None = self.project.project_dir
+        else:
+            command = (self.lean_path, str(temp_path))
+            cwd = None
+
         try:
             # Run LEAN
-            proc = await asyncio.create_subprocess_exec(
-                self.lean_path,
-                str(temp_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *command,
+                    cwd=cwd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            except FileNotFoundError:
+                return VerificationResult(
+                    success=False,
+                    code=code,
+                    error=(
+                        f"Could not execute {command[0]!r}. A Lean toolchain "
+                        "with `lake` on PATH (or under $ELAN_HOME/bin) is "
+                        "required to verify code with imports."
+                    ),
+                )
 
             try:
                 stdout, stderr = await asyncio.wait_for(
