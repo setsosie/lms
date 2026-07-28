@@ -624,3 +624,200 @@ references: []
             gen1_prompt = received_prompts[1]
             # Should mention foundation or import
             assert "Foundation" in gen1_prompt or "Cat" in gen1_prompt or "import" in gen1_prompt.lower()
+
+
+class TestSocietyWorkingGroups:
+    """Tests for Society working groups integration."""
+
+    @pytest.mark.asyncio
+    async def test_society_has_working_group_settings(self, tmp_path: Path):
+        """Society has working group configuration."""
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config)
+
+        society = Society(n_agents=3, provider=provider)
+
+        assert hasattr(society, "use_working_groups")
+        assert hasattr(society, "n_working_groups")
+        assert hasattr(society, "max_turns_per_group")
+        assert hasattr(society, "use_planning_panel")
+        assert hasattr(society, "dependency_graph")
+
+    @pytest.mark.asyncio
+    async def test_run_generation_with_groups_no_goal(self, tmp_path: Path):
+        """Working groups mode falls back to regular generation without goal."""
+        config = ProviderConfig(api_key="test", model="test")
+        response = """
+<artifact>
+type: definition
+name: Test
+description: A test
+lean: def test := 42
+references: []
+</artifact>
+"""
+        provider = MockProvider(config, responses=[response])
+        verifier = MockLeanVerifier()
+
+        society = Society(n_agents=1, provider=provider, verifier=verifier)
+        society.use_working_groups = True
+
+        # Without a goal, should fall back to regular generation
+        result = await society.run_generation_with_groups(0)
+
+        assert result.generation == 0
+        # Falls back to regular mode which creates artifacts
+        assert result.artifacts_created >= 0
+
+    @pytest.mark.asyncio
+    async def test_run_generation_with_groups_with_goal(self, tmp_path: Path):
+        """Working groups mode creates dependency graph from goal."""
+        from lms.goals import Goal, StacksDefinition
+        from lms.dependency import DependencyGraph
+
+        config = ProviderConfig(api_key="test", model="test")
+        # Response for planning panel + working group
+        responses = [
+            """<proposal>
+<rationale>Focus on CH4-CAT first</rationale>
+<assignments>
+<group id="1" task="CH4-CAT" priority="1">
+Work on category definition
+</group>
+</assignments>
+</proposal>""",
+            "APPROVE",
+            "APPROVE",
+            "APPROVE",
+            # Working group responses
+            "Let's define Category.",  # Chair
+            """```lean
+structure Category where
+  Obj : Type
+```""",  # Researcher
+            "CONSENSUS REACHED",  # Chair
+            """<artifact>
+type: definition
+name: Category
+stacks_tag: CH4-CAT
+description: Category structure
+lean: |
+  structure Category where
+    Obj : Type
+</artifact>""",  # Scribe
+        ]
+        provider = MockProvider(config, responses=responses)
+        verifier = MockLeanVerifier()
+
+        goal = Goal(
+            name="Test Goal",
+            description="Test",
+            source="Test",
+            definitions=[
+                StacksDefinition(tag="CH4-CAT", section="4.1", name="Category", content="..."),
+                StacksDefinition(tag="CH4-FUNC", section="4.2", name="Functor", content="..."),
+            ],
+        )
+
+        foundation_path = tmp_path / "LMS" / "Foundation.lean"
+        society = Society(
+            n_agents=1,
+            provider=provider,
+            verifier=verifier,
+            goal=goal,
+            foundation_path=foundation_path,
+        )
+        society.use_working_groups = True
+        society.n_working_groups = 1
+
+        result = await society.run_generation_with_groups(0)
+
+        # Dependency graph should be created
+        assert society.dependency_graph is not None
+        assert isinstance(society.dependency_graph, DependencyGraph)
+        assert result.generation == 0
+
+    @pytest.mark.asyncio
+    async def test_dependency_graph_initialized_from_goal(self, tmp_path: Path):
+        """Dependency graph is automatically created from goal."""
+        from lms.goals import Goal, StacksDefinition
+        from lms.dependency import TaskStatus
+
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config, responses=["No output"])
+
+        goal = Goal(
+            name="Test Goal",
+            description="Test",
+            source="Test",
+            definitions=[
+                StacksDefinition(tag="A", section="1.1", name="A", content="..."),
+                StacksDefinition(tag="B", section="1.2", name="B", content="..."),
+            ],
+        )
+
+        society = Society(n_agents=1, provider=provider, goal=goal)
+        society.use_working_groups = True
+        society.use_planning_panel = False  # Skip planning for simpler test
+
+        # Trigger graph initialization
+        await society.run_generation_with_groups(0)
+
+        assert society.dependency_graph is not None
+        assert "A" in society.dependency_graph.nodes
+        assert "B" in society.dependency_graph.nodes
+
+    @pytest.mark.asyncio
+    async def test_foundation_summary_empty(self, tmp_path: Path):
+        """Foundation summary indicates empty state correctly."""
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config)
+
+        foundation_path = tmp_path / "LMS" / "Foundation.lean"
+        society = Society(
+            n_agents=1,
+            provider=provider,
+            foundation_path=foundation_path,
+        )
+
+        summary = society._get_foundation_summary()
+        assert "empty" in summary.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_task_content_from_goal(self, tmp_path: Path):
+        """_get_task_content retrieves content from goal definitions."""
+        from lms.goals import Goal, StacksDefinition
+
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config)
+
+        goal = Goal(
+            name="Test",
+            description="Test",
+            source="Test",
+            definitions=[
+                StacksDefinition(
+                    tag="CH4-CAT",
+                    section="4.1",
+                    name="Category",
+                    content="A category is a collection of objects with morphisms.",
+                ),
+            ],
+        )
+
+        society = Society(n_agents=1, provider=provider, goal=goal)
+
+        content = society._get_task_content("CH4-CAT")
+        assert "category" in content.lower()
+        assert "morphisms" in content.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_task_content_fallback(self, tmp_path: Path):
+        """_get_task_content falls back to generic message for unknown tag."""
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config)
+
+        society = Society(n_agents=1, provider=provider)
+
+        content = society._get_task_content("UNKNOWN-TAG")
+        assert "UNKNOWN-TAG" in content
