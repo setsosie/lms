@@ -85,14 +85,40 @@ time lake build                     # expect: fast if cache hit, hours if not
 > and should be made deliberately, not inside a runbook.
 
 ```bash
-# Verify the existing corpus still compiles and count sorries
-lake build 2>&1 | tee /tmp/lake-build.log
-grep -c "sorry" /tmp/lake-build.log || true
+# Compile the corpus and record what comes out
+lake build 2>&1 | tee "$SCRATCH/lake-build.log"
+grep -c "error:" "$SCRATCH/lake-build.log" || true
+grep -n "declaration uses 'sorry'" "$SCRATCH/lake-build.log" || true
 ```
 
-**Checkpoint 2b**: report the error count and the `sorry` warnings. Baseline
-expectation from the last known state: **3 sorries, 0 errors** in the novel files.
-A discrepancy here means the corpus rotted against Mathlib and needs its own task.
+**Checkpoint 2b — this is the first time any of this has been compiled.**
+Do not expect a clean build, and do not treat errors here as a failed checkpoint.
+
+Until `lean/lakefile.toml` gained `globs = ["LMS.+"]`, Lake's default built only
+the module `LMS` (which imports `LMS.Basic`) — every other file under `LMS/` was
+excluded, so `lake build` exited 0 without elaborating them. No CI ever covered
+them either: `lean/.github/workflows/` is not a path GitHub Actions reads. The
+previously recorded "all compile, 0 errors" baseline has no build behind it.
+
+What we know from source review, to compare against:
+
+- **1 real `sorry`** — `LMS/Categories/Compat.lean:161`, the triangle identity in
+  `equivalenceToMathlib`. It is **not fillable as written**: LMS's `Equivalence`
+  records no coherence law, so Mathlib's `functor_unitIso_comp` obligation is
+  false for equivalences the structure admits. Expect one `declaration uses
+  'sorry'` warning here. The fix (`CategoryTheory.Equivalence.mk`, which applies
+  `adjointifyη`) is its own task — **do not attempt it on the box.**
+- Two further `sorry` tokens in that file are prose inside docstrings (lines 30,
+  103). A `grep -c sorry` counts 3; the code contains 1. Count
+  `declaration uses 'sorry'` warnings, not tokens.
+- `LMS/Temp/verify_f5413690.lean` is harness scratch that got tracked by
+  accident and is now inside the glob. If it errors, that's a cleanup task, not
+  corpus rot.
+
+**Report the full error list verbatim.** That list is the deliverable of this
+step — it tells us what to fix and what to purge. Do not hand-edit any `.lean`
+file to make the build pass; a corpus repaired by hand is no longer a measurement
+of what the pipeline produced.
 
 ---
 
@@ -201,7 +227,9 @@ uv run lms \
   2>&1 | tee /tmp/gateB.log
 ```
 
-Then score it through the Sprint 2 gates:
+Then score it through the Sprint 2 gates. Requires `26Q3-HARN-01`, `-03`, `-04`
+and `-05` to have landed — as of 2026-07-28 `lms/metrics.py` has no
+`cvfn_report` and no `__main__`, so this command does not exist yet:
 
 ```bash
 uv run python -m lms.metrics cvfn_report experiments/gateB_smoke
