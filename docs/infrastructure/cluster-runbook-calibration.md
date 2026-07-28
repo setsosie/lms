@@ -17,10 +17,12 @@ continuing.
 ```bash
 nvidia-smi                       # expect 4x H100 NVL, ~94GB each
 df -h /scratch                   # need >= 100 GB free (model ~61 GB + Mathlib ~20 GB + toolchain)
-python3 --version                # >= 3.12
+uv --version                     # everything Python in this repo goes through uv
+uv run python --version          # >= 3.12
 ```
 
-**Checkpoint 0**: 4 GPUs visible, ≥100 GB free on the scratch mount.
+**Checkpoint 0**: 4 GPUs visible, ≥100 GB free on the scratch mount, `uv` present.
+Never invoke bare `python`/`pip` anywhere in this runbook — always `uv run`.
 
 ---
 
@@ -53,13 +55,28 @@ mkdir -p "$HF_HOME" "$XDG_CACHE_HOME" "$ELAN_HOME"
 
 ```bash
 curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
-source "$ELAN_HOME/env"
+
+# elan does NOT create an `env` file to source (that is rustup, not elan). It
+# installs binaries into <install-dir>/bin. Find which dir it actually used:
+ls "$ELAN_HOME/bin/elan" 2>/dev/null || ls ~/.elan/bin/elan
+
+# Then put that bin dir on PATH — substitute ~/.elan if that is where it landed:
+export PATH="$ELAN_HOME/bin:$PATH"
+echo 'export PATH="$ELAN_HOME/bin:$PATH"' >> ~/.bashrc
+
 elan --version
 lake --version
 ```
 
-**Checkpoint 1**: `lake --version` prints a version. Add `source $ELAN_HOME/env`
-to your shell rc (elan-init respects `ELAN_HOME` from Step 0.5).
+**Checkpoint 1**: `lake --version` prints a version, and `which lake` points
+inside the scratch mount.
+
+> `ELAN_HOME` is honored by the `elan-init` **binary**, not by the shell
+> bootstrapper, and it is undocumented in elan's README — so verify rather than
+> assume. If elan landed in `~/.elan`, the toolchains and their multi-GB
+> `.olean` trees are going to your **home quota**, which is exactly what Step 0.5
+> exists to prevent. In that case remove `~/.elan`, confirm `echo $ELAN_HOME`
+> is set in the current shell, and re-run the installer.
 
 ---
 
@@ -163,9 +180,14 @@ Per `docs/infrastructure/2026Q2-lean-codegen-base-model-selection.md`, start wit
 the generalist only — one model is enough for Gate B. Add BFS-Prover-V1-7B for
 Phase C.
 
+Run from the repo root, after Step 3's `uv sync` — `uv pip install` targets the
+project's `.venv`, so `vllm` lands there and must be invoked with `uv run`
+(a bare `vllm serve` will not be on `PATH`).
+
 ```bash
+cd "$SCRATCH/lms"
 uv pip install vllm
-CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
+CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --port 8000 \
   --tensor-parallel-size 2 \
   --max-model-len 65536 \
