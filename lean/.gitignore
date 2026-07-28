@@ -1,1 +1,4 @@
 /.lake
+# Agent-generated verification scratch. Never library source — with
+# `globs = ["LMS.+"]` anything left here would be compiled by `lake build`.
+/LMS/Temp/

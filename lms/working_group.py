@@ -151,6 +151,19 @@ class WorkingGroupState:
             "final_artifact": self.final_artifact,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "WorkingGroupState":
+        """Create from dictionary for checkpoint resumption."""
+        config = WorkingGroupConfig.from_dict(data["config"])
+        return cls(
+            config=config,
+            messages=[GroupMessage.from_dict(m) for m in data["messages"]],
+            blackboard=data["blackboard"],
+            current_turn=data["current_turn"],
+            status=GroupStatus(data["status"]),
+            final_artifact=data.get("final_artifact"),
+        )
+
 
 # =============================================================================
 # Role-specific system prompts
