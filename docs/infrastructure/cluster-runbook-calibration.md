@@ -86,11 +86,20 @@ which lake
 **Checkpoint 1**: `lake --version` prints a version, and `which lake` points
 inside the scratch mount.
 
-> **Recovery if elan already installed to `~/.elan`.** Nothing is lost — with no
-> toolchain installed, `~/.elan` is just the binary and shims. Check with
-> `du -sh ~/.elan`, then `mkdir -p "$ELAN_HOME" && rm -rf ~/.elan` and re-run the
-> installer with `ELAN_HOME` exported. Remove the stale `~/.elan/bin` PATH line
-> the installer appended to your shell rc (`grep -n elan ~/.bashrc`).
+> **Recovery if elan already installed to `~/.elan`.** Check the size first —
+> `du -sh ~/.elan`. Do **not** assume it is just the binary and shims: a first
+> install sets a default toolchain, so it is routinely 2-3 GB. `no default
+> toolchain configured` does not mean nothing is installed, only that nothing is
+> installed *at `$ELAN_HOME`*, which is where elan is looking. Deleting it costs
+> a re-download.
+>
+> Then `mkdir -p "$ELAN_HOME" && rm -rf ~/.elan`, re-run the installer with
+> `ELAN_HOME` exported, and **`hash -r`** — bash caches absolute paths of
+> commands it has already run, so without it the shell keeps trying the deleted
+> `~/.elan/bin/elan` and reports `No such file or directory` even though the new
+> install is fine. Check your shell rc for a stale `~/.elan/bin` PATH line the
+> first installer appended; note that `grep -n elan ~/.bashrc` will not show a
+> line written as `$ELAN_HOME/bin` — grep for both.
 
 > `ELAN_HOME` is honored by the `elan-init` **binary**, not by the shell
 > bootstrapper, and it is undocumented in elan's README — so verify rather than
