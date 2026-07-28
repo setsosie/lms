@@ -25,7 +25,10 @@ class LeanProject:
             project_dir: Path to the Lean project root (contains lakefile.toml)
         """
         self.project_dir = Path(project_dir)
-        self.temp_dir = self.project_dir / "LMS" / "Temp"
+        # Deliberately OUTSIDE the library source tree. The lean_lib globs
+        # `LMS.+`, so a scratch file under LMS/ becomes build input and
+        # `lake build` starts compiling whatever an agent last emitted.
+        self.temp_dir = self.project_dir / ".lake" / "verify-temp"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
         # Track imports we've seen to detect when rebuild is needed
@@ -91,7 +94,8 @@ class LeanProject:
         """
         if clean:
             clean_proc = await asyncio.create_subprocess_exec(
-                "lake", "clean",
+                "lake",
+                "clean",
                 cwd=self.project_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -99,7 +103,8 @@ class LeanProject:
             await clean_proc.communicate()
 
         proc = await asyncio.create_subprocess_exec(
-            "lake", "build",
+            "lake",
+            "build",
             cwd=self.project_dir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
