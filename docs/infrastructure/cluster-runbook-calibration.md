@@ -187,6 +187,54 @@ step — it tells us what to fix and what to purge. Do not hand-edit any `.lean`
 file to make the build pass; a corpus repaired by hand is no longer a measurement
 of what the pipeline produced.
 
+**Result, 2026-07-28 (first run):** 19 modules, **0 errors**, **exactly one**
+`declaration uses 'sorry'` at `Compat.lean:108` — the `equivalenceToMathlib`
+declaration, whose `sorry` token sits at line 161. The corpus compiles against
+pinned Mathlib `fe3134f0`.
+
+---
+
+## Step 2c — Axiom audit
+
+**A 0-error build is not verification.** A proof admitted through an `aesop_cat`
+autoParam produces no error and no `sorry` warning, and a `grep` for `sorry`
+cannot see a `sorryAx` reached through an import. Only `#print axioms` settles
+what a proof term actually depends on. This is the manual form of the T4 gate in
+`26Q3-HARN-03`.
+
+Note the invocation: **`lake env lean`**, not bare `lean`. Bare `lean` has no
+`LEAN_PATH` and cannot resolve a single import.
+
+```bash
+cd ~/code/lms/lean
+cat > "$SCRATCH/axcheck.lean" <<'EOF'
+import LMS.Categories.Localization
+import LMS.Categories.Compat
+
+#print axioms LMS.Categories.Localization.sameDenom_eq_iff_exists_postcomp_W
+#print axioms LMS.Categories.Localization.sameDenom_eq_iff_exists_postcomp
+#print axioms LMS.Categories.Localization.exists_lift_commSq
+#print axioms LMS.Categories.Localization.isIso_map_iff_inSaturation
+#print axioms LMS.Categories.Compat.equivalenceToMathlib
+EOF
+lake env lean "$SCRATCH/axcheck.lean"
+```
+
+**Checkpoint 2c**: every declaration should report exactly
+`[propext, Classical.choice, Quot.sound]`. Anything else — above all `sorryAx` —
+means an obligation was silently admitted.
+
+**Result, 2026-07-28:** all four `Localization` theorems (Stacks Tags 04VB, 04VD,
+05Q2) clean on the standard three. `sorryAx` appears only in
+`Compat.equivalenceToMathlib` and does not leak into the Localization results.
+This is the project's first genuinely verified output.
+
+> `TwoFibreProduct.lean` declares into `namespace LMS.Categories.IsoComma`, not a
+> namespace of its own — so `mapFunctor` and the `assoc*` family are
+> `LMS.Categories.IsoComma.*`. The `IsoComma`/`TwoFibreProduct`/`TwoCat`
+> declarations are the ones carrying `aesop_cat` obligations and are worth their
+> own batch.
+
 ---
 
 ## Step 3 — Verify Lean is reachable as an oracle from Python
@@ -221,6 +269,41 @@ print(asyncio.run(v.verify('theorem nonsense : 1 = 2 := by rfl')))
 
 **Checkpoint 3b**: both rejected. An oracle that only ever says yes is the failure
 mode this whole program is guarding against.
+
+> Note which of those two rejections is load-bearing. `sorry` is caught by
+> `if "sorry" in code` in `lms/lean/real.py:86` — a Python substring test that
+> short-circuits before Lean is ever invoked, and returns the same answer on a
+> machine with no Lean installed. Only `1 = 2 := by rfl` exercises the compiler.
+
+Now the test that actually matters — code with an import:
+
+```bash
+uv run python -c "
+from lms.lean.real import RealLeanVerifier
+import asyncio, pathlib
+v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+code = '''import Mathlib.Logic.Basic
+theorem cal_import_smoke (p : Prop) [Decidable p] : ¬¬p ↔ p := not_not'''
+print(asyncio.run(v.verify(code)))
+"
+```
+
+**Checkpoint 3c**: **this is expected to FAIL today**, with `unknown module
+prefix 'Mathlib'`. That is not a broken install — it is a defect in the verifier.
+
+`RealLeanVerifier.verify` invokes `lean <temp_path>` with no `LEAN_PATH` and no
+`cwd` (`lms/lean/real.py:111-116`), so nothing puts the project's
+`.lake/packages/*/build/lib/lean` directories on the module search path. The
+verifier can therefore only check **import-free** Lean. Checkpoints 3 and 3b pass
+only because their snippets import nothing.
+
+Every real agent proof imports Mathlib, so without this fix Gate B measures an
+environment bug rather than the pipeline — it would report 0 verified statements
+for reasons having nothing to do with the models. The correct invocation is the
+one used for the axiom audit in Step 2c: `lake env lean <file>`, run from the
+Lean project directory.
+
+Record the failure and proceed; Step 4 does not depend on it.
 
 ---
 
