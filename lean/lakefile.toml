@@ -1,6 +1,6 @@
 name = "LMS"
 version = "0.1.0"
-defaultTargets = ["lms"]
+defaultTargets = ["lms", "LMS"]
 
 [[require]]
 name = "mathlib"
@@ -9,6 +9,11 @@ rev = "master"
 
 [[lean_lib]]
 name = "LMS"
+# Without this, Lake's default `globs = roots.map Glob.one` builds the single
+# module `LMS` (which imports only `LMS.Basic`) and nothing else — every file
+# under LMS/ was silently excluded from the build. `LMS.+` = LMS and all
+# submodules, recursively.
+globs = ["LMS.+"]
 
 [[lean_exe]]
 name = "lms"
