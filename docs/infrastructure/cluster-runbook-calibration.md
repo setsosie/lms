@@ -28,9 +28,10 @@ Never invoke bare `python`/`pip` anywhere in this runbook — always `uv run`.
 
 ## Step 0.5 — Route heavy artifacts to scratch
 
-Everything bulky (model weights, Mathlib cache, elan toolchain, the repo itself
-with its `.lake/` and `.venv/`) goes on scratch, not home. Substitute the box's
-actual scratch mount if it isn't `/scratch/$USER`.
+Everything bulky — model weights, Mathlib cache, elan toolchains, Lake build
+artifacts — goes on scratch. **The repo itself stays in home** (see Step 2): code
+and git history belong on a backed-up mount, not a purgeable one. Substitute the
+box's actual scratch mount if it isn't `/scratch/$USER`.
 
 ```bash
 cat >> ~/.bashrc <<'EOF'
@@ -114,9 +115,28 @@ inside the scratch mount.
 
 The repo pins Lean `v4.27.0-rc1` and Mathlib rev `fe3134f0c3508d` (Dec 2025).
 
+**The repo itself lives in home, not scratch.** Only two directories inside it
+are bulky — `lean/.lake/` (unpacked Mathlib oleans, ~20-30 GB) and `.venv/`.
+Everything else is source and git history, which is the last thing you want on a
+purgeable mount. Symlink the bulk out instead. Keeping artifacts off `/` also
+protects the root filesystem: a full `/` destabilizes the box, a full scratch
+mount only costs a re-download.
+
 ```bash
-git clone git@github.com:setsosie/lms.git "$SCRATCH/lms"   # on scratch: .lake/ and .venv/ are the bulky parts
-cd "$SCRATCH/lms/lean"
+git clone git@github.com:setsosie/lms.git ~/code/lms   # or `git fetch origin` if it exists
+cd ~/code/lms
+
+# Until chore/track-wc3-lean-corpus and chore/wire-lean-build are merged to main,
+# check out BOTH — neither alone gives a build that reaches the corpus. One has
+# the 14 .lean files, the other has the `globs` that make Lake compile them.
+git checkout chore/track-wc3-lean-corpus
+git merge origin/chore/wire-lean-build      # verified conflict-free
+
+# Route build artifacts to scratch BEFORE the first cache get
+mkdir -p "$SCRATCH/lake-artifacts"
+ln -s "$SCRATCH/lake-artifacts" lean/.lake
+
+cd ~/code/lms/lean
 cat lean-toolchain                  # leanprover/lean4:v4.27.0-rc1
 
 time lake exe cache get             # downloads prebuilt Mathlib olean files
@@ -172,7 +192,7 @@ of what the pipeline produced.
 ## Step 3 — Verify Lean is reachable as an oracle from Python
 
 ```bash
-cd "$SCRATCH/lms"
+cd ~/code/lms
 uv sync
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
@@ -215,7 +235,7 @@ project's `.venv`, so `vllm` lands there and must be invoked with `uv run`
 (a bare `vllm serve` will not be on `PATH`).
 
 ```bash
-cd "$SCRATCH/lms"
+cd ~/code/lms
 uv pip install vllm
 CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --port 8000 \
@@ -248,7 +268,7 @@ API keys are needed for local serving (`.env.example` is in the repo for
 reference; do not copy the laptop's `.env` with live keys onto the box).
 
 ```bash
-cd "$SCRATCH/lms"
+cd ~/code/lms
 cat >> .env <<'EOF'
 LMS_OPENAI_BASE_URL=http://localhost:8000/v1
 LMS_OPENAI_MODEL=lms-generalist
@@ -268,9 +288,16 @@ print(c.openai.base_url, c.openai.model)
 
 ## Step 6 — Gate B: end-to-end smoke
 
+Invoke the module, **not** `uv run lms`. The project declares
+`[project.scripts] lms` but has no `[build-system]` and no
+`tool.uv.package = true`, so `uv sync` prints *"Skipping installation of entry
+points (`project.scripts`) because this project is not packaged"* and `uv run
+lms` dies with `Failed to spawn: lms`. `python -m lms.run` takes the identical
+arguments and is verified working.
+
 ```bash
-cd "$SCRATCH/lms"
-uv run lms \
+cd ~/code/lms
+uv run python -m lms.run \
   --provider openai \
   --verifier real \
   --agents 1 \
