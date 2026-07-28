@@ -53,7 +53,15 @@ mkdir -p "$HF_HOME" "$XDG_CACHE_HOME" "$ELAN_HOME"
 
 ## Step 1 — Lean toolchain
 
+**`ELAN_HOME` must be exported in the shell that runs the installer.** elan reads
+it at *runtime* for `$ELAN_HOME/toolchains`, but the piped bootstrapper does not
+see it unless it is already in the environment. Get this wrong and you get a
+split brain — binary and shims in `~/.elan`, toolchain root pointed at an empty
+scratch path — whose symptom is `could not canonicalize path:
+'<scratch>/elan/toolchains'` followed by `no default toolchain configured`.
+
 ```bash
+echo "ELAN_HOME=$ELAN_HOME"   # must be non-empty BEFORE the next line
 curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
 
 # elan does NOT create an `env` file to source (that is rustup, not elan). It
@@ -64,12 +72,25 @@ ls "$ELAN_HOME/bin/elan" 2>/dev/null || ls ~/.elan/bin/elan
 export PATH="$ELAN_HOME/bin:$PATH"
 echo 'export PATH="$ELAN_HOME/bin:$PATH"' >> ~/.bashrc
 
+# Install the PINNED toolchain. Do NOT run `elan default stable`, which is what
+# elan's own error message suggests — this repo pins v4.27.0-rc1 and the Step 2
+# Mathlib cache is built against that pin. `stable` guarantees a cache miss.
+elan toolchain install leanprover/lean4:v4.27.0-rc1
+elan default leanprover/lean4:v4.27.0-rc1
+
 elan --version
 lake --version
+which lake
 ```
 
 **Checkpoint 1**: `lake --version` prints a version, and `which lake` points
 inside the scratch mount.
+
+> **Recovery if elan already installed to `~/.elan`.** Nothing is lost — with no
+> toolchain installed, `~/.elan` is just the binary and shims. Check with
+> `du -sh ~/.elan`, then `mkdir -p "$ELAN_HOME" && rm -rf ~/.elan` and re-run the
+> installer with `ELAN_HOME` exported. Remove the stale `~/.elan/bin` PATH line
+> the installer appended to your shell rc (`grep -n elan ~/.bashrc`).
 
 > `ELAN_HOME` is honored by the `elan-init` **binary**, not by the shell
 > bootstrapper, and it is undocumented in elan's README — so verify rather than
