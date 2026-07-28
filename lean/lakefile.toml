@@ -1,6 +1,10 @@
 name = "LMS"
 version = "0.1.0"
-defaultTargets = ["lms"]
+# The `lms` exe is a `lake new` stub (Main.lean prints a string; nothing invokes
+# it) and Lake schedules it before the library is in place, so `import LMS` in
+# Main fails with `unknown module prefix 'LMS'`. It is not in the default
+# targets; `lake build lms` still builds it explicitly if ever needed.
+defaultTargets = ["LMS"]
 
 [[require]]
 name = "mathlib"
@@ -9,6 +13,11 @@ rev = "master"
 
 [[lean_lib]]
 name = "LMS"
+# Without this, Lake's default `globs = roots.map Glob.one` builds the single
+# module `LMS` (which imports only `LMS.Basic`) and nothing else — every file
+# under LMS/ was silently excluded from the build. `LMS.+` = LMS and all
+# submodules, recursively.
+globs = ["LMS.+"]
 
 [[lean_exe]]
 name = "lms"

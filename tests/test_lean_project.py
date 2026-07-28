@@ -23,9 +23,20 @@ class TestLeanProject:
         """Test that temp directory is created."""
         with tempfile.TemporaryDirectory() as tmpdir:
             project = LeanProject(tmpdir)
-            expected_temp = Path(tmpdir) / "LMS" / "Temp"
+            expected_temp = Path(tmpdir) / ".lake" / "verify-temp"
             assert project.temp_dir == expected_temp
             assert expected_temp.exists()
+
+    def test_temp_dir_outside_library_source_tree(self):
+        """Scratch must not sit under LMS/, or `globs = ["LMS.+"]` compiles it.
+
+        Regression guard: verification snippets written into the library source
+        tree become build input, so `lake build` starts elaborating whatever an
+        agent last emitted.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = LeanProject(tmpdir)
+            assert "LMS" not in project.temp_dir.relative_to(tmpdir).parts
 
     def test_extract_imports_single(self):
         """Test extracting a single import."""
