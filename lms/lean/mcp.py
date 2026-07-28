@@ -5,11 +5,9 @@ richer error messages and integration with the Lean project.
 """
 
 import asyncio
-import json
-import tempfile
 from pathlib import Path
 
-from lms.lean.interface import LeanVerifier, VerificationResult
+from lms.lean.interface import LeanVerifier, VerificationResult, VerifierKind
 from lms.lean.project import LeanProject
 
 
@@ -25,6 +23,8 @@ class MCPLeanVerifier(LeanVerifier):
     Note: This requires the lean-lsp MCP server to be running and
     a valid Lean project at the specified path.
     """
+
+    verifier_kind: VerifierKind = "mcp"
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class MCPLeanVerifier(LeanVerifier):
         """
         # Empty code always fails
         if not code or not code.strip():
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Empty code provided",
@@ -73,7 +73,7 @@ class MCPLeanVerifier(LeanVerifier):
 
         # Check for sorry (incomplete proofs)
         if "sorry" in code:
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Code contains 'sorry' - incomplete proof not allowed",
@@ -92,7 +92,9 @@ class MCPLeanVerifier(LeanVerifier):
 
         # Ensure imports are present for category theory (only if no Foundation)
         elif "CategoryTheory" in cleaned_code and "import" not in cleaned_code:
-            cleaned_code = "import Mathlib.CategoryTheory.Category.Basic\n\n" + cleaned_code
+            cleaned_code = (
+                "import Mathlib.CategoryTheory.Category.Basic\n\n" + cleaned_code
+            )
 
         # Auto-rebuild if new imports detected (prevents .olean errors)
         await self.project.ensure_built(cleaned_code)
@@ -103,6 +105,7 @@ class MCPLeanVerifier(LeanVerifier):
 
         # Create a unique temp file
         import uuid
+
         temp_file = temp_dir / f"verify_{uuid.uuid4().hex[:8]}.lean"
 
         try:
@@ -144,13 +147,19 @@ class MCPLeanVerifier(LeanVerifier):
                 if stripped != "import LMS.Foundation":
                     imports.append(stripped)
             # Stop collecting imports after first non-import, non-empty, non-comment line
-            elif stripped and not stripped.startswith("--") and not stripped.startswith("/-"):
+            elif (
+                stripped
+                and not stripped.startswith("--")
+                and not stripped.startswith("/-")
+            ):
                 in_imports = False
                 other_lines.append(line)
             elif not in_imports:
                 other_lines.append(line)
             # Skip empty lines and comments at the top (before first real code)
-            elif in_imports and (not stripped or stripped.startswith("--") or stripped.startswith("/-")):
+            elif in_imports and (
+                not stripped or stripped.startswith("--") or stripped.startswith("/-")
+            ):
                 # Keep comments that might be module docs
                 if stripped.startswith("/-"):
                     other_lines.append(line)
@@ -180,7 +189,10 @@ class MCPLeanVerifier(LeanVerifier):
         try:
             # Try using lake env lean for verification
             proc = await asyncio.create_subprocess_exec(
-                "lake", "env", "lean", str(file_path),
+                "lake",
+                "env",
+                "lean",
+                str(file_path),
                 cwd=self.project_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -193,7 +205,7 @@ class MCPLeanVerifier(LeanVerifier):
                 )
             except asyncio.TimeoutError:
                 proc.kill()
-                return VerificationResult(
+                return self._result(
                     success=False,
                     code=code,
                     error=f"Verification timed out after {self.timeout}s",
@@ -211,13 +223,13 @@ class MCPLeanVerifier(LeanVerifier):
                         error_lines.append(line.strip())
 
                 error_msg = "\n".join(error_lines) if error_lines else output[:500]
-                return VerificationResult(
+                return self._result(
                     success=False,
                     code=code,
                     error=error_msg,
                 )
 
-            return VerificationResult(
+            return self._result(
                 success=True,
                 code=code,
                 error=None,
@@ -227,20 +239,23 @@ class MCPLeanVerifier(LeanVerifier):
             # lake not found, try direct lean
             return await self._verify_with_lean_direct(code, file_path)
 
-    async def _verify_with_lean_direct(self, code: str, file_path: Path) -> VerificationResult:
+    async def _verify_with_lean_direct(
+        self, code: str, file_path: Path
+    ) -> VerificationResult:
         """Fallback: verify with lean directly (no lake)."""
         import shutil
 
         lean_path = shutil.which("lean")
         if not lean_path:
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="LEAN not found. Install via elan.",
             )
 
         proc = await asyncio.create_subprocess_exec(
-            lean_path, str(file_path),
+            lean_path,
+            str(file_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -252,14 +267,14 @@ class MCPLeanVerifier(LeanVerifier):
             )
         except asyncio.TimeoutError:
             proc.kill()
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error=f"Verification timed out after {self.timeout}s",
             )
 
         if proc.returncode == 0:
-            return VerificationResult(success=True, code=code, error=None)
+            return self._result(success=True, code=code, error=None)
 
         error_msg = stderr.decode("utf-8").strip() or stdout.decode("utf-8").strip()
-        return VerificationResult(success=False, code=code, error=error_msg[:500])
+        return self._result(success=False, code=code, error=error_msg[:500])

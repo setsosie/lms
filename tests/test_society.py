@@ -5,11 +5,32 @@ from unittest import mock
 
 import pytest
 
-from lms.artifacts import Artifact, ArtifactType, ArtifactLibrary
+from lms.artifacts import ArtifactLibrary
 from lms.config import ProviderConfig
 from lms.lean.mock import MockLeanVerifier
 from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
 from lms.society import Society, GenerationResult
+from lms.lean.interface import (
+    LeanVerifier,
+    VerificationResult,
+    VerificationStatus,
+    VerifierKind,
+)
+
+
+class StubLeanVerifier(LeanVerifier):
+    """Accepts any code, but declares Lean-grade provenance.
+
+    Foundation accumulation is gated on `VERIFIED_LEAN`, so exercising that
+    path needs a verifier whose kind is Lean-grade. `MockLeanVerifier` can only
+    ever reach `VERIFIED_HEURISTIC` — see `test_mock_verifier_does_not_populate
+    _foundation` for the other half of this contract.
+    """
+
+    verifier_kind: VerifierKind = "real"
+
+    async def verify(self, code: str) -> VerificationResult:
+        return self._result(success=True, code=code)
 
 
 class MockProvider(BaseLLMProvider):
@@ -190,7 +211,9 @@ references: []
         provider = MockProvider(config, responses=[response])
         verifier = MockLeanVerifier()
 
-        with mock.patch.object(verifier, "verify", wraps=verifier.verify) as mock_verify:
+        with mock.patch.object(
+            verifier, "verify", wraps=verifier.verify
+        ) as mock_verify:
             society = Society(n_agents=1, provider=provider, verifier=verifier)
             await society.run_generation(0)
 
@@ -412,7 +435,7 @@ references: []
 """
         provider = MockProvider(config, responses=[response])
         # Use a verifier that always verifies
-        verifier = MockLeanVerifier()
+        verifier = StubLeanVerifier()
 
         foundation_path = tmp_path / "LMS" / "Foundation.lean"
         society = Society(
@@ -453,11 +476,47 @@ references: []
 
         await society.run_generation(0)
 
-        # Foundation should be empty (bad code fails mock verifier)
-        # Note: MockLeanVerifier might accept anything, so this test
-        # verifies the logic even if the verifier is lenient
-        # The key is that only artifact.verified=True goes to foundation
-        pass  # Test passes if no exception
+        assert len(society.foundation) == 0
+
+    @pytest.mark.asyncio
+    async def test_mock_verifier_does_not_populate_foundation(self, tmp_path: Path):
+        """The mock cannot seed the foundation even with code it accepts.
+
+        Regression test for 26Q3-HARN-01. `MockLeanVerifier` is a regex; the
+        code below matches it happily. Before provenance existed this produced
+        a `verified` artifact that was written into the shared Lean corpus and
+        counted toward the roadmap numbers.
+        """
+        config = ProviderConfig(api_key="test", model="test")
+        response = """
+<artifact>
+type: theorem
+name: goal_thm
+description: Trivially true, and the mock will accept it
+lean: theorem goal_thm : True := trivial
+references: []
+</artifact>
+"""
+        provider = MockProvider(config, responses=[response])
+
+        foundation_path = tmp_path / "LMS" / "Foundation.lean"
+        society = Society(
+            n_agents=1,
+            provider=provider,
+            verifier=MockLeanVerifier(),
+            foundation_path=foundation_path,
+        )
+
+        result = await society.run_generation(0)
+
+        assert result.artifacts_created >= 1, "the mock should still accept the code"
+        assert len(society.foundation) == 0, "but nothing may reach the corpus"
+        assert society.library.get_verified() == []
+        assert all(
+            a.status is VerificationStatus.VERIFIED_HEURISTIC
+            for a in society.library.all()
+            if a.lean_code
+        )
 
     @pytest.mark.asyncio
     async def test_foundation_grows_across_generations(self, tmp_path: Path):
@@ -486,7 +545,7 @@ references: []
 """,
         ]
         provider = MockProvider(config, responses=responses)
-        verifier = MockLeanVerifier()
+        verifier = StubLeanVerifier()
 
         foundation_path = tmp_path / "LMS" / "Foundation.lean"
         society = Society(
@@ -516,7 +575,7 @@ references: []
 </artifact>
 """
         provider = MockProvider(config, responses=[response])
-        verifier = MockLeanVerifier()
+        verifier = StubLeanVerifier()
 
         foundation_path = tmp_path / "LMS" / "Foundation.lean"
         society = Society(
@@ -623,7 +682,11 @@ references: []
         if len(received_prompts) >= 2:
             gen1_prompt = received_prompts[1]
             # Should mention foundation or import
-            assert "Foundation" in gen1_prompt or "Cat" in gen1_prompt or "import" in gen1_prompt.lower()
+            assert (
+                "Foundation" in gen1_prompt
+                or "Cat" in gen1_prompt
+                or "import" in gen1_prompt.lower()
+            )
 
 
 class TestSocietyWorkingGroups:
@@ -714,8 +777,12 @@ lean: |
             description="Test",
             source="Test",
             definitions=[
-                StacksDefinition(tag="CH4-CAT", section="4.1", name="Category", content="..."),
-                StacksDefinition(tag="CH4-FUNC", section="4.2", name="Functor", content="..."),
+                StacksDefinition(
+                    tag="CH4-CAT", section="4.1", name="Category", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH4-FUNC", section="4.2", name="Functor", content="..."
+                ),
             ],
         )
 
@@ -741,7 +808,6 @@ lean: |
     async def test_dependency_graph_initialized_from_goal(self, tmp_path: Path):
         """Dependency graph is automatically created from goal."""
         from lms.goals import Goal, StacksDefinition
-        from lms.dependency import TaskStatus
 
         config = ProviderConfig(api_key="test", model="test")
         provider = MockProvider(config, responses=["No output"])

@@ -1,14 +1,12 @@
 """Tests for LMS agents."""
 
-from unittest import mock
-
 import pytest
 
 from lms.agent import Agent, AgentResponse
 from lms.artifacts import Artifact, ArtifactType, ArtifactLibrary
 from lms.config import ProviderConfig
-from lms.lean.mock import MockLeanVerifier
 from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
+from lms.lean.interface import VerificationStatus
 
 
 class MockProvider(BaseLLMProvider):
@@ -116,15 +114,17 @@ references: []
         agent = Agent(id="agent-1", provider=provider, generation=1)
 
         library = ArtifactLibrary()
-        library.add(Artifact(
-            id="existing-001",
-            type=ArtifactType.LEMMA,
-            natural_language="Existing lemma",
-            lean_code="lemma existing : True := trivial",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+        library.add(
+            Artifact(
+                id="existing-001",
+                type=ArtifactType.LEMMA,
+                natural_language="Existing lemma",
+                lean_code="lemma existing : True := trivial",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         await agent.propose(library)
 
@@ -151,13 +151,15 @@ references: [existing-001]
         agent = Agent(id="agent-1", provider=provider, generation=1)
 
         library = ArtifactLibrary()
-        library.add(Artifact(
-            id="existing-001",
-            type=ArtifactType.LEMMA,
-            natural_language="Existing lemma",
-            created_by="agent-0",
-            generation=0,
-        ))
+        library.add(
+            Artifact(
+                id="existing-001",
+                type=ArtifactType.LEMMA,
+                natural_language="Existing lemma",
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         response = await agent.propose(library)
 
@@ -214,34 +216,40 @@ references: []
         library = ArtifactLibrary()
 
         # Add unverified artifact first
-        library.add(Artifact(
-            id="unverified-001",
-            type=ArtifactType.LEMMA,
-            natural_language="Unverified lemma",
-            verified=False,
-            created_by="agent-0",
-            generation=0,
-        ))
+        library.add(
+            Artifact(
+                id="unverified-001",
+                type=ArtifactType.LEMMA,
+                natural_language="Unverified lemma",
+                status=VerificationStatus.UNVERIFIED,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         # Add verified artifact second
-        library.add(Artifact(
-            id="verified-001",
-            type=ArtifactType.THEOREM,
-            natural_language="Verified theorem",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+        library.add(
+            Artifact(
+                id="verified-001",
+                type=ArtifactType.THEOREM,
+                natural_language="Verified theorem",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         # Add another unverified
-        library.add(Artifact(
-            id="unverified-002",
-            type=ArtifactType.INSIGHT,
-            natural_language="Unverified insight",
-            verified=False,
-            created_by="agent-0",
-            generation=1,
-        ))
+        library.add(
+            Artifact(
+                id="unverified-002",
+                type=ArtifactType.INSIGHT,
+                natural_language="Unverified insight",
+                status=VerificationStatus.UNVERIFIED,
+                created_by="agent-0",
+                generation=1,
+            )
+        )
 
         context = agent._build_library_context(library)
 
@@ -260,24 +268,28 @@ references: []
         library = ArtifactLibrary()
 
         # Add older verified artifact
-        library.add(Artifact(
-            id="verified-old",
-            type=ArtifactType.LEMMA,
-            natural_language="Old verified",
-            verified=True,
-            created_by="agent-0",
-            generation=1,
-        ))
+        library.add(
+            Artifact(
+                id="verified-old",
+                type=ArtifactType.LEMMA,
+                natural_language="Old verified",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=1,
+            )
+        )
 
         # Add newer verified artifact
-        library.add(Artifact(
-            id="verified-new",
-            type=ArtifactType.THEOREM,
-            natural_language="New verified",
-            verified=True,
-            created_by="agent-0",
-            generation=5,
-        ))
+        library.add(
+            Artifact(
+                id="verified-new",
+                type=ArtifactType.THEOREM,
+                natural_language="New verified",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=5,
+            )
+        )
 
         context = agent._build_library_context(library)
 
@@ -311,22 +323,28 @@ references: []
 
         # Create foundation with a definition
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
-        foundation.add_artifact(Artifact(
-            id="def-Cat",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="structure Cat where\n  Obj : Type u",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         library = ArtifactLibrary()
-        response = await agent.propose(library, foundation=foundation)
+        await agent.propose(library, foundation=foundation)
 
         # Agent should have received foundation context in prompt
         last_message = provider.last_messages[0].content
-        assert "Foundation" in last_message or "Cat" in last_message or "import" in last_message.lower()
+        assert (
+            "Foundation" in last_message
+            or "Cat" in last_message
+            or "import" in last_message.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_agent_foundation_context_shows_importable(self, tmp_path):
@@ -339,24 +357,28 @@ references: []
 
         # Create foundation with definitions
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
-        foundation.add_artifact(Artifact(
-            id="def-Cat",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="structure Cat where\n  Obj : Type u\n  Hom : Obj → Obj → Type v",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
-        foundation.add_artifact(Artifact(
-            id="def-Functor",
-            type=ArtifactType.DEFINITION,
-            natural_language="Functor",
-            lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
-            verified=True,
-            created_by="agent-1",
-            generation=1,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="structure Cat where\n  Obj : Type u\n  Hom : Obj → Obj → Type v",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
+        foundation.add_artifact(
+            Artifact(
+                id="def-Functor",
+                type=ArtifactType.DEFINITION,
+                natural_language="Functor",
+                lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=1,
+            )
+        )
 
         library = ArtifactLibrary()
         await agent.propose(library, foundation=foundation)
@@ -388,4 +410,8 @@ references: []
         last_message = provider.last_messages[0].content
 
         # Should indicate empty or starting fresh
-        assert "empty" in last_message.lower() or "no definitions" in last_message.lower() or "starting" in last_message.lower()
+        assert (
+            "empty" in last_message.lower()
+            or "no definitions" in last_message.lower()
+            or "starting" in last_message.lower()
+        )

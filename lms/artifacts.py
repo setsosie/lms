@@ -6,6 +6,18 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from lms.lean.interface import VerificationStatus
+
+__all__ = [
+    "Artifact",
+    "ArtifactLibrary",
+    "ArtifactType",
+    "Correspondence",
+    "PendingReview",
+    "ReviewQueue",
+    "VerificationStatus",
+]
+
 
 class ArtifactType(Enum):
     """Types of mathematical artifacts."""
@@ -32,7 +44,7 @@ class Artifact:
     created_by: str
     generation: int
     lean_code: str | None = None
-    verified: bool = False
+    status: VerificationStatus = VerificationStatus.UNVERIFIED
     references: list[str] = field(default_factory=list)
     referenced_by: list[str] = field(default_factory=list)
     # Agent's notes about their reasoning - like Fermat's marginalia
@@ -44,6 +56,17 @@ class Artifact:
     # Stacks Project tag this artifact addresses (for goal tracking)
     stacks_tag: str | None = None
 
+    @property
+    def verified(self) -> bool:
+        """Whether Lean itself accepted this artifact.
+
+        Read-only on purpose. This used to be a settable boolean, which let
+        `MockLeanVerifier`'s regex mark artifacts verified and produced the
+        retracted roadmap numbers. Promotion now requires going through a
+        verifier that sets `status` to `VERIFIED_LEAN`.
+        """
+        return self.status is VerificationStatus.VERIFIED_LEAN
+
     def to_dict(self) -> dict[str, Any]:
         """Convert artifact to dictionary for serialization."""
         return {
@@ -51,6 +74,9 @@ class Artifact:
             "type": self.type.value,
             "natural_language": self.natural_language,
             "lean_code": self.lean_code,
+            "status": self.status.value,
+            # Retained so older readers keep parsing these files. It tracks the
+            # tightened meaning of `verified`, so a heuristic pass reads False.
             "verified": self.verified,
             "created_by": self.created_by,
             "generation": self.generation,
@@ -64,13 +90,19 @@ class Artifact:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Artifact":
-        """Create artifact from dictionary."""
+        """Create artifact from dictionary.
+
+        Records written before verifier provenance existed carry only a
+        `verified` boolean, and every such run used the mock verifier. Those
+        load as `VERIFIED_HEURISTIC` — never `VERIFIED_LEAN`, so replaying a
+        historical experiment cannot inflate the calibration numerator.
+        """
         return cls(
             id=d["id"],
             type=ArtifactType(d["type"]),
             natural_language=d["natural_language"],
             lean_code=d.get("lean_code"),
-            verified=d.get("verified", False),
+            status=cls._status_from_dict(d),
             created_by=d["created_by"],
             generation=d["generation"],
             references=d.get("references", []),
@@ -80,6 +112,16 @@ class Artifact:
             tokens_used=d.get("tokens_used", 0),
             stacks_tag=d.get("stacks_tag"),
         )
+
+    @staticmethod
+    def _status_from_dict(d: dict[str, Any]) -> VerificationStatus:
+        """Resolve status, demoting legacy provenance-free records."""
+        raw_status = d.get("status")
+        if raw_status is not None:
+            return VerificationStatus(raw_status)
+        if d.get("verified", False):
+            return VerificationStatus.VERIFIED_HEURISTIC
+        return VerificationStatus.UNVERIFIED
 
 
 @dataclass
@@ -299,12 +341,26 @@ class ArtifactLibrary:
         return [a for a in self.artifacts.values() if a.generation == generation]
 
     def get_verified(self) -> list[Artifact]:
-        """Get all verified artifacts.
+        """Get all Lean-verified artifacts.
+
+        Heuristically-checked artifacts are deliberately excluded — this is the
+        numerator of the calibration metric, so only `VERIFIED_LEAN` counts.
 
         Returns:
             List of artifacts that have been verified by LEAN
         """
         return [a for a in self.artifacts.values() if a.verified]
+
+    def count_by_status(self) -> dict[str, int]:
+        """Histogram of artifacts by verification status.
+
+        Makes the mock/real split visible in metrics rather than collapsing it
+        into a single "verified" count.
+        """
+        counts = {status.value: 0 for status in VerificationStatus}
+        for artifact in self.artifacts.values():
+            counts[artifact.status.value] += 1
+        return counts
 
     def all(self) -> list[Artifact]:
         """Get all artifacts as a list.

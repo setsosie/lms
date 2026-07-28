@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lms.artifacts import Artifact, ArtifactType
 from lms.foundation import FoundationFile, FoundationEntry
+from lms.lean.interface import VerificationStatus
 
 
 class TestFoundationEntry:
@@ -78,7 +79,7 @@ class TestFoundationFile:
   Hom : Obj → Obj → Type v
   id : (X : Obj) → Hom X X
   comp : {X Y Z : Obj} → Hom X Y → Hom Y Z → Hom X Z""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0-anthropic",
             generation=0,
         )
@@ -97,7 +98,7 @@ class TestFoundationFile:
             type=ArtifactType.DEFINITION,
             natural_language="Bad definition",
             lean_code="structure Bad where",
-            verified=False,  # Not verified!
+            status=VerificationStatus.UNVERIFIED,  # Not verified!
             created_by="agent-1",
             generation=0,
         )
@@ -114,7 +115,7 @@ class TestFoundationFile:
             type=ArtifactType.INSIGHT,
             natural_language="Some insight",
             lean_code=None,  # No code!
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-1",
             generation=0,
         )
@@ -158,7 +159,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             lean_code="""structure Category (Obj : Type u) where
   Hom : Obj → Obj → Type v
   id : (X : Obj) → Hom X X""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -180,7 +181,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             natural_language="Category",
             lean_code="""structure Cat where
   Obj : Type u""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -202,7 +203,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             type=ArtifactType.DEFINITION,
             natural_language="Category",
             lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -222,7 +223,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             type=ArtifactType.DEFINITION,
             natural_language="Category",
             lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -244,7 +245,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             type=ArtifactType.DEFINITION,
             natural_language="Category",
             lean_code="structure Cat where",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -263,7 +264,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             type=ArtifactType.DEFINITION,
             natural_language="Category",
             lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -273,7 +274,7 @@ theorem category_id_unique : ∀ C, unique_id C := sorry
             type=ArtifactType.DEFINITION,
             natural_language="Functor",
             lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-1",
             generation=1,
         )
@@ -307,7 +308,7 @@ class TestFoundationContext:
   id_comp : ∀ f, comp (id _) f = f
   comp_id : ∀ f, comp f (id _) = f
   assoc : ∀ f g h, comp (comp f g) h = comp f (comp g h)""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -359,7 +360,7 @@ structure Cat where
   comp_id : ∀ {X Y} (f : Hom X Y), comp f (id Y) = f
   assoc : ∀ {W X Y Z} (f : Hom W X) (g : Hom X Y) (h : Hom Y Z),
     comp (comp f g) h = comp f (comp g h)""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0-anthropic",
             generation=0,
         )
@@ -398,7 +399,7 @@ structure Cat where
   comp_id : ∀ {X Y} (f : Hom X Y), comp f (id Y) = f
   assoc : ∀ {W X Y Z} (f : Hom W X) (g : Hom X Y) (h : Hom Y Z),
     comp (comp f g) h = comp f (comp g h)""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0-anthropic",
             generation=0,
         )
@@ -424,7 +425,7 @@ structure CFunctor (C D : Cat) where
   map_id : ∀ X, map (C.id X) = D.id (obj X)
   map_comp : ∀ {X Y Z} (f : C.Hom X Y) (g : C.Hom Y Z),
     map (C.comp f g) = D.comp (map f) (map g)""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0-anthropic",
             generation=1,
         )
@@ -448,11 +449,12 @@ structure CFunctor (C D : Cat) where
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
 
         # Add Gen 0 and Gen 1 artifacts
-        foundation.add_artifact(Artifact(
-            id="def-Cat-gen0",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="""universe u v
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat-gen0",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="""universe u v
 structure Cat where
   Obj : Type u
   Hom : Obj → Obj → Type v
@@ -462,32 +464,36 @@ structure Cat where
   comp_id : ∀ {X Y} (f : Hom X Y), comp f (id Y) = f
   assoc : ∀ {W X Y Z} (f : Hom W X) (g : Hom X Y) (h : Hom Y Z),
     comp (comp f g) h = comp f (comp g h)""",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
-        foundation.add_artifact(Artifact(
-            id="def-Functor-gen1",
-            type=ArtifactType.DEFINITION,
-            natural_language="Functor",
-            lean_code="""structure CFunctor (C D : Cat) where
+        foundation.add_artifact(
+            Artifact(
+                id="def-Functor-gen1",
+                type=ArtifactType.DEFINITION,
+                natural_language="Functor",
+                lean_code="""structure CFunctor (C D : Cat) where
   obj : C.Obj → D.Obj
   map : {X Y : C.Obj} → C.Hom X Y → D.Hom (obj X) (obj Y)
   map_id : ∀ X, map (C.id X) = D.id (obj X)
   map_comp : ∀ {X Y Z} (f : C.Hom X Y) (g : C.Hom Y Z),
     map (C.comp f g) = D.comp (map f) (map g)""",
-            verified=True,
-            created_by="agent-1",
-            generation=1,
-        ))
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=1,
+            )
+        )
 
         # Gen 2: NatTrans
-        foundation.add_artifact(Artifact(
-            id="def-NatTrans-gen2",
-            type=ArtifactType.DEFINITION,
-            natural_language="Natural transformation between functors",
-            lean_code="""/-
+        foundation.add_artifact(
+            Artifact(
+                id="def-NatTrans-gen2",
+                type=ArtifactType.DEFINITION,
+                natural_language="Natural transformation between functors",
+                lean_code="""/-
   Generation 2: Natural Transformation
   Builds on: Cat (gen0), CFunctor (gen1)
 -/
@@ -496,10 +502,11 @@ structure NatTrans {C D : Cat} (F G : CFunctor C D) where
   app : (X : C.Obj) → D.Hom (F.obj X) (G.obj X)
   naturality : ∀ {X Y} (f : C.Hom X Y),
     D.comp (F.map f) (app Y) = D.comp (app X) (G.map f)""",
-            verified=True,
-            created_by="agent-2",
-            generation=2,
-        ))
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-2",
+                generation=2,
+            )
+        )
 
         foundation.save()
 
@@ -517,68 +524,80 @@ structure NatTrans {C D : Cat} (F G : CFunctor C D) where
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
 
         # Gen 0: Category
-        foundation.add_artifact(Artifact(
-            id="def-Cat-gen0",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="structure Cat where\n  Obj : Type u\n  Hom : Obj → Obj → Type v",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat-gen0",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="structure Cat where\n  Obj : Type u\n  Hom : Obj → Obj → Type v",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         # Gen 1: Functor
-        foundation.add_artifact(Artifact(
-            id="def-Functor-gen1",
-            type=ArtifactType.DEFINITION,
-            natural_language="Functor",
-            lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
-            verified=True,
-            created_by="agent-1",
-            generation=1,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Functor-gen1",
+                type=ArtifactType.DEFINITION,
+                natural_language="Functor",
+                lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=1,
+            )
+        )
 
         # Gen 2: NatTrans + Opposite
-        foundation.add_artifact(Artifact(
-            id="def-NatTrans-gen2",
-            type=ArtifactType.DEFINITION,
-            natural_language="Natural transformation",
-            lean_code="structure NatTrans {C D : Cat} (F G : CFunctor C D) where\n  app : (X : C.Obj) → D.Hom (F.obj X) (G.obj X)",
-            verified=True,
-            created_by="agent-0",
-            generation=2,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-NatTrans-gen2",
+                type=ArtifactType.DEFINITION,
+                natural_language="Natural transformation",
+                lean_code="structure NatTrans {C D : Cat} (F G : CFunctor C D) where\n  app : (X : C.Obj) → D.Hom (F.obj X) (G.obj X)",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=2,
+            )
+        )
 
-        foundation.add_artifact(Artifact(
-            id="def-OpCat-gen2",
-            type=ArtifactType.DEFINITION,
-            natural_language="Opposite category",
-            lean_code="def Cat.op (C : Cat) : Cat where\n  Obj := C.Obj\n  Hom X Y := C.Hom Y X",
-            verified=True,
-            created_by="agent-1",
-            generation=2,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-OpCat-gen2",
+                type=ArtifactType.DEFINITION,
+                natural_language="Opposite category",
+                lean_code="def Cat.op (C : Cat) : Cat where\n  Obj := C.Obj\n  Hom X Y := C.Hom Y X",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=2,
+            )
+        )
 
         # Gen 3: HomFunctor + Yoneda
-        foundation.add_artifact(Artifact(
-            id="def-HomFunctor-gen3",
-            type=ArtifactType.DEFINITION,
-            natural_language="Hom functor",
-            lean_code="def HomFunctor (C : Cat) (X : C.Obj) : CFunctor C.op TypeCat where",
-            verified=True,
-            created_by="agent-0",
-            generation=3,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-HomFunctor-gen3",
+                type=ArtifactType.DEFINITION,
+                natural_language="Hom functor",
+                lean_code="def HomFunctor (C : Cat) (X : C.Obj) : CFunctor C.op TypeCat where",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=3,
+            )
+        )
 
-        foundation.add_artifact(Artifact(
-            id="thm-Yoneda-gen3",
-            type=ArtifactType.THEOREM,
-            natural_language="Yoneda lemma",
-            lean_code="theorem yoneda {C : Cat} (F : CFunctor C.op TypeCat) (X : C.Obj) :\n  NatTrans (HomFunctor C X) F ≃ F.obj X := sorry",
-            verified=True,
-            created_by="agent-2",
-            generation=3,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="thm-Yoneda-gen3",
+                type=ArtifactType.THEOREM,
+                natural_language="Yoneda lemma",
+                lean_code="theorem yoneda {C : Cat} (F : CFunctor C.op TypeCat) (X : C.Obj) :\n  NatTrans (HomFunctor C X) F ≃ F.obj X := sorry",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-2",
+                generation=3,
+            )
+        )
 
         foundation.save()
 
@@ -614,15 +633,17 @@ structure NatTrans {C D : Cat} (F G : CFunctor C D) where
         assert "empty" in context_0.lower() or "no definitions" in context_0.lower()
 
         # Add Category
-        foundation.add_artifact(Artifact(
-            id="def-Cat",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="structure Cat where\n  Obj : Type u\n  Hom : Obj → Obj → Type v",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="structure Cat where\n  Obj : Type u\n  Hom : Obj → Obj → Type v",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         # Gen 1 context has Category
         context_1 = foundation.get_context_for_agent()
@@ -630,15 +651,17 @@ structure NatTrans {C D : Cat} (F G : CFunctor C D) where
         assert "Obj" in context_1 or "structure" in context_1.lower()
 
         # Add Functor
-        foundation.add_artifact(Artifact(
-            id="def-Functor",
-            type=ArtifactType.DEFINITION,
-            natural_language="Functor",
-            lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
-            verified=True,
-            created_by="agent-1",
-            generation=1,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Functor",
+                type=ArtifactType.DEFINITION,
+                natural_language="Functor",
+                lean_code="structure CFunctor (C D : Cat) where\n  obj : C.Obj → D.Obj",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=1,
+            )
+        )
 
         # Gen 2 context has both
         context_2 = foundation.get_context_for_agent()
@@ -664,7 +687,7 @@ class TestFoundationCodeCleaning:
             type=ArtifactType.DEFINITION,
             natural_language="Test",
             lean_code="|\n  theorem test : 1 + 1 = 2 := by rfl",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -688,7 +711,7 @@ class TestFoundationCodeCleaning:
             type=ArtifactType.DEFINITION,
             natural_language="Test",
             lean_code="|\n\n\n  lemma foo : True := trivial",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -713,7 +736,7 @@ class TestFoundationCodeCleaning:
 
 lemma div_self_eq_one (n : ℕ) (h : n ≠ 0) : n / n = 1 :=
   Nat.div_self (Nat.pos_of_ne_zero h)""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -724,12 +747,13 @@ lemma div_self_eq_one (n : ℕ) (h : n ≠ 0) : n / n = 1 :=
         content = foundation.path.read_text()
 
         # Count imports - should only have header imports, not embedded ones
-        import_lines = [l for l in content.split('\n') if l.strip().startswith('import ')]
         # All imports should be before namespace
-        namespace_pos = content.find('namespace LMS.Foundation')
-        for line in content.split('\n'):
-            if line.strip().startswith('import '):
-                assert content.find(line) < namespace_pos, "Import found after namespace"
+        namespace_pos = content.find("namespace LMS.Foundation")
+        for line in content.split("\n"):
+            if line.strip().startswith("import "):
+                assert content.find(line) < namespace_pos, (
+                    "Import found after namespace"
+                )
 
     def test_removes_multiple_embedded_imports(self, tmp_path: Path):
         """Foundation removes all import statements from artifact code."""
@@ -744,7 +768,7 @@ import Mathlib.Algebra.Group.Defs
 import Mathlib.Tactic.Ring
 
 lemma test : True := trivial""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -758,9 +782,9 @@ lemma test : True := trivial""",
         assert "lemma test" in content
 
         # No imports after the namespace
-        namespace_pos = content.find('namespace LMS.Foundation')
+        namespace_pos = content.find("namespace LMS.Foundation")
         after_namespace = content[namespace_pos:]
-        assert 'import ' not in after_namespace
+        assert "import " not in after_namespace
 
     def test_handles_both_pipe_and_imports(self, tmp_path: Path):
         """Foundation handles code with both YAML pipe and embedded imports."""
@@ -771,7 +795,7 @@ lemma test : True := trivial""",
             type=ArtifactType.DEFINITION,
             natural_language="Test",
             lean_code="""|\n  import Mathlib.Data.Nat.Basic\n  \n  theorem test : 1 = 1 := rfl""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -784,9 +808,9 @@ lemma test : True := trivial""",
         assert "|\n" not in content
         assert "theorem test" in content
         # Import should be stripped from the artifact section
-        namespace_pos = content.find('namespace LMS.Foundation')
+        namespace_pos = content.find("namespace LMS.Foundation")
         after_namespace = content[namespace_pos:]
-        assert 'import Mathlib.Data.Nat.Basic' not in after_namespace
+        assert "import Mathlib.Data.Nat.Basic" not in after_namespace
 
     def test_removes_universe_declarations(self, tmp_path: Path):
         """Foundation removes universe declarations from artifact code."""
@@ -800,7 +824,7 @@ lemma test : True := trivial""",
 
 structure Cat where
   Obj : Type u""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -814,11 +838,17 @@ structure Cat where
         assert "universe u v w" in content
 
         # But artifact section should not have duplicate
-        namespace_pos = content.find('namespace LMS.Foundation')
+        namespace_pos = content.find("namespace LMS.Foundation")
         after_namespace = content[namespace_pos:]
         # Count universe lines after namespace - should be 0
-        universe_lines_after = [l for l in after_namespace.split('\n') if l.strip().startswith('universe ')]
-        assert len(universe_lines_after) == 0, f"Found universe declarations after namespace: {universe_lines_after}"
+        universe_lines_after = [
+            line
+            for line in after_namespace.split("\n")
+            if line.strip().startswith("universe ")
+        ]
+        assert len(universe_lines_after) == 0, (
+            f"Found universe declarations after namespace: {universe_lines_after}"
+        )
 
     def test_extracts_indented_definitions(self, tmp_path: Path):
         """Foundation extracts definitions with leading whitespace."""
@@ -835,7 +865,7 @@ structure Cat where
     Hom : Obj → Obj → Type v
 
   def Category.id (C : Category) (x : C.Obj) : C.Hom x x := sorry""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -869,7 +899,7 @@ structure NatTrans where
   app : Type u
 
 def NatTrans.identity : NatTrans := { app := Nat }""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -879,7 +909,9 @@ def NatTrans.identity : NatTrans := { app := Nat }""",
         # Should NOT have extracted Op (it's inside a comment)
         # SHOULD have extracted NatTrans and NatTrans.identity
         names = [e.name for e in foundation.entries]
-        assert "Op" not in names, f"Op should not be extracted from comment, got {names}"
+        assert "Op" not in names, (
+            f"Op should not be extracted from comment, got {names}"
+        )
         assert "NatTrans" in names, f"Expected NatTrans in {names}"
         assert "NatTrans.identity" in names, f"Expected NatTrans.identity in {names}"
 
@@ -900,7 +932,7 @@ structure Cat where
 theorem cat_id : True := trivial
 
 end Category""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -932,7 +964,7 @@ end Category""",
   Hom : Obj → Obj → Type v
 
 def Category.helper : Nat := 42""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -948,7 +980,7 @@ def Category.helper : Nat := 42""",
   Hom : Obj → Obj → Type v
 
 def Cat.other_helper : Nat := 99""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-1",
             generation=0,
         )
@@ -961,7 +993,9 @@ def Cat.other_helper : Nat := 99""",
 
         # Cat should be REJECTED even though it's a different name
         # because Category and Cat map to the same "category" concept
-        assert "Cat" not in names, f"Cat should be rejected (category concept already claimed)"
+        assert "Cat" not in names, (
+            "Cat should be rejected (category concept already claimed)"
+        )
 
         # Non-structure defs (Cat.other_helper) should also be excluded since
         # the parent structure was rejected
@@ -981,7 +1015,7 @@ def Cat.other_helper : Nat := 99""",
             natural_language="Category v1",
             lean_code="""structure Category where
   Obj : Type u""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
@@ -998,7 +1032,7 @@ def Cat.other_helper : Nat := 99""",
 
 structure Functor (C D : Category) where
   obj : C.Obj → D.Obj""",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-1",
             generation=1,
         )
@@ -1009,7 +1043,9 @@ structure Functor (C D : Category) where
 
         # Category should only appear once (from gen 0)
         category_count = content.count("structure Category")
-        assert category_count == 1, f"Expected 1 Category definition, found {category_count}"
+        assert category_count == 1, (
+            f"Expected 1 Category definition, found {category_count}"
+        )
 
         # But Functor should be there
         assert "structure Functor" in content
@@ -1026,15 +1062,17 @@ class TestFoundationCompilation:
         """Foundation generates syntactically correct Lean structure."""
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
 
-        foundation.add_artifact(Artifact(
-            id="def-Cat",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
-            created_by="agent-0",
-            generation=0,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="structure Cat where\n  Obj : Type u",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
+        )
 
         foundation.save()
 
@@ -1049,15 +1087,17 @@ class TestFoundationCompilation:
         """Foundation includes comments about where each artifact came from."""
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
 
-        foundation.add_artifact(Artifact(
-            id="def-Cat-abc123",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category",
-            lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
-            created_by="agent-0-anthropic",
-            generation=0,
-        ))
+        foundation.add_artifact(
+            Artifact(
+                id="def-Cat-abc123",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category",
+                lean_code="structure Cat where\n  Obj : Type u",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0-anthropic",
+                generation=0,
+            )
+        )
 
         foundation.save()
 
@@ -1077,7 +1117,7 @@ class TestFoundationCompilation:
             type=ArtifactType.DEFINITION,
             natural_language="Category",
             lean_code="structure Cat where\n  Obj : Type u",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-0",
             generation=0,
         )
