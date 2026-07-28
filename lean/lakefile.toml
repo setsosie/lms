@@ -1,6 +1,10 @@
 name = "LMS"
 version = "0.1.0"
-defaultTargets = ["lms", "LMS"]
+# The `lms` exe is a `lake new` stub (Main.lean prints a string; nothing invokes
+# it) and Lake schedules it before the library is in place, so `import LMS` in
+# Main fails with `unknown module prefix 'LMS'`. It is not in the default
+# targets; `lake build lms` still builds it explicitly if ever needed.
+defaultTargets = ["LMS"]
 
 [[require]]
 name = "mathlib"
