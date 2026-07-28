@@ -57,3 +57,5 @@ experiments/
 # OS
 .DS_Store
 Thumbs.db
+.claude/settings.local.json
+.ruff_cache/
