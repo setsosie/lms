@@ -9,13 +9,18 @@ repo-root `.env` otherwise leaks through `load_dotenv` even under
 is designed to fill.
 """
 
+import json
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Iterator
 from unittest import mock
 
 import pytest
 
 from lms.config import Config, ProviderConfig
+from lms.providers.base import Message
 from lms.providers.openai import OpenAIProvider
 
 HOSTED_DEFAULT = "https://api.openai.com/v1"
@@ -27,6 +32,85 @@ def empty_env(tmp_path: Path) -> Path:
     env_file = tmp_path / "empty.env"
     env_file.write_text("")
     return env_file
+
+
+class _StubEndpoint:
+    """A minimal OpenAI-compatible `/v1` server, standing in for vLLM.
+
+    vLLM/SGLang/Ollama differ from hosted OpenAI in exactly the ways this stub
+    reproduces: any API key is accepted, and the model name is whatever the
+    server was launched with. Running the real SDK over real TCP against it is
+    what makes the end-to-end claim testable without a GPU.
+    """
+
+    def __init__(self) -> None:
+        self.requests: list[dict] = []
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                outer.requests.append(
+                    {
+                        "path": self.path,
+                        "authorization": self.headers.get("Authorization"),
+                        "payload": json.loads(body),
+                    }
+                )
+                payload = json.dumps(
+                    {
+                        "id": "chatcmpl-stub",
+                        "object": "chat.completion",
+                        "created": 0,
+                        "model": "local-model",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {
+                                    "role": "assistant",
+                                    "content": "theorem stub : True",
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": 11,
+                            "completion_tokens": 7,
+                            "total_tokens": 18,
+                        },
+                    }
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, format: str, *args: object) -> None:
+                """Silence the default stderr access log."""
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def base_url(self) -> str:
+        host, port = self._server.server_address[:2]
+        return f"http://{host}:{port}/v1"
+
+    def __enter__(self) -> "_StubEndpoint":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5)
+
+
+@pytest.fixture
+def stub_endpoint() -> Iterator[_StubEndpoint]:
+    with _StubEndpoint() as server:
+        yield server
 
 
 class TestProviderConfigBaseURL:
@@ -64,6 +148,19 @@ class TestConfigFromEnv:
         assert config.openai is not None
         assert config.openai.base_url is None
 
+    def test_empty_base_url_is_treated_as_unset(self, empty_env: Path):
+        """`.env.example` ships the key bare; a copied file must not break the client."""
+        env = {"OPENAI_API_KEY": "sk-test", "LMS_OPENAI_BASE_URL": ""}
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        assert config.openai is not None
+        assert config.openai.base_url is None
+        assert (
+            str(OpenAIProvider(config.openai).client.base_url).rstrip("/")
+            == HOSTED_DEFAULT
+        )
+
 
 class TestOpenAIProviderClient:
     def test_base_url_threads_into_client(self):
@@ -77,3 +174,33 @@ class TestOpenAIProviderClient:
         config = ProviderConfig(api_key="k", model="m")
         provider = OpenAIProvider(config)
         assert str(provider.client.base_url).rstrip("/") == HOSTED_DEFAULT
+
+
+class TestEndToEndAgainstLocalEndpoint:
+    """The acceptance criterion: a local model is usable via env config alone."""
+
+    async def test_env_config_reaches_a_local_endpoint(
+        self, stub_endpoint: _StubEndpoint, empty_env: Path
+    ):
+        env = {
+            "OPENAI_API_KEY": "dummy-key",  # vLLM accepts any key
+            "LMS_OPENAI_MODEL": "Qwen/Qwen3-Coder-30B-A3B",
+            "LMS_OPENAI_BASE_URL": stub_endpoint.base_url,
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        provider = OpenAIProvider(config.get_provider_config("openai"))
+        response = await provider.generate(
+            [Message(role="user", content="formalize this")]
+        )
+
+        assert response.content == "theorem stub : True"
+        assert response.usage.total_tokens == 18
+
+        # The request reached the local server, not api.openai.com.
+        assert len(stub_endpoint.requests) == 1
+        request = stub_endpoint.requests[0]
+        assert request["path"] == "/v1/chat/completions"
+        assert request["authorization"] == "Bearer dummy-key"
+        assert request["payload"]["model"] == "Qwen/Qwen3-Coder-30B-A3B"

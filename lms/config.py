@@ -18,6 +18,8 @@ class ProviderConfig:
     api_key: str
     model: str
     max_tokens: int = DEFAULT_MAX_TOKENS
+    # OpenAI-compatible endpoint (vLLM, SGLang, Ollama). None = the hosted API.
+    base_url: str | None = None
 
 
 @dataclass
@@ -66,6 +68,9 @@ class Config:
             config.openai = ProviderConfig(
                 api_key=openai_key,
                 model=os.getenv("LMS_OPENAI_MODEL", "gpt-5.2"),
+                # `or None`: .env.example ships the key bare, so a copied file
+                # yields "" — which would send the SDK at a relative URL.
+                base_url=os.getenv("LMS_OPENAI_BASE_URL") or None,
             )
 
         # Load Google config

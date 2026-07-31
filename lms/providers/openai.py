@@ -16,13 +16,17 @@ class OpenAIProvider(BaseLLMProvider):
         """Initialize the OpenAI provider.
 
         Args:
-            config: Provider configuration with API key and model
+            config: Provider configuration with API key, model, and optional base_url
             timeout: Request timeout in seconds (default 5 minutes)
         """
         super().__init__(config)
-        # Use explicit timeout to prevent infinite hangs
+        # Use explicit timeout to prevent infinite hangs.
+        # base_url=None is the SDK's own default, so an unset config leaves
+        # hosted-OpenAI behavior untouched; setting it points the same code path
+        # at a local vLLM/SGLang/Ollama `/v1`.
         self.client = AsyncOpenAI(
             api_key=config.api_key,
+            base_url=config.base_url,
             timeout=httpx.Timeout(timeout, connect=30.0),
         )
 
@@ -44,7 +48,9 @@ class OpenAIProvider(BaseLLMProvider):
         Returns:
             GenerationResponse with content and token usage
         """
-        effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
+        effective_max_tokens = (
+            max_tokens if max_tokens is not None else self.config.max_tokens
+        )
 
         api_messages = []
 
@@ -61,8 +67,13 @@ class OpenAIProvider(BaseLLMProvider):
 
         # Extract cache tokens if available
         cache_read = 0
-        if hasattr(response.usage, 'prompt_tokens_details') and response.usage.prompt_tokens_details:
-            cache_read = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0) or 0
+        if (
+            hasattr(response.usage, "prompt_tokens_details")
+            and response.usage.prompt_tokens_details
+        ):
+            cache_read = (
+                getattr(response.usage.prompt_tokens_details, "cached_tokens", 0) or 0
+            )
 
         usage = TokenUsage(
             input_tokens=response.usage.prompt_tokens,
