@@ -43,8 +43,10 @@ class _StubEndpoint:
     what makes the end-to-end claim testable without a GPU.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, report_usage: bool = True) -> None:
         self.requests: list[dict] = []
+        # Ollama and some vLLM configurations answer without a usage block.
+        self.report_usage = report_usage
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -77,7 +79,9 @@ class _StubEndpoint:
                             "prompt_tokens": 11,
                             "completion_tokens": 7,
                             "total_tokens": 18,
-                        },
+                        }
+                        if outer.report_usage
+                        else None,
                     }
                 ).encode()
                 self.send_response(200)
@@ -161,6 +165,15 @@ class TestConfigFromEnv:
             == HOSTED_DEFAULT
         )
 
+    def test_blank_model_falls_back_to_the_default(self, empty_env: Path):
+        """Blank means absent for every read, not just base_url — "" is no model name."""
+        env = {"OPENAI_API_KEY": "sk-test", "LMS_OPENAI_MODEL": ""}
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        assert config.openai is not None
+        assert config.openai.model == "gpt-5.2"
+
 
 class TestOpenAIProviderClient:
     def test_base_url_threads_into_client(self):
@@ -190,13 +203,16 @@ class TestEndToEndAgainstLocalEndpoint:
         with mock.patch.dict(os.environ, env, clear=True):
             config = Config.from_env(env_path=empty_env)
 
-        provider = OpenAIProvider(config.get_provider_config("openai"))
+        # timeout caps the SDK's 300s read timeout x2 retries: a stub that
+        # accepted and never answered would otherwise stall CI for ~15 minutes.
+        provider = OpenAIProvider(config.get_provider_config("openai"), timeout=10.0)
         response = await provider.generate(
             [Message(role="user", content="formalize this")]
         )
 
         assert response.content == "theorem stub : True"
-        assert response.usage.total_tokens == 18
+        assert response.usage.input_tokens == 11
+        assert response.usage.output_tokens == 7
 
         # The request reached the local server, not api.openai.com.
         assert len(stub_endpoint.requests) == 1
@@ -204,3 +220,16 @@ class TestEndToEndAgainstLocalEndpoint:
         assert request["path"] == "/v1/chat/completions"
         assert request["authorization"] == "Bearer dummy-key"
         assert request["payload"]["model"] == "Qwen/Qwen3-Coder-30B-A3B"
+
+    async def test_server_omitting_usage_does_not_crash_the_agent_loop(self):
+        """A missing token count is a hole in accounting, not a failed generation."""
+        with _StubEndpoint(report_usage=False) as endpoint:
+            config = ProviderConfig(
+                api_key="local", model="m", base_url=endpoint.base_url
+            )
+            response = await OpenAIProvider(config, timeout=10.0).generate(
+                [Message(role="user", content="formalize this")]
+            )
+
+        assert response.content == "theorem stub : True"
+        assert response.usage.total_tokens == 0
