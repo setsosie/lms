@@ -24,7 +24,13 @@ class LeanProject:
         Args:
             project_dir: Path to the Lean project root (contains lakefile.toml)
         """
-        self.project_dir = Path(project_dir)
+        # Resolved, not stored as given. `RealLeanVerifier` runs Lean with
+        # `cwd=project_dir` (so `lake env` finds the package) while passing the
+        # temp file path derived from this attribute. If both stay relative,
+        # Lean is handed `lean/.lake/verify-temp/x.lean` *from inside* `lean/`
+        # and reports `no such file or directory` — which is indistinguishable
+        # in the result from a genuine proof failure.
+        self.project_dir = Path(project_dir).resolve()
         # Deliberately OUTSIDE the library source tree. The lean_lib globs
         # `LMS.+`, so a scratch file under LMS/ becomes build input and
         # `lake build` starts compiling whatever an agent last emitted.
