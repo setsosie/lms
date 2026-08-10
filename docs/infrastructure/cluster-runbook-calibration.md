@@ -359,24 +359,94 @@ communicate over HTTP. Keeping them apart also puts vLLM's ~10 GB of wheels on
 scratch instead of the home quota, and makes a later `uv sync` unable to break a
 running server.
 
+### 4a — CUDA: pin vLLM below 0.20 while the driver is 570
+
+**`mahpiya` runs driver 570.207, which caps CUDA at 12.8.** vLLM moved its default
+PyPI wheel to CUDA 13.0 at **v0.20.0** (to match torch 2.11), and CUDA 13 requires
+driver **≥ 580.65.06**. So the current default wheel cannot run on this box.
+
+This fails in two stages, and the first fix does not reveal the second:
+
+1. Plain `uv pip install vllm` gets torch built for **cu130**. Engine startup dies
+   in `init_device` with `RuntimeError: The NVIDIA driver on your system is too
+   old`.
+2. Adding `--torch-backend=auto` fixes *torch* (it picks cu129) but not vLLM's own
+   compiled extension, which is still built against CUDA 13. Now it dies earlier,
+   at import: `ImportError: libcudart.so.13: cannot open shared object file`.
+
+`libcudart.so.13` cannot be supplied by a package — CUDA 13 needs a 13-capable
+driver. Pinning below 0.20 is the fix that works today:
+
 ```bash
 cd ~
 echo "$SCRATCH"                     # must be non-empty
 export UV_LINK_MODE=copy            # cache and venv are on different filesystems
+uv self update && hash -r           # see the uv note below
 uv venv "$SCRATCH/vllm-env" --python 3.12
-uv pip install --python "$SCRATCH/vllm-env/bin/python" vllm
+uv pip install --python "$SCRATCH/vllm-env/bin/python" "vllm<0.20" --torch-backend=auto
+```
 
+> **`uv` must be current.** An older `uv` does not know CUDA backends past
+> `cu126`, and `--torch-backend=cu128` fails with `invalid value`, listing only
+> ancient options. Do not pick `cu126` from that list to get past it — vLLM pins
+> an exact torch version and torch drops old CUDA targets, so you get an
+> unresolvable or ABI-mismatched environment. Update `uv` and use `auto`, which
+> reads the driver and chooses. `hash -r` matters: bash caches the old binary's
+> path.
+
+**Verified working on the box, 2026-08-10:** vLLM `0.19.1`, torch `2.11.0+cu129`,
+driver `570.207`. Qwen3 MoE support long predates 0.20, so the pin costs nothing
+we need.
+
+**Retire this pin when the driver reaches 580.65.06+**, at which point plain
+`uv pip install vllm --torch-backend=auto` is correct again. That bump is
+scheduled maintenance on a shared box — root, a reboot, and displacing other
+jobs — not a debugging step. Do not do it mid-phase.
+
+### 4b — Check the GPUs before loading 61 GB of weights
+
+Both checks below are the exact failures above. Each takes seconds; a failed
+model load takes minutes.
+
+```bash
+"$SCRATCH/vllm-env/bin/python" -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.device_count())"
+"$SCRATCH/vllm-env/bin/python" -c "import vllm; print(vllm.__version__)"
+```
+
+Want `2.11.0+cu129 12.9 True 4` from the first — CUDA 12.9 on a 12.8 driver is
+fine, since minor versions are compatible within CUDA 12; it was the **major**
+jump to 13 that broke. The second must print a version rather than raise
+`ImportError`.
+
+### 4c — Serve
+
+```bash
 CUDA_VISIBLE_DEVICES=0,1 "$SCRATCH/vllm-env/bin/vllm" serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --port 8000 \
   --tensor-parallel-size 2 \
   --max-model-len 131072 \
-  --served-model-name lms-generalist
+  --served-model-name lms-generalist \
+  2>&1 | tee "$SCRATCH/vllm.log"
 ```
+
+Healthy progress, in order: `world_size=2` with an `nccl` backend →
+`Starting to load model` → `Loading safetensors checkpoint shards: N%` →
+`GPU KV cache size: ... tokens` → `Starting vLLM API server on http://0.0.0.0:8000`.
+Until that last line, `curl` returning `Connection refused` is expected. Use
+`curl -sS`, not `-s`, or connection failures are silent.
 
 If you already ran `uv pip install vllm` against the project, `cd ~/code/lms &&
 uv sync` prunes vLLM and torch back out of `.venv` and restores the pinned
 `openai`. The harness side keeps using `uv run` exactly as before — Steps 3, 5
 and 6 are unchanged.
+
+> **tmux, if you don't use it often.** `Ctrl-b` is a prefix: press and *release*
+> `Ctrl-b`, then tap the next key on its own — `Ctrl-b Ctrl-c` is a different
+> (unbound) sequence. `c` new window, `0`/`1` jump to window N, `n`/`p` next and
+> previous, `d` detach, `[` scroll mode (`q` exits). The status bar names the
+> session and marks the current window with `*`. To read a pane you can't scroll,
+> `tmux capture-pane -t <session> -p -S -5000 > file`. `echo "$TMUX"` is the
+> reliable test for whether you are inside a session — it is empty outside.
 
 > **`--max-model-len` must exceed 64k, which is why it is 131072 and not the
 > 65536 this runbook originally said.** `ProviderConfig.max_tokens` defaults to
