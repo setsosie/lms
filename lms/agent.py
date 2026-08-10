@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from lms.artifacts import Artifact, ArtifactType, ArtifactLibrary, PendingReview
 from lms.foundation import FoundationFile
+from lms.lean.interface import VerificationResult, VerificationStatus
 from lms.prompts import get_prompt
 from lms.providers.base import BaseLLMProvider, Message, TokenUsage
 from lms.textbook import Textbook
@@ -24,16 +26,21 @@ class AttemptResult:
     Attributes:
         attempt_num: Which attempt (1-indexed)
         artifact: The artifact that was proposed
-        verified: Whether LEAN verification succeeded
+        status: Outcome of this attempt, carrying verifier provenance
         error: Error message if verification failed
         tokens_used: Tokens used for this attempt
     """
 
     attempt_num: int
     artifact: Artifact
-    verified: bool
+    status: VerificationStatus
     error: str | None = None
     tokens_used: int = 0
+
+    @property
+    def verified(self) -> bool:
+        """Whether Lean itself accepted this attempt."""
+        return self.status is VerificationStatus.VERIFIED_LEAN
 
 
 @dataclass
@@ -204,7 +211,7 @@ class Agent:
     async def propose_iterative(
         self,
         library: ArtifactLibrary,
-        verify_fn,  # Callable[[str], Awaitable[tuple[bool, str | None]]]
+        verify_fn: "Callable[[str], Awaitable[VerificationResult]]",
         goal: "Goal | None" = None,
         textbook: Textbook | None = None,
         max_attempts: int = 5,
@@ -217,7 +224,10 @@ class Agent:
 
         Args:
             library: Current artifact library
-            verify_fn: Async function that takes LEAN code and returns (success, error)
+            verify_fn: Async function taking LEAN code and returning a
+                `VerificationResult`. It returns the whole result rather than a
+                `(success, error)` pair so that verifier provenance survives
+                the hop into the agent loop
             goal: Optional goal to work towards
             textbook: Optional collective wisdom
             max_attempts: Maximum verification attempts (default 5)
@@ -298,43 +308,56 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             if not proposed or not proposed[0].lean_code:
                 # No valid artifact, ask to try again
                 if attempt_num < max_attempts:
-                    conversation.append(Message(
-                        role="user",
-                        content=f"Attempt {attempt_num}/{max_attempts}: No valid LEAN code found. "
-                                f"Please propose an artifact with lean: code block."
-                    ))
+                    conversation.append(
+                        Message(
+                            role="user",
+                            content=f"Attempt {attempt_num}/{max_attempts}: No valid LEAN code found. "
+                            f"Please propose an artifact with lean: code block.",
+                        )
+                    )
                 continue
 
             artifact = proposed[0]
             artifact.generation = self.generation
             artifact.created_by = self.id
 
+            # Non-None by the `not proposed[0].lean_code` guard above.
+            lean_code = artifact.lean_code
+            assert lean_code is not None
+
             # Verify the code
-            success, error = await verify_fn(artifact.lean_code)
-            artifact.verified = success
+            result = await verify_fn(lean_code)
+            success, error = result.success, result.error
+            artifact.status = result.status
             if error:
                 artifact.verification_error = error
 
-            attempts.append(AttemptResult(
-                attempt_num=attempt_num,
-                artifact=artifact,
-                verified=success,
-                error=error,
-                tokens_used=tokens_used,
-            ))
+            attempts.append(
+                AttemptResult(
+                    attempt_num=attempt_num,
+                    artifact=artifact,
+                    status=result.status,
+                    error=error,
+                    tokens_used=tokens_used,
+                )
+            )
 
             if success:
                 # Success! Ask for writeup
-                conversation.append(Message(
-                    role="user",
-                    content=f"✓ Attempt {attempt_num}/{max_attempts}: VERIFIED! "
-                            f"Please provide a <writeup> with a <title> summarizing what you learned."
-                ))
+                conversation.append(
+                    Message(
+                        role="user",
+                        content=f"✓ Attempt {attempt_num}/{max_attempts}: VERIFIED! "
+                        f"Please provide a <writeup> with a <title> summarizing what you learned.",
+                    )
+                )
                 writeup_response = await self.provider.generate(
                     conversation,
                     system_prompt=system_prompt.content,
                 )
-                total_tokens += writeup_response.usage.total_tokens if writeup_response.usage else 0
+                total_tokens += (
+                    writeup_response.usage.total_tokens if writeup_response.usage else 0
+                )
                 writeup, writeup_title = self._extract_writeup(writeup_response.content)
 
                 return IterativeResponse(
@@ -348,26 +371,32 @@ Include error messages and how you fixed them. Be detailed - this helps future a
 
             # Failed - add error feedback for next attempt
             if attempt_num < max_attempts:
-                conversation.append(Message(
-                    role="user",
-                    content=f"✗ Attempt {attempt_num}/{max_attempts}: Verification FAILED.\n\n"
-                            f"Error:\n```\n{error[:500] if error else 'Unknown error'}\n```\n\n"
-                            f"Analyze the error and try again. You have {max_attempts - attempt_num} attempts left."
-                ))
+                conversation.append(
+                    Message(
+                        role="user",
+                        content=f"✗ Attempt {attempt_num}/{max_attempts}: Verification FAILED.\n\n"
+                        f"Error:\n```\n{error[:500] if error else 'Unknown error'}\n```\n\n"
+                        f"Analyze the error and try again. You have {max_attempts - attempt_num} attempts left.",
+                    )
+                )
             else:
                 # Final attempt failed - ask for writeup anyway
-                conversation.append(Message(
-                    role="user",
-                    content=f"✗ Attempt {attempt_num}/{max_attempts}: Verification FAILED.\n\n"
-                            f"Error:\n```\n{error[:500] if error else 'Unknown error'}\n```\n\n"
-                            f"No more attempts. Please provide a <writeup> with <title> - "
-                            f"what you learned and advice for the next generation."
-                ))
+                conversation.append(
+                    Message(
+                        role="user",
+                        content=f"✗ Attempt {attempt_num}/{max_attempts}: Verification FAILED.\n\n"
+                        f"Error:\n```\n{error[:500] if error else 'Unknown error'}\n```\n\n"
+                        f"No more attempts. Please provide a <writeup> with <title> - "
+                        f"what you learned and advice for the next generation.",
+                    )
+                )
                 writeup_response = await self.provider.generate(
                     conversation,
                     system_prompt=system_prompt.content,
                 )
-                total_tokens += writeup_response.usage.total_tokens if writeup_response.usage else 0
+                total_tokens += (
+                    writeup_response.usage.total_tokens if writeup_response.usage else 0
+                )
                 writeup, writeup_title = self._extract_writeup(writeup_response.content)
 
                 # Return best attempt (last one)
@@ -404,7 +433,9 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             if title_match:
                 title = title_match.group(1).strip()
                 # Remove title from content
-                content = re.sub(r"<title>.*?</title>", "", writeup_text, flags=re.DOTALL).strip()
+                content = re.sub(
+                    r"<title>.*?</title>", "", writeup_text, flags=re.DOTALL
+                ).strip()
                 return content, title
 
             return writeup_text, ""
@@ -427,8 +458,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
 
         # Sort: verified first (to encourage reuse), then by generation (newest first)
         sorted_artifacts = sorted(
-            library.all(),
-            key=lambda a: (not a.verified, -a.generation)
+            library.all(), key=lambda a: (not a.verified, -a.generation)
         )
 
         lines = ["Current artifact library:"]
@@ -447,7 +477,9 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 lines.append(f"  Notes: {artifact.notes[:200]}...")
             # If verification failed, show the error so successors can learn
             if artifact.verification_error:
-                lines.append(f"  ⚠ Verification failed: {artifact.verification_error[:100]}...")
+                lines.append(
+                    f"  ⚠ Verification failed: {artifact.verification_error[:100]}..."
+                )
 
         return "\n".join(lines)
 
@@ -514,7 +546,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 type=art_type,
                 natural_language=description,
                 lean_code=lean_code,
-                verified=False,  # Will be verified later
+                status=VerificationStatus.UNVERIFIED,  # Will be verified later
                 created_by=self.id,
                 generation=self.generation,
                 references=references,
@@ -571,9 +603,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
         # Parse review from response
         return self._parse_review(response.content, response.usage)
 
-    def _parse_review(
-        self, text: str, usage: TokenUsage | None = None
-    ) -> ReviewResult:
+    def _parse_review(self, text: str, usage: TokenUsage | None = None) -> ReviewResult:
         """Parse review decision from LLM response.
 
         Args:

@@ -21,6 +21,15 @@ from lms.prompts import get_all_versions
 from lms.providers import create_provider
 from lms.society import Society, BudgetExceeded
 
+_MOCK_VERIFIER_BANNER = """
+================================================================================
+  MOCK VERIFIER — RESULTS ARE NOT PROOFS
+  Artifacts are matched against a regex, not checked by Lean. Nothing this run
+  produces can count as verified, and its numbers must not be used to forecast
+  or calibrate anything. Re-run with --verifier real for Lean-backed results.
+================================================================================
+"""
+
 
 def write_status(
     output_dir: Path,
@@ -49,7 +58,9 @@ def write_status(
         "generation": {
             "current": current_gen,
             "target": target_gen,
-            "progress": f"{100 * current_gen / target_gen:.1f}%" if target_gen > 0 else "0%",
+            "progress": f"{100 * current_gen / target_gen:.1f}%"
+            if target_gen > 0
+            else "0%",
         },
         "tokens": {
             "used": society.total_tokens_used,
@@ -62,7 +73,9 @@ def write_status(
         "timing": {
             "elapsed_hours": round(elapsed / 3600, 2),
             "gens_per_hour": round(gens_per_hour, 1),
-            "eta_hours": round((target_gen - current_gen) / gens_per_hour, 1) if gens_per_hour > 0 else None,
+            "eta_hours": round((target_gen - current_gen) / gens_per_hour, 1)
+            if gens_per_hour > 0
+            else None,
         },
     }
 
@@ -90,6 +103,7 @@ def setup_signal_handlers(
         output_dir: Directory to save checkpoint
         goal: Optional goal to save
     """
+
     def handle_signal(signum, frame):
         sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
         print(f"\n[{sig_name}] Graceful shutdown requested...")
@@ -137,7 +151,7 @@ async def run_experiment(
         max_attempts: Max attempts per agent in iterative mode
         checkpoint_interval: Save checkpoint every N generations
     """
-    print(f"\nStarting LMS Experiment")
+    print("\nStarting LMS Experiment")
     print(f"  Agents: {n_agents}")
     print(f"  Generations: {n_generations}")
 
@@ -154,6 +168,7 @@ async def run_experiment(
     else:
         verifier = MockLeanVerifier()
         verifier_name = "Mock"
+        print(_MOCK_VERIFIER_BANNER)
 
     # Show goal if present
     if goal:
@@ -206,7 +221,7 @@ async def run_experiment(
     setup_signal_handlers(society, output_dir, goal)
 
     # Print society members (agents)
-    print(f"  Society Members:")
+    print("  Society Members:")
     for i, agent in enumerate(society.agents):
         print(f"    - {agent.id}: {society.providers[i].config.model}")
 
@@ -237,7 +252,11 @@ async def run_experiment(
                 tokens_used=result.tokens_used,
             )
             # Basic stats
-            score = math.sqrt(result.artifacts_created * result.artifacts_verified) if result.artifacts_verified > 0 else 0
+            score = (
+                math.sqrt(result.artifacts_created * result.artifacts_verified)
+                if result.artifacts_verified > 0
+                else 0
+            )
             output = (
                 f"Created: {result.artifacts_created}, "
                 f"Verified: {result.artifacts_verified}, "
@@ -245,9 +264,7 @@ async def run_experiment(
             )
             # Add review stats if peer review was used
             if result.reviews_total > 0:
-                output += (
-                    f", Reviews: {result.reviews_approved}A/{result.reviews_modified}M/{result.reviews_rejected}R"
-                )
+                output += f", Reviews: {result.reviews_approved}A/{result.reviews_modified}M/{result.reviews_rejected}R"
             output += f", Tokens: {result.tokens_used:,}"
             print(output)
 
@@ -278,33 +295,43 @@ async def run_experiment(
     # Print cumulative score
     total_created = len(society.library)
     total_verified = len(society.library.get_verified())
-    cumulative_score = math.sqrt(total_created * total_verified) if total_verified > 0 else 0
+    cumulative_score = (
+        math.sqrt(total_created * total_verified) if total_verified > 0 else 0
+    )
     print(f"\nCollective Score: {cumulative_score:.1f}")
     print(f"  (sqrt({total_created} created × {total_verified} verified))")
 
     # Print goal progress if applicable
     if goal:
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print("Goal Progress")
-        print(f"{'='*50}")
+        print(f"{'=' * 50}")
         print(f"Progress: {goal.progress():.0%}")
         for defn in goal.definitions:
             status = "[DONE]" if defn.formalized else "[    ]"
             milestone = "MILESTONE: " if "MILESTONE" in defn.name else ""
-            print(f"  {status} {milestone}{defn.tag}: {defn.name.split(':')[-1].strip()[:40]}")
-        print(f"{'='*50}")
+            print(
+                f"  {status} {milestone}{defn.tag}: {defn.name.split(':')[-1].strip()[:40]}"
+            )
+        print(f"{'=' * 50}")
 
     # Print token summary
     print(f"\nToken Usage: {society.total_tokens_used:,} total")
     if max_tokens:
-        print(f"  Budget: {max_tokens:,} ({100*society.total_tokens_used/max_tokens:.1f}% used)")
+        print(
+            f"  Budget: {max_tokens:,} ({100 * society.total_tokens_used / max_tokens:.1f}% used)"
+        )
     # Per-agent breakdown
     if society.artifacts_by_agent:
-        print(f"  Per-agent breakdown:")
+        print("  Per-agent breakdown:")
         for agent_id in sorted(society.artifacts_by_agent.keys()):
             stats = society.artifacts_by_agent[agent_id]
             tokens = society.tokens_by_agent.get(agent_id, 0)
-            ver_rate = 100 * stats["verified"] / stats["created"] if stats["created"] > 0 else 0
+            ver_rate = (
+                100 * stats["verified"] / stats["created"]
+                if stats["created"] > 0
+                else 0
+            )
             reviews = society.reviews_by_agent.get(agent_id, {})
             print(f"    {agent_id}:")
             line = f"      Created: {stats['created']:>2}  Verified: {stats['verified']:>2} ({ver_rate:>4.0f}%)  Referenced: {stats['referenced']:>2}"
@@ -327,9 +354,13 @@ async def run_experiment(
         "prompt_versions": get_all_versions(),
         "total_tokens_used": society.total_tokens_used,
         "max_tokens": max_tokens,
+        # Which machinery produced this run's results. Without it, a mock run
+        # is indistinguishable from a real one after the fact.
+        "verifier": society.verifier_metadata(),
         "analysis": {
             "total_artifacts": analysis.total_artifacts,
             "verified_artifacts": analysis.verified_artifacts,
+            "artifacts_by_status": society.library.count_by_status(),
             "reuse_rate": analysis.reuse_rate,
             "fresh_creation_rate": analysis.fresh_creation_rate,
             "verification_rate": analysis.verification_rate,
@@ -340,8 +371,7 @@ async def run_experiment(
     # Add provider details
     if mixed_providers:
         metadata["providers"] = [
-            {"name": p.name, "model": p.config.model}
-            for p in society.providers
+            {"name": p.name, "model": p.config.model} for p in society.providers
         ]
     else:
         metadata["model"] = society.provider.config.model
@@ -409,7 +439,7 @@ async def resume_experiment(
     provider_name = metadata["provider"]
     n_agents = metadata["n_agents"]
 
-    print(f"\nResuming LMS Experiment from checkpoint")
+    print("\nResuming LMS Experiment from checkpoint")
     print(f"  Checkpoint: {checkpoint_dir}")
     print(f"  Completed generations: {metadata['generations_completed']}")
     print(f"  Target generations: {target_generations}")
@@ -478,7 +508,9 @@ async def resume_experiment(
     start_time = datetime.now()
 
     # Continue running with periodic checkpoints
-    print(f"Continuing from generation {society.current_generation} (checkpoint every {checkpoint_interval})...")
+    print(
+        f"Continuing from generation {society.current_generation} (checkpoint every {checkpoint_interval})..."
+    )
     try:
         for gen in range(society.current_generation, target_generations):
             crash_log.log_generation_start(gen, mode)
@@ -497,7 +529,14 @@ async def resume_experiment(
             )
 
             # Update status file for remote monitoring
-            write_status(checkpoint_dir, society, gen + 1, target_generations, society.goal, start_time)
+            write_status(
+                checkpoint_dir,
+                society,
+                gen + 1,
+                target_generations,
+                society.goal,
+                start_time,
+            )
 
             # Periodic checkpoint
             if (gen + 1) % checkpoint_interval == 0:
@@ -705,7 +744,9 @@ def main() -> None:
     # Handle mixed mode
     if args.mixed:
         if len(available) < args.agents:
-            print(f"Error: Mixed mode requires {args.agents} providers but only {len(available)} configured.")
+            print(
+                f"Error: Mixed mode requires {args.agents} providers but only {len(available)} configured."
+            )
             print(f"Available providers: {', '.join(available)}")
             return
         provider = "mixed"

@@ -8,25 +8,42 @@ import json
 import random
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lms.agent import Agent, AgentResponse, ReviewResult, IterativeResponse
-from lms.artifacts import ArtifactLibrary, ReviewQueue, PendingReview, Artifact, ArtifactType
+from lms.artifacts import (
+    ArtifactLibrary,
+    ReviewQueue,
+    PendingReview,
+    Artifact,
+    ArtifactType,
+)
 from lms.dependency import DependencyGraph, TaskStatus
 from lms.foundation import FoundationFile
-from lms.lean.interface import LeanVerifier
+from lms.lean.interface import (
+    LeanVerifier,
+    VerificationResult,
+    VerificationStatus,
+)
 from lms.planning import PlanningPanel, create_default_assignments
 from lms.providers.base import BaseLLMProvider
 from lms.textbook import Textbook
-from lms.traces import TraceStore, ConversationLog, ReasoningTrace
-from lms.working_group import WorkingGroup, WorkingGroupConfig, Role
+from lms.traces import TraceStore
+from lms.working_group import WorkingGroup, WorkingGroupConfig
 
 if TYPE_CHECKING:
     from lms.goals import Goal
 
 
+#: Shared Lean corpus a Society writes to when no `foundation_path` is given.
+DEFAULT_FOUNDATION_PATH = (
+    Path(__file__).parent.parent / "lean" / "LMS" / "Foundation.lean"
+)
+
+
 class BudgetExceeded(Exception):
     """Raised when token budget is exceeded."""
+
     pass
 
 
@@ -99,11 +116,17 @@ class Society:
         self.current_generation = 0
         self.goal = goal
         self.tokens_by_agent: dict[str, int] = {}  # Track per-agent token usage
-        self.artifacts_by_agent: dict[str, dict[str, int]] = {}  # Track created/verified/referenced per agent
-        self.reviews_by_agent: dict[str, dict[str, int]] = {}  # Track reviews given per agent
+        self.artifacts_by_agent: dict[
+            str, dict[str, int]
+        ] = {}  # Track created/verified/referenced per agent
+        self.reviews_by_agent: dict[
+            str, dict[str, int]
+        ] = {}  # Track reviews given per agent
         self.use_peer_review: bool = True  # Enable/disable peer review phase
         self.textbook = Textbook()  # Accumulated wisdom
-        self.iterative_mode: bool = False  # Enable iterative proposals (5 attempts per agent)
+        self.iterative_mode: bool = (
+            False  # Enable iterative proposals (5 attempts per agent)
+        )
         self.max_attempts: int = 5  # Max attempts per agent in iterative mode
         self.trace_store = TraceStore()  # Full conversation logs and reasoning traces
 
@@ -118,13 +141,18 @@ class Society:
         if foundation_path:
             self.foundation = FoundationFile(foundation_path)
         else:
-            # Default path in lean project
-            self.foundation = FoundationFile(Path("lean/LMS/Foundation.lean"))
+            # Anchored to the package, not the cwd. As a relative path this
+            # resolved to whatever directory the process happened to start in,
+            # so a run launched from the repo root wrote into the tracked
+            # corpus at lean/LMS/Foundation.lean.
+            self.foundation = FoundationFile(DEFAULT_FOUNDATION_PATH)
 
         # Handle provider(s)
         if providers is not None:
             if len(providers) != n_agents:
-                raise ValueError(f"providers list length ({len(providers)}) must match n_agents ({n_agents})")
+                raise ValueError(
+                    f"providers list length ({len(providers)}) must match n_agents ({n_agents})"
+                )
             self.providers = providers
             self.provider = providers[0]  # Keep for backwards compatibility
         elif provider is not None:
@@ -185,13 +213,22 @@ class Society:
         # ===== ITERATIVE MODE: Each agent gets multiple verification attempts =====
         if self.iterative_mode and self.verifier:
             return await self._run_generation_iterative(
-                generation, artifacts_created, artifacts_verified,
-                artifacts_referenced, fresh_creations, generation_tokens
+                generation,
+                artifacts_created,
+                artifacts_verified,
+                artifacts_referenced,
+                fresh_creations,
+                generation_tokens,
             )
 
         # ===== PHASE 1: PROPOSE (parallel) =====
         propose_tasks = [
-            agent.propose(self.library, goal=self.goal, textbook=self.textbook, foundation=self.foundation)
+            agent.propose(
+                self.library,
+                goal=self.goal,
+                textbook=self.textbook,
+                foundation=self.foundation,
+            )
             for agent in self.agents
         ]
         responses: list[AgentResponse] = await asyncio.gather(*propose_tasks)
@@ -209,7 +246,11 @@ class Society:
 
             # Initialize per-agent stats
             if agent.id not in self.artifacts_by_agent:
-                self.artifacts_by_agent[agent.id] = {"created": 0, "verified": 0, "referenced": 0}
+                self.artifacts_by_agent[agent.id] = {
+                    "created": 0,
+                    "verified": 0,
+                    "referenced": 0,
+                }
 
             # Queue artifacts for review
             for artifact in response.proposed_artifacts:
@@ -241,7 +282,12 @@ class Society:
             for agent in self.agents:
                 # Initialize review stats
                 if agent.id not in self.reviews_by_agent:
-                    self.reviews_by_agent[agent.id] = {"given": 0, "approved": 0, "rejected": 0, "modified": 0}
+                    self.reviews_by_agent[agent.id] = {
+                        "given": 0,
+                        "approved": 0,
+                        "rejected": 0,
+                        "modified": 0,
+                    }
 
                 # Get an artifact to review (not own work)
                 pending = review_queue.get_for_review(exclude_agent=agent.id)
@@ -273,7 +319,9 @@ class Society:
                         approved=approved,
                         notes=result.reasoning,
                         modified_code=result.modified_code,
-                        tokens_used=result.tokens_used.total_tokens if result.tokens_used else 0,
+                        tokens_used=result.tokens_used.total_tokens
+                        if result.tokens_used
+                        else 0,
                     )
 
                     if result.decision == "APPROVE":
@@ -314,12 +362,16 @@ class Society:
                     continue
 
                 # Check import restrictions before running expensive verification
-                if self.goal and (self.goal.allowed_imports or self.goal.forbidden_imports):
+                if self.goal and (
+                    self.goal.allowed_imports or self.goal.forbidden_imports
+                ):
                     valid, error = self.goal.validate_code(code)
                     if not valid:
                         # Reject immediately - forbidden import
-                        pending.artifact.verified = False
-                        pending.artifact.verification_error = f"Import restriction violated: {error}"
+                        pending.artifact.status = VerificationStatus.FAILED
+                        pending.artifact.verification_error = (
+                            f"Import restriction violated: {error}"
+                        )
                         self.library.add(pending.artifact)
                         continue
 
@@ -333,16 +385,18 @@ class Society:
             verify_results = await asyncio.gather(*verify_tasks)
 
             # Process verification results
-            for pending, result in zip(approved_items, verify_results):
+            for pending, verification in zip(approved_items, verify_results):
                 artifact = pending.artifact
 
                 # If code was modified by reviewer, update the artifact
                 if pending.modified_code:
                     artifact.lean_code = pending.modified_code
-                    artifact.notes = (artifact.notes or "") + f"\n[Modified by {pending.reviewed_by}]"
+                    artifact.notes = (
+                        artifact.notes or ""
+                    ) + f"\n[Modified by {pending.reviewed_by}]"
 
-                artifact.verified = result.success
-                if result.success:
+                artifact.status = verification.status
+                if verification.success:
                     artifacts_verified += 1
                     creator_id = artifact.created_by
                     if creator_id in self.artifacts_by_agent:
@@ -369,16 +423,16 @@ class Society:
                             entry_type="success",
                         )
                 else:
-                    artifact.verification_error = result.error
+                    artifact.verification_error = verification.error
                     # Also add failed attempts to textbook - learning from failures
-                    if artifact.notes and result.error:
+                    if artifact.notes and verification.error:
                         topics = [artifact.stacks_tag] if artifact.stacks_tag else []
                         topics.append("error")
                         # Extract error type for title
-                        error_summary = result.error.split('\n')[0][:50] if result.error else "Unknown"
+                        error_summary = verification.error.split("\n")[0][:50]
                         title = f"[ERROR] {error_summary}"
                         self.textbook.add(
-                            content=f"{artifact.notes}\n\n---\nError: {result.error}",
+                            content=f"{artifact.notes}\n\n---\nError: {verification.error}",
                             author=artifact.created_by,
                             generation=artifact.generation,
                             topics=topics,
@@ -401,7 +455,9 @@ class Society:
         # Add rejected items to library (unverified, with rejection reason)
         for pending in review_queue.get_rejected():
             artifact = pending.artifact
-            artifact.verification_error = f"Rejected by {pending.reviewed_by}: {pending.review_notes}"
+            artifact.verification_error = (
+                f"Rejected by {pending.reviewed_by}: {pending.review_notes}"
+            )
             self.library.add(artifact)
 
         self.current_generation = generation + 1
@@ -421,6 +477,35 @@ class Society:
         self.results.append(result)
         return result
 
+    def _rejected(self, code: str, error: str) -> VerificationResult:
+        """A failure decided before the verifier ran (e.g. import restrictions).
+
+        Still stamped with the configured verifier's provenance so that every
+        result in a run reports which machinery the run was using.
+        """
+        return VerificationResult(
+            success=False,
+            code=code,
+            error=error,
+            verifier_kind=self.verifier.verifier_kind if self.verifier else "mock",
+            verifier_id=self.verifier.verifier_id if self.verifier else "none",
+        )
+
+    def verifier_metadata(self) -> dict[str, Any]:
+        """Provenance block recorded with every experiment.
+
+        Without this, a run's artifacts cannot be told apart from any other
+        run's after the fact — which is exactly how a mock run came to
+        calibrate the three-text roadmap.
+        """
+        if self.verifier is None:
+            return {"kind": None, "id": None, "lean_version": None, "mathlib_rev": None}
+        return {
+            "kind": self.verifier.verifier_kind,
+            "id": self.verifier.verifier_id,
+            **self.verifier.toolchain_info(),
+        }
+
     async def _run_generation_iterative(
         self,
         generation: int,
@@ -437,16 +522,18 @@ class Society:
         - No separate peer review phase (verification happens in the loop)
         - Agents write up their learnings which go to textbook
         """
+
         # Create verify function for agents
-        async def verify_fn(code: str) -> tuple[bool, str | None]:
+        async def verify_fn(code: str) -> VerificationResult:
             # Check import restrictions first
             if self.goal and (self.goal.allowed_imports or self.goal.forbidden_imports):
                 valid, error = self.goal.validate_code(code)
                 if not valid:
-                    return False, f"Import restriction: {error}"
+                    return self._rejected(code, f"Import restriction: {error}")
             # Run LEAN verification
-            result = await self.verifier.verify(code)
-            return result.success, result.error
+            if self.verifier is None:
+                return self._rejected(code, "No verifier configured")
+            return await self.verifier.verify(code)
 
         # Run all agents in parallel with iterative proposals
         iterative_tasks = [
@@ -473,7 +560,11 @@ class Society:
 
             # Initialize per-agent stats
             if agent.id not in self.artifacts_by_agent:
-                self.artifacts_by_agent[agent.id] = {"created": 0, "verified": 0, "referenced": 0}
+                self.artifacts_by_agent[agent.id] = {
+                    "created": 0,
+                    "verified": 0,
+                    "referenced": 0,
+                }
 
             # Count all attempts as "created"
             artifacts_created += len(response.attempts)
@@ -534,7 +625,7 @@ class Society:
                     title = f"[{status}] {response.writeup_title}"
                 else:
                     # Fallback: extract first sentence or first 80 chars
-                    first_line = response.writeup.split('\n')[0].strip()
+                    first_line = response.writeup.split("\n")[0].strip()
                     if len(first_line) > 80:
                         first_line = first_line[:77] + "..."
                     title = f"[{status}] {first_line}"
@@ -681,11 +772,15 @@ class Society:
 
             # Create artifact
             artifact_name = group_result.get("name", f"group_{group.config.group_id}")
-            artifact_id = f"{artifact_name}-{hashlib.sha1(lean_code.encode()).hexdigest()[:8]}"
+            artifact_id = (
+                f"{artifact_name}-{hashlib.sha1(lean_code.encode()).hexdigest()[:8]}"
+            )
             artifact = Artifact(
                 id=artifact_id,
                 type=ArtifactType(group_result.get("type", "definition")),
-                natural_language=group_result.get("description", group.config.task_name),
+                natural_language=group_result.get(
+                    "description", group.config.task_name
+                ),
                 lean_code=lean_code,
                 stacks_tag=group_result.get("stacks_tag", group.config.task_tag),
                 created_by=f"group-{group.config.group_id}",
@@ -696,10 +791,12 @@ class Society:
             # Verify with LEAN
             if self.verifier:
                 # Check import restrictions first
-                if self.goal and (self.goal.allowed_imports or self.goal.forbidden_imports):
+                if self.goal and (
+                    self.goal.allowed_imports or self.goal.forbidden_imports
+                ):
                     valid, error = self.goal.validate_code(lean_code)
                     if not valid:
-                        artifact.verified = False
+                        artifact.status = VerificationStatus.FAILED
                         artifact.verification_error = f"Import restriction: {error}"
                         self.library.add(artifact)
                         self.dependency_graph.update_status(
@@ -708,7 +805,7 @@ class Society:
                         continue
 
                 verify_result = await self.verifier.verify(lean_code)
-                artifact.verified = verify_result.success
+                artifact.status = verify_result.status
 
                 if verify_result.success:
                     artifacts_verified += 1
@@ -893,6 +990,7 @@ class Society:
         goal_path = output_dir / "goal.json"
         if goal is None and goal_path.exists():
             from lms.goals import Goal
+
             goal = Goal.load(goal_path)
 
         # Create society with same config
@@ -907,8 +1005,7 @@ class Society:
         # Restore state
         society.library = ArtifactLibrary.load(output_dir / "artifacts.json")
         society.results = [
-            GenerationResult(**gen_data)
-            for gen_data in results_data["generations"]
+            GenerationResult(**gen_data) for gen_data in results_data["generations"]
         ]
         society.current_generation = checkpoint.get("current_generation", 0)
         society.total_tokens_used = checkpoint.get("total_tokens_used", 0)
@@ -938,7 +1035,9 @@ class Society:
 
         return society
 
-    async def run_from_checkpoint(self, target_generation: int) -> list[GenerationResult]:
+    async def run_from_checkpoint(
+        self, target_generation: int
+    ) -> list[GenerationResult]:
         """Continue running from current checkpoint to target generation.
 
         Args:

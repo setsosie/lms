@@ -10,6 +10,21 @@ Paste output back into the session after each checkpoint. Every step has an
 explicit expected result; if you get something else, stop at that step rather than
 continuing.
 
+## State of the box as of 2026-08-10
+
+Steps 0 through 2c ran early, on 2026-07-28. **Start at Step 2 (branch switch),
+then go to Step 3.**
+
+| Step | State |
+|---|---|
+| 0, 0.5, 1 — prereqs, scratch routing, elan | ✅ done |
+| 2 — Mathlib cache + corpus build | ✅ done (0 errors, 1 `sorry`). Needs only the switch to `main` |
+| 2c — axiom audit | ✅ done. Four Localization theorems clean on `[propext, Classical.choice, Quot.sound]` |
+| 3 — Lean reachable from Python | ⬜ **today.** Expectation changed: 3c now **passes** (`26Q3-HARN-07` landed) |
+| 4 — serve the model | ⬜ **today.** `--max-model-len` corrected below |
+| 5 — point the harness at it | ⬜ **today.** Unblocked: `26Q3-INFRA-01` merged as #18 |
+| 6 — Gate B | ⬜ **partial today.** Only checkbox 1 of 5 is reachable; see Step 6 |
+
 ---
 
 ## Step 0 — Prerequisites
@@ -114,6 +129,9 @@ inside the scratch mount.
 ## Step 2 — Build the LMS Lean project
 
 The repo pins Lean `v4.27.0-rc1` and Mathlib rev `fe3134f0c3508d` (Dec 2025).
+`main` carries the **same** pin as the July branches, so if the box already ran
+Step 2 on 2026-07-28 its `$SCRATCH/lake-artifacts` cache is still valid — the
+switch to `main` costs a re-elaboration of the LMS modules, not of Mathlib.
 
 **The repo itself lives in home, not scratch.** Only two directories inside it
 are bulky — `lean/.lake/` (unpacked Mathlib oleans, ~20-30 GB) and `.venv/`.
@@ -122,15 +140,16 @@ purgeable mount. Symlink the bulk out instead. Keeping artifacts off `/` also
 protects the root filesystem: a full `/` destabilizes the box, a full scratch
 mount only costs a re-download.
 
+**Use `main`.** As of 2026-08-10 both chore branches have landed, and `main` is a
+strict superset of the merge the July run used: all 19 modules including
+`TwoCat.lean` and `TwoFibreProduct.lean` (which `chore/wire-lean-build` was
+missing), the `globs = ["LMS.+"]` line, and `LMS/Temp/` dropped from the corpus
+and gitignored. Do **not** re-create the July two-branch merge.
+
 ```bash
 git clone git@github.com:setsosie/lms.git ~/code/lms   # or `git fetch origin` if it exists
 cd ~/code/lms
-
-# Until chore/track-wc3-lean-corpus and chore/wire-lean-build are merged to main,
-# check out BOTH — neither alone gives a build that reaches the corpus. One has
-# the 14 .lean files, the other has the `globs` that make Lake compile them.
-git checkout chore/track-wc3-lean-corpus
-git merge origin/chore/wire-lean-build      # verified conflict-free
+git checkout main && git pull origin main
 
 # Route build artifacts to scratch BEFORE the first cache get
 mkdir -p "$SCRATCH/lake-artifacts"
@@ -245,7 +264,7 @@ uv sync
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
 import asyncio, pathlib
-v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
 code = 'theorem cal_smoke (n : Nat) : n + 0 = n := by simp'
 print(asyncio.run(v.verify(code)))
 "
@@ -261,7 +280,7 @@ Then confirm it **rejects** what it should:
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
 import asyncio, pathlib
-v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
 print(asyncio.run(v.verify('theorem bad (n : Nat) : n + 0 = n := by sorry')))
 print(asyncio.run(v.verify('theorem nonsense : 1 = 2 := by rfl')))
 "
@@ -281,29 +300,69 @@ Now the test that actually matters — code with an import:
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
 import asyncio, pathlib
-v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
 code = '''import Mathlib.Logic.Basic
 theorem cal_import_smoke (p : Prop) [Decidable p] : ¬¬p ↔ p := not_not'''
 print(asyncio.run(v.verify(code)))
 "
 ```
 
-**Checkpoint 3c**: **this is expected to FAIL today**, with `unknown module
-prefix 'Mathlib'`. That is not a broken install — it is a defect in the verifier.
+**Checkpoint 3c**: **this must now PASS.** It is the single most important
+checkpoint in the runbook.
 
-`RealLeanVerifier.verify` invokes `lean <temp_path>` with no `LEAN_PATH` and no
-`cwd` (`lms/lean/real.py:111-116`), so nothing puts the project's
-`.lake/packages/*/build/lib/lean` directories on the module search path. The
-verifier can therefore only check **import-free** Lean. Checkpoints 3 and 3b pass
-only because their snippets import nothing.
+It was expected to fail when this runbook was written on 2026-07-28:
+`RealLeanVerifier.verify` invoked bare `lean <temp_path>` with no `LEAN_PATH` and
+no `cwd`, so nothing put the project's `.lake/packages/*/build/lib/lean`
+directories on the module search path, and the verifier could only check
+**import-free** Lean. Every real agent proof imports Mathlib, so the CVFN
+numerator was structurally 0 for reasons having nothing to do with the models.
 
-Every real agent proof imports Mathlib, so without this fix Gate B measures an
-environment bug rather than the pipeline — it would report 0 verified statements
-for reasons having nothing to do with the models. The correct invocation is the
-one used for the axiom audit in Step 2c: `lake env lean <file>`, run from the
-Lean project directory.
+`26Q3-HARN-07` fixed it (PR #12, merged 2026-07-28): `real.py` now runs
+`lake env lean` from the Lean project directory, the same invocation the Step 2c
+axiom audit uses.
 
-Record the failure and proceed; Step 4 does not depend on it.
+**If 3c still fails with `unknown module prefix 'Mathlib'`, stop.** Either the
+checkout is behind `main` or the `lake env` path is broken on this box, and
+everything downstream would measure the environment instead of the pipeline.
+Note that 3 and 3b passing tells you nothing here — their snippets import
+nothing, and `sorry` is caught by a Python substring test in `lms/lean/real.py`
+that returns the same answer on a machine with no Lean at all.
+
+### 3d — Confirm it rejects an import-bearing statement too
+
+3b only ever exercised import-free code, so it could not tell a working oracle
+from one that says no for the wrong reason. Run the negative case through the
+*same* path as 3c:
+
+```bash
+uv run python -c "
+from lms.lean.real import RealLeanVerifier
+import asyncio, pathlib
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
+code = '''import Mathlib.Logic.Basic
+theorem cal_import_reject (p : Prop) : p ↔ ¬p := not_not'''
+print(asyncio.run(v.verify(code)))
+"
+```
+
+**Checkpoint 3d**: `success=False` carrying a real elaborator message
+(`Type mismatch ... has type ¬¬?m.1 ↔ ?m.1 but is expected to have type p ↔ ¬p`).
+A bare `no such file or directory` is **not** a pass — see the note below.
+
+> **`.resolve()` is load-bearing in these snippets.** `RealLeanVerifier` runs
+> Lean with `cwd=project_dir` and separately hands it a temp path derived from
+> the same value. With a relative `project_dir`, Lean runs inside `lean/` and is
+> given `lean/.lake/verify-temp/x.lean`, so it looks for `lean/lean/.lake/...`
+> and returns `no such file or directory (error code: 2)` — a false negative
+> shaped exactly like a failed proof. Fixed in `LeanProject.__init__` (PR #21);
+> the `.resolve()` here is belt-and-braces and works either way.
+> `lms/run.py:146` always built an absolute path, so Step 6 was never affected.
+
+**Result, 2026-08-10 (first live run of the oracle):** 3c `success=True`, 3d
+`success=False` with the type mismatch above. Both adjudicated by the compiler
+against pinned Mathlib. This is the first time the project has verified
+import-bearing Lean end to end — every previously recorded "verified" figure came
+from the mock or from import-free snippets.
 
 ---
 
@@ -313,19 +372,147 @@ Per `docs/infrastructure/2026Q2-lean-codegen-base-model-selection.md`, start wit
 the generalist only — one model is enough for Gate B. Add BFS-Prover-V1-7B for
 Phase C.
 
-Run from the repo root, after Step 3's `uv sync` — `uv pip install` targets the
-project's `.venv`, so `vllm` lands there and must be invoked with `uv run`
-(a bare `vllm serve` will not be on `PATH`).
+**vLLM gets its own virtualenv, and it is the one thing in this repo you do not
+launch with `uv run`.** Confirmed on the box 2026-08-10.
+
+An earlier version of this step said to `uv pip install vllm` into the project's
+`.venv` and launch it with `uv run vllm serve`. That cannot work. vLLM requires a
+newer `openai` than `uv.lock` pins (2.12.0), so the install upgrades it — and then
+`uv run` re-syncs the environment to the lockfile *before* running the command,
+silently downgrading `openai` back. vLLM then dies during import:
+
+```
+Uninstalled 2 packages in 2ms
+Installed 2 packages in 28ms
+ImportError: cannot import name 'NamespaceTool' from 'openai.types.responses'
+```
+
+That "uninstalled/installed" pair immediately above the traceback is the tell.
+Re-installing does not help; `uv run` undoes it every launch.
+
+The two sides have no reason to share an interpreter — since `26Q3-INFRA-01` they
+communicate over HTTP. Keeping them apart also puts vLLM's ~10 GB of wheels on
+scratch instead of the home quota, and makes a later `uv sync` unable to break a
+running server.
+
+### 4a — CUDA: pin vLLM below 0.20 while the driver is 570
+
+**`mahpiya` runs driver 570.207, which caps CUDA at 12.8.** vLLM moved its default
+PyPI wheel to CUDA 13.0 at **v0.20.0** (to match torch 2.11), and CUDA 13 requires
+driver **≥ 580.65.06**. So the current default wheel cannot run on this box.
+
+This fails in two stages, and the first fix does not reveal the second:
+
+1. Plain `uv pip install vllm` gets torch built for **cu130**. Engine startup dies
+   in `init_device` with `RuntimeError: The NVIDIA driver on your system is too
+   old`.
+2. Adding `--torch-backend=auto` fixes *torch* (it picks cu129) but not vLLM's own
+   compiled extension, which is still built against CUDA 13. Now it dies earlier,
+   at import: `ImportError: libcudart.so.13: cannot open shared object file`.
+
+`libcudart.so.13` cannot be supplied by a package — CUDA 13 needs a 13-capable
+driver. Pinning below 0.20 is the fix that works today:
 
 ```bash
-cd ~/code/lms
-uv pip install vllm
-CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
+cd ~
+echo "$SCRATCH"                     # must be non-empty
+export UV_LINK_MODE=copy            # cache and venv are on different filesystems
+uv self update && hash -r           # see the uv note below
+uv venv "$SCRATCH/vllm-env" --python 3.12
+uv pip install --python "$SCRATCH/vllm-env/bin/python" "vllm<0.20" --torch-backend=auto
+```
+
+> **`uv` must be current.** An older `uv` does not know CUDA backends past
+> `cu126`, and `--torch-backend=cu128` fails with `invalid value`, listing only
+> ancient options. Do not pick `cu126` from that list to get past it — vLLM pins
+> an exact torch version and torch drops old CUDA targets, so you get an
+> unresolvable or ABI-mismatched environment. Update `uv` and use `auto`, which
+> reads the driver and chooses. `hash -r` matters: bash caches the old binary's
+> path.
+
+**Verified working on the box, 2026-08-10:** vLLM `0.19.1`, torch `2.11.0+cu129`,
+driver `570.207`. Qwen3 MoE support long predates 0.20, so the pin costs nothing
+we need.
+
+**Retire this pin when the driver reaches 580.65.06+**, at which point plain
+`uv pip install vllm --torch-backend=auto` is correct again. That bump is
+scheduled maintenance on a shared box — root, a reboot, and displacing other
+jobs — not a debugging step. Do not do it mid-phase.
+
+### 4b — Check the GPUs before loading 61 GB of weights
+
+Both checks below are the exact failures above. Each takes seconds; a failed
+model load takes minutes.
+
+```bash
+"$SCRATCH/vllm-env/bin/python" -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.device_count())"
+"$SCRATCH/vllm-env/bin/python" -c "import vllm; print(vllm.__version__)"
+```
+
+Want `2.11.0+cu129 12.9 True 4` from the first — CUDA 12.9 on a 12.8 driver is
+fine, since minor versions are compatible within CUDA 12; it was the **major**
+jump to 13 that broke. The second must print a version rather than raise
+`ImportError`.
+
+### 4c — Serve
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 "$SCRATCH/vllm-env/bin/vllm" serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --port 8000 \
   --tensor-parallel-size 2 \
-  --max-model-len 65536 \
-  --served-model-name lms-generalist
+  --max-model-len 131072 \
+  --served-model-name lms-generalist \
+  2>&1 | tee "$SCRATCH/vllm.log"
 ```
+
+Healthy progress, in order: `world_size=2` with an `nccl` backend →
+`Starting to load model` → `Loading safetensors checkpoint shards: N%` →
+`GPU KV cache size: ... tokens` → `Starting vLLM API server on http://0.0.0.0:8000`.
+Until that last line, `curl` returning `Connection refused` is expected. Use
+`curl -sS`, not `-s`, or connection failures are silent.
+
+**Result, 2026-08-10 (first successful serve):** `Available KV cache memory:
+52.19 GiB` → **`GPU KV cache size: 1,139,984 tokens`**; engine init (profile,
+create KV cache, warmup) 40.7 s after weights loaded.
+
+At `--max-model-len 131072` that is ~8.7 full-length sequences resident
+simultaneously, so a 1-agent Gate B run uses roughly 11% of KV capacity.
+**Phase C sizing follows from this**: there is headroom for substantially more
+concurrent agents on GPUs 0–1, or for BFS-Prover-V1-7B on GPUs 2–3, without
+revisiting `--gpu-memory-utilization` (left at its 0.9 default) or
+`--max-model-len`.
+
+If you already ran `uv pip install vllm` against the project, `cd ~/code/lms &&
+uv sync` prunes vLLM and torch back out of `.venv` and restores the pinned
+`openai`. The harness side keeps using `uv run` exactly as before — Steps 3, 5
+and 6 are unchanged.
+
+> **tmux, if you don't use it often.** `Ctrl-b` is a prefix: press and *release*
+> `Ctrl-b`, then tap the next key on its own — `Ctrl-b Ctrl-c` is a different
+> (unbound) sequence. `c` new window, `0`/`1` jump to window N, `n`/`p` next and
+> previous, `d` detach, `[` scroll mode (`q` exits). The status bar names the
+> session and marks the current window with `*`. To read a pane you can't scroll,
+> `tmux capture-pane -t <session> -p -S -5000 > file`. `echo "$TMUX"` is the
+> reliable test for whether you are inside a session — it is empty outside.
+
+> **`--max-model-len` must exceed 64k, which is why it is 131072 and not the
+> 65536 this runbook originally said.** `ProviderConfig.max_tokens` defaults to
+> `DEFAULT_MAX_TOKENS = 64_000` (`lms/config.py:11`), sized for Claude Opus's
+> output cap, and nothing overrides it per request — `lms/agent.py` calls
+> `generate()` without a `max_tokens` argument, so every request reaches vLLM
+> asking for 64,000 completion tokens. vLLM rejects a request when
+> `prompt_tokens + max_tokens > max_model_len`, so at 65536 every call with a
+> prompt over ~1,536 tokens returns HTTP 400 — and the agent system prompts are
+> far larger than that. The symptom is a run that fails on the very first
+> generation with a 400 that looks like a malformed request.
+>
+> 131072 is inside Qwen3-Coder-30B-A3B's native 262144 window and costs nothing
+> at rest: KV is ~96 KB/token (48 layers × 4 KV heads × 128 dim × 2 × 2 bytes),
+> so a full-length sequence is ~12.6 GB, ~6.3 GB per GPU at TP=2, against 94 GB
+> H100 NVLs already holding ~30.5 GB of weights each.
+>
+> The real fix is to make the per-request cap configurable rather than to size
+> the server around a Claude-shaped constant — tracked as `26Q3-INFRA-02`.
 
 Run it inside `tmux` (or `nohup`) so it survives your SSH session — the model
 download (~61 GB to `$HF_HOME`) plus startup can take a while on first run.
@@ -340,11 +527,21 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 **Checkpoint 4**: the model is listed and the completion returns `ok`.
 
+Check `max_model_len` in the `/v1/models` response, not just that the call
+succeeded — it is the field that would otherwise 400 every agent request. Want
+`"max_model_len":131072`.
+
+**Result, 2026-08-10:** ✅ both. `/v1/models` reported `lms-generalist`
+(root `Qwen/Qwen3-Coder-30B-A3B-Instruct`) with `max_model_len: 131072`, and the
+completion returned `ok` in 2 tokens.
+
 ---
 
 ## Step 5 — Point the harness at it
 
-Requires `26Q3-INFRA-01` (Sprint 2) to have landed.
+`26Q3-INFRA-01` landed as PR #18 on 2026-08-10, so this step is unblocked. It
+threads `base_url` from the environment onto `ProviderConfig` and into
+`AsyncOpenAI`; an unset or blank value leaves hosted-OpenAI behavior untouched.
 
 `.env` is gitignored, so the clone starts without one — this creates it. No real
 API keys are needed for local serving (`.env.example` is in the repo for
@@ -371,6 +568,37 @@ print(c.openai.base_url, c.openai.model)
 
 ## Step 6 — Gate B: end-to-end smoke
 
+**Only checkbox 1 of the 5 below is reachable on 2026-08-10.** `26Q3-HARN-01`
+(provenance) is open as PR #14; `-03` (T2/T4 gates), `-04` (novelty) and `-05`
+(cost accounting) are not started. Today's target is therefore **Gate B-minus**:
+the loop closes and at least one artifact clears *real* Lean. That is a genuine
+first — the pipeline has never once run against a live oracle — but it is not
+Gate B, and the Aug 21 checkpoint still judges the full five.
+
+> ### Guard the corpus before you run
+>
+> `Society.__init__` defaults its accumulator to `FoundationFile(Path("lean/LMS/Foundation.lean"))`
+> (`lms/society.py:122`) and `lms/run.py` never passes `foundation_path`, so
+> **the run overwrites the tracked 127-line WC-3 corpus file.** This is issue #19
+> in a second guise — it is by design that verified artifacts accumulate there,
+> but that file is also a build input, so a later `lake build` would be
+> elaborating harness-mutated source and Step 2's result would stop meaning what
+> it says.
+>
+> ```bash
+> cd ~/code/lms
+> git status --short lean/          # expect clean before the run
+> cp lean/LMS/Foundation.lean "$SCRATCH/Foundation.lean.orig"
+> ```
+>
+> After the run, keep the mutated copy as evidence, then restore:
+>
+> ```bash
+> cp lean/LMS/Foundation.lean "$SCRATCH/Foundation.lean.after-gateB"
+> git checkout -- lean/LMS/Foundation.lean
+> git status --short lean/          # must be clean again
+> ```
+
 Invoke the module, **not** `uv run lms`. The project declares
 `[project.scripts] lms` but has no `[build-system]` and no
 `tool.uv.package = true`, so `uv sync` prints *"Skipping installation of entry
@@ -378,15 +606,21 @@ points (`project.scripts`) because this project is not packaged"* and `uv run
 lms` dies with `Failed to spawn: lms`. `python -m lms.run` takes the identical
 arguments and is verified working.
 
+Run this from a shell that has the elan PATH. `RealLeanVerifier.__init__` calls
+`_find_lean()`, which raises `FileNotFoundError` when `lean` is not on `PATH` — so
+a fresh `tmux` pane that never sourced `~/.bashrc` crashes before a single token
+is generated. Check with `which lean lake` first.
+
 ```bash
 cd ~/code/lms
+which lean lake                     # both must resolve, inside $ELAN_HOME
 uv run python -m lms.run \
   --provider openai \
   --verifier real \
   --agents 1 \
   --generations 1 \
   --output experiments/gateB_smoke \
-  2>&1 | tee /tmp/gateB.log
+  2>&1 | tee "$SCRATCH/gateB.log"
 ```
 
 Then score it through the Sprint 2 gates. Requires `26Q3-HARN-01`, `-03`, `-04`
@@ -399,11 +633,41 @@ uv run python -m lms.metrics cvfn_report experiments/gateB_smoke
 
 **Checkpoint 6 — Gate B passes when**:
 
-- [ ] ≥1 artifact reaches `VERIFIED_LEAN` (not `VERIFIED_HEURISTIC`)
-- [ ] `metadata.json` records `verifier.kind == "real"` plus Lean/Mathlib versions
-- [ ] gate results are populated for every artifact (pass or fail, with reasons)
-- [ ] the novelty classifier emits a level for each verified artifact
-- [ ] `cvfn_report` produces a number, even if that number is terrible
+- [ ] ≥1 artifact reaches `VERIFIED_LEAN` (not `VERIFIED_HEURISTIC`) — *reachable today*
+- [ ] `metadata.json` records `verifier.kind == "real"` plus Lean/Mathlib versions — *blocked on `26Q3-HARN-01`, PR #14*
+- [ ] gate results are populated for every artifact (pass or fail, with reasons) — *blocked on `26Q3-HARN-03`*
+- [ ] the novelty classifier emits a level for each verified artifact — *blocked on `26Q3-HARN-04`*
+- [ ] `cvfn_report` produces a number, even if that number is terrible — *blocked on `26Q3-HARN-05`*
+
+**Checkpoint 6-minus — what to check today instead.** Since `metadata.json` does
+not yet carry provenance, the only way to tell a real verification from a
+heuristic one is that you launched with `--verifier real` and Checkpoint 3c
+passed. Record both facts alongside the artifacts, because this run's outputs
+will otherwise be indistinguishable from the mock-verified runs that produced the
+retracted roadmap numbers.
+
+```bash
+uv run python -c "
+import json, collections
+d = json.load(open('experiments/gateB_smoke/artifacts.json'))
+a = d['artifacts']
+print('artifacts     :', len(a))
+print('verified      :', collections.Counter(str(x.get('verified')) for x in a))
+print('by type       :', collections.Counter(x.get('type') for x in a))
+print('with an error :', sum(1 for x in a if x.get('verification_error')))
+print('total tokens  :', d.get('total_tokens_used'))
+for x in a:
+    if x.get('verification_error'):
+        print('---', x['id'], x['verification_error'][:300])
+"
+```
+
+Report that histogram, the wall-clock, and the GPU-hours. **A histogram of
+all-failures is a pass for today** — it means the instrument ran end to end
+against a live oracle. What would *not* be a pass is a high verified count: the
+archived `experiments/mixed_3llm` reads 21/25 `verified: true` and every one of
+those came from the mock. If this run reports a similar rate, suspect the
+verifier wiring before believing the number.
 
 **A terrible number here is a pass.** Gate B tests that the instrument works, not
 that the pipeline is good. Phase C measures the pipeline.
@@ -415,6 +679,20 @@ that the pipeline is good. Phase C measures the pipeline.
 Paste: checkpoint results 0–6, `wall-clock` for `lake exe cache get` and
 `lake build`, the `cvfn_report` output, and the gate-failure histogram. That plus
 GPU-hours consumed is everything needed to configure Phase C.
+
+**For the 2026-08-10 Gate B-minus run specifically**, `cvfn_report` does not
+exist yet, so paste instead:
+
+1. Checkpoint 3c verbatim — pass/fail decides whether anything after it means
+   something.
+2. The Step 4 vLLM startup banner (it prints the resolved `max_model_len`, the
+   KV-cache blocks allocated, and the dtype).
+3. The Step 6 histogram, plus every `verification_error` string. **The error
+   strings are the most valuable output of the day**: they say whether the models
+   are producing malformed Lean, unprovable goals, or hitting the `lean_code`
+   YAML block-scalar leak that `26Q3-HARN-02` is meant to fix.
+4. Wall-clock for the run and `nvidia-smi` peak memory.
+5. `git status --short lean/` after the restore in Step 6's guard.
 
 ## What not to do
 
