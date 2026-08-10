@@ -1,0 +1,47 @@
+|
+  import Mathlib.CategoryTheory.Category.Basic
+  
+  /-!
+  # Category Definition (Stacks Tag 0013)
+  
+  A category C consists of:
+  1. A collection of objects Ob(C)
+  2. For each pair x, y ∈ Ob(C), a set of morphisms Mor(x, y)
+  3. For each object x, an identity morphism id_x ∈ Mor(x, x)
+  4. Composition: Mor(x, y) × Mor(y, z) → Mor(x, z)
+  
+  Satisfying associativity and identity laws.
+  
+  In Mathlib, this is `CategoryTheory.Category`.
+  -/
+  
+  namespace StacksProject
+  
+  -- We use Mathlib's Category which matches Stacks 0013
+  -- The key components are:
+  -- * Objects: Type u (the type C itself)
+  -- * Morphisms: C → C → Type v (written X ⟶ Y)
+  -- * Identity: 𝟙 X : X ⟶ X
+  -- * Composition: f ≫ g for f : X ⟶ Y, g : Y ⟶ Z
+  -- Note: Mathlib uses diagrammatic order (f ≫ g means "f then g")
+  
+  example {C : Type*} [CategoryTheory.Category C] (X : C) : X ⟶ X := 𝟙 X
+  
+  example {C : Type*} [CategoryTheory.Category C] {X Y Z : C} 
+      (f : X ⟶ Y) (g : Y ⟶ Z) : X ⟶ Z := f ≫ g
+  
+  -- Associativity (Stacks: (h ∘ g) ∘ f = h ∘ (g ∘ f))
+  -- In diagrammatic order: (f ≫ g) ≫ h = f ≫ (g ≫ h)
+  example {C : Type*} [CategoryTheory.Category C] {W X Y Z : C}
+      (f : W ⟶ X) (g : X ⟶ Y) (h : Y ⟶ Z) : (f ≫ g) ≫ h = f ≫ (g ≫ h) :=
+    CategoryTheory.Category.assoc f g h
+  
+  -- Identity laws (Stacks: f ∘ id_x = f = id_y ∘ f)
+  -- In diagrammatic order: 𝟙 X ≫ f = f and f ≫ 𝟙 Y = f
+  example {C : Type*} [CategoryTheory.Category C] {X Y : C} (f : X ⟶ Y) : 
+      𝟙 X ≫ f = f := CategoryTheory.Category.id_comp f
+  
+  example {C : Type*} [CategoryTheory.Category C] {X Y : C} (f : X ⟶ Y) : 
+      f ≫ 𝟙 Y = f := CategoryTheory.Category.comp_id f
+  
+  end StacksProject

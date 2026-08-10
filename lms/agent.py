@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import textwrap
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -96,6 +97,57 @@ class AgentResponse:
     proposed_artifacts: list[Artifact] = field(default_factory=list)
     referenced_artifacts: list[str] = field(default_factory=list)
     tokens_used: TokenUsage | None = None
+
+
+# A YAML block-scalar header occupying its whole first line: `|`, `>`, with an
+# optional chomping indicator and indent indicator (`|-`, `|2`, `|2-`).
+_BLOCK_SCALAR_HEADER = re.compile(r"\A[ \t]*[|>][+-]?[0-9]?[+-]?[ \t]*\n")
+
+# A complete markdown fence, optionally language-tagged (```lean, ```lean4).
+# Non-greedy so the body stops at the first closing fence, and unanchored so
+# that prose on either side of the block is discarded with it.
+_FENCED_BLOCK = re.compile(r"```[^\n`]*\n(?P<body>.*?)\n?[ \t]*```", re.DOTALL)
+
+# An opening fence whose closing partner never arrived - a truncated generation.
+_OPEN_FENCE = re.compile(r"\A[ \t]*```[^\n`]*[ \t]*\n")
+
+
+def _clean_lean_code(raw: str | None) -> str | None:
+    """Recover the Lean source an agent meant to send from how it packaged it.
+
+    Models wrap `lean:` payloads in two things that are not Lean: a YAML
+    block-scalar header (`lean: |`) and markdown fences (```lean). Both reach
+    the compiler as source and fail on line 1, which is indistinguishable in
+    the result from a genuine proof failure -- so every verification number
+    taken over unstripped payloads measures the parser, not the mathematics.
+
+    Args:
+        raw: The `lean` group exactly as `ARTIFACT_PATTERN` captured it.
+
+    Returns:
+        Lean source with packaging removed and block indentation flattened, or
+        None if the payload was nothing but packaging.
+    """
+    if raw is None:
+        return None
+
+    text = raw.replace("\r\n", "\n")
+
+    # The header has to go before dedent, not after: it sits at column 0 while
+    # the body it introduces is indented beneath it, so leaving it in place
+    # makes the common prefix empty and dedent a no-op.
+    text = _BLOCK_SCALAR_HEADER.sub("", text, count=1)
+    text = textwrap.dedent(text).strip()
+
+    fenced = _FENCED_BLOCK.search(text)
+    if fenced:
+        text = fenced.group("body")
+    elif text.startswith("```"):
+        text = _OPEN_FENCE.sub("", text, count=1)
+
+    # Fenced bodies carry their own indentation when the fence was itself
+    # nested inside a block scalar, so dedent again after unwrapping.
+    return textwrap.dedent(text).strip() or None
 
 
 class Agent:
@@ -508,9 +560,8 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             artifact_type = match.group("type").lower()
             name = match.group("name")
             description = match.group("description").strip()
-            lean_code = match.group("lean")
-            if lean_code:
-                lean_code = lean_code.strip()
+            lean_code_raw = match.group("lean")
+            lean_code = _clean_lean_code(lean_code_raw)
 
             # Parse notes - the agent's marginalia
             notes = match.group("notes")
@@ -546,6 +597,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 type=art_type,
                 natural_language=description,
                 lean_code=lean_code,
+                lean_code_raw=lean_code_raw,
                 status=VerificationStatus.UNVERIFIED,  # Will be verified later
                 created_by=self.id,
                 generation=self.generation,

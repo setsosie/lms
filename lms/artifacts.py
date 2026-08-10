@@ -44,6 +44,10 @@ class Artifact:
     created_by: str
     generation: int
     lean_code: str | None = None
+    # Exactly what the regex captured, before `_clean_lean_code` normalized it.
+    # Kept so that an extraction bug stays visible in the record rather than
+    # being silently laundered into what looks like the agent's own source.
+    lean_code_raw: str | None = None
     status: VerificationStatus = VerificationStatus.UNVERIFIED
     references: list[str] = field(default_factory=list)
     referenced_by: list[str] = field(default_factory=list)
@@ -74,6 +78,7 @@ class Artifact:
             "type": self.type.value,
             "natural_language": self.natural_language,
             "lean_code": self.lean_code,
+            "lean_code_raw": self.lean_code_raw,
             "status": self.status.value,
             # Retained so older readers keep parsing these files. It tracks the
             # tightened meaning of `verified`, so a heuristic pass reads False.
@@ -102,6 +107,7 @@ class Artifact:
             type=ArtifactType(d["type"]),
             natural_language=d["natural_language"],
             lean_code=d.get("lean_code"),
+            lean_code_raw=d.get("lean_code_raw"),
             status=cls._status_from_dict(d),
             created_by=d["created_by"],
             generation=d["generation"],
