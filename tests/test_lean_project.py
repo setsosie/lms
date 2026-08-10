@@ -27,6 +27,25 @@ class TestLeanProject:
             assert project.temp_dir == expected_temp
             assert expected_temp.exists()
 
+    def test_relative_project_dir_is_resolved(self, monkeypatch):
+        """A relative project_dir must not yield a relative temp path.
+
+        Regression guard, found on the cluster 2026-08-10. `RealLeanVerifier`
+        runs Lean with `cwd=project_dir` and hands it `str(temp_path)`. When
+        both are relative, Lean resolves `lean/.lake/verify-temp/x.lean` from
+        *inside* `lean/` and fails with `no such file or directory (error code:
+        2)` — a path bug wearing the costume of a failed proof.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "lean").mkdir()
+            monkeypatch.chdir(tmpdir)
+
+            project = LeanProject("lean")
+
+            assert project.project_dir.is_absolute()
+            assert project.temp_dir.is_absolute()
+            assert project.get_temp_file("theorem t : True := trivial").is_absolute()
+
     def test_temp_dir_outside_library_source_tree(self):
         """Scratch must not sit under LMS/, or `globs = ["LMS.+"]` compiles it.
 
