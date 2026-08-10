@@ -1,11 +1,10 @@
 """Tests for cultural artifact storage and tracking."""
 
-import json
 from pathlib import Path
 
-import pytest
 
 from lms.artifacts import Artifact, ArtifactType, ArtifactLibrary
+from lms.lean.interface import VerificationStatus
 
 
 class TestArtifact:
@@ -18,7 +17,7 @@ class TestArtifact:
             type=ArtifactType.LEMMA,
             natural_language="If n is even, then n^2 is even",
             lean_code="lemma even_sq (n : Nat) (h : Even n) : Even (n * n) := ...",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-1",
             generation=1,
         )
@@ -47,7 +46,7 @@ class TestArtifact:
             type=ArtifactType.THEOREM,
             natural_language="Main theorem",
             lean_code="theorem main : ...",
-            verified=True,
+            status=VerificationStatus.VERIFIED_LEAN,
             created_by="agent-1",
             generation=2,
             references=["lemma-001"],
@@ -159,9 +158,33 @@ class TestArtifactLibrary:
         """Can filter artifacts by generation."""
         library = ArtifactLibrary()
 
-        library.add(Artifact(id="a1", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=0))
-        library.add(Artifact(id="a2", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=0))
-        library.add(Artifact(id="a3", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=1))
+        library.add(
+            Artifact(
+                id="a1",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
+        library.add(
+            Artifact(
+                id="a2",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
+        library.add(
+            Artifact(
+                id="a3",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=1,
+            )
+        )
 
         gen0 = library.get_by_generation(0)
         gen1 = library.get_by_generation(1)
@@ -173,8 +196,26 @@ class TestArtifactLibrary:
         """Can filter to only verified artifacts."""
         library = ArtifactLibrary()
 
-        library.add(Artifact(id="a1", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=0, verified=True))
-        library.add(Artifact(id="a2", type=ArtifactType.INSIGHT, natural_language="", created_by="", generation=0, verified=False))
+        library.add(
+            Artifact(
+                id="a1",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=0,
+                status=VerificationStatus.VERIFIED_LEAN,
+            )
+        )
+        library.add(
+            Artifact(
+                id="a2",
+                type=ArtifactType.INSIGHT,
+                natural_language="",
+                created_by="",
+                generation=0,
+                status=VerificationStatus.UNVERIFIED,
+            )
+        )
 
         verified = library.get_verified()
         assert len(verified) == 1
@@ -183,15 +224,17 @@ class TestArtifactLibrary:
     def test_save_and_load(self, tmp_path: Path):
         """Library can be saved to and loaded from JSON."""
         library = ArtifactLibrary()
-        library.add(Artifact(
-            id="lemma-001",
-            type=ArtifactType.LEMMA,
-            natural_language="Test lemma",
-            lean_code="lemma test : True := trivial",
-            verified=True,
-            created_by="agent-1",
-            generation=0,
-        ))
+        library.add(
+            Artifact(
+                id="lemma-001",
+                type=ArtifactType.LEMMA,
+                natural_language="Test lemma",
+                lean_code="lemma test : True := trivial",
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=0,
+            )
+        )
 
         path = tmp_path / "artifacts.json"
         library.save(path)
@@ -203,8 +246,24 @@ class TestArtifactLibrary:
     def test_all_artifacts_list(self):
         """Can get all artifacts as a list."""
         library = ArtifactLibrary()
-        library.add(Artifact(id="a1", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=0))
-        library.add(Artifact(id="a2", type=ArtifactType.THEOREM, natural_language="", created_by="", generation=0))
+        library.add(
+            Artifact(
+                id="a1",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
+        library.add(
+            Artifact(
+                id="a2",
+                type=ArtifactType.THEOREM,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
 
         all_artifacts = library.all()
         assert len(all_artifacts) == 2
@@ -213,9 +272,34 @@ class TestArtifactLibrary:
         """Can count how many artifacts have been reused."""
         library = ArtifactLibrary()
 
-        library.add(Artifact(id="a1", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=0))
-        library.add(Artifact(id="a2", type=ArtifactType.THEOREM, natural_language="", created_by="", generation=1, references=["a1"]))
-        library.add(Artifact(id="a3", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=1))
+        library.add(
+            Artifact(
+                id="a1",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
+        library.add(
+            Artifact(
+                id="a2",
+                type=ArtifactType.THEOREM,
+                natural_language="",
+                created_by="",
+                generation=1,
+                references=["a1"],
+            )
+        )
+        library.add(
+            Artifact(
+                id="a3",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=1,
+            )
+        )
         library.add_reference("a2", "a1")
 
         # a1 is referenced, a2 references something, a3 is standalone
@@ -225,9 +309,34 @@ class TestArtifactLibrary:
         """Can count artifacts created without references."""
         library = ArtifactLibrary()
 
-        library.add(Artifact(id="a1", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=0))
-        library.add(Artifact(id="a2", type=ArtifactType.THEOREM, natural_language="", created_by="", generation=1, references=["a1"]))
-        library.add(Artifact(id="a3", type=ArtifactType.LEMMA, natural_language="", created_by="", generation=1))
+        library.add(
+            Artifact(
+                id="a1",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
+        library.add(
+            Artifact(
+                id="a2",
+                type=ArtifactType.THEOREM,
+                natural_language="",
+                created_by="",
+                generation=1,
+                references=["a1"],
+            )
+        )
+        library.add(
+            Artifact(
+                id="a3",
+                type=ArtifactType.LEMMA,
+                natural_language="",
+                created_by="",
+                generation=1,
+            )
+        )
         library.add_reference("a2", "a1")
 
         # a1 and a3 have no references (fresh), a2 references a1

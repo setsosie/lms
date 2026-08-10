@@ -3,7 +3,7 @@
 import re
 import random
 
-from lms.lean.interface import LeanVerifier, VerificationResult
+from lms.lean.interface import LeanVerifier, VerificationResult, VerifierKind
 
 
 class MockLeanVerifier(LeanVerifier):
@@ -16,7 +16,14 @@ class MockLeanVerifier(LeanVerifier):
 
     This is meant for rapid prototyping. Replace with RealLeanVerifier
     before running actual experiments.
+
+    Nothing this class returns can reach `VerificationStatus.VERIFIED_LEAN`:
+    its `verifier_kind` is `"mock"`, and the status is derived from the kind
+    rather than stored, so a passing regex match yields only
+    `VERIFIED_HEURISTIC`.
     """
+
+    verifier_kind: VerifierKind = "mock"
 
     # LEAN 4 keywords that indicate valid code structure
     VALID_KEYWORDS = re.compile(
@@ -49,7 +56,7 @@ class MockLeanVerifier(LeanVerifier):
         """
         # Empty code always fails
         if not code or not code.strip():
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Empty code provided",
@@ -57,7 +64,7 @@ class MockLeanVerifier(LeanVerifier):
 
         # Check for sorry (incomplete proof)
         if "sorry" in code.lower():
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Code contains 'sorry' - incomplete proof",
@@ -65,7 +72,7 @@ class MockLeanVerifier(LeanVerifier):
 
         # Check for valid LEAN structure
         if not self.VALID_KEYWORDS.search(code):
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Code does not appear to be valid LEAN 4 syntax",
@@ -73,7 +80,7 @@ class MockLeanVerifier(LeanVerifier):
 
         # If always_check_syntax is False and success_rate < 1.0, use random
         if not self.always_check_syntax and random.random() > self.success_rate:
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Random verification failure (mock mode)",
@@ -83,13 +90,13 @@ class MockLeanVerifier(LeanVerifier):
         # Apply success rate for randomness if configured
         if self.always_check_syntax and self.success_rate < 1.0:
             if random.random() > self.success_rate:
-                return VerificationResult(
+                return self._result(
                     success=False,
                     code=code,
                     error="Random verification failure (mock mode)",
                 )
 
-        return VerificationResult(
+        return self._result(
             success=True,
             code=code,
             error=None,

@@ -9,8 +9,10 @@ regex.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | CRITICAL |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q3-HARN-01-verifier-provenance` |
+| **PR** | #14 |
+| **Verify** | `scripts/verify/26Q3-01/verify_26Q3-HARN-01.sh` |
 | **Dependencies** | 26Q3-CHORE-01 |
 | **PR Size Target** | <250 lines |
 
@@ -41,21 +43,21 @@ verified value.
 
 #### Acceptance Criteria
 
-- [ ] `VerificationResult` (`lms/lean/interface.py`) carries a `verifier_id: str`
+- [x] `VerificationResult` (`lms/lean/interface.py`) carries a `verifier_id: str`
       and `verifier_kind: Literal["mock", "real", "mcp"]`
-- [ ] New `VerificationStatus` enum on `Artifact`:
+- [x] New `VerificationStatus` enum on `Artifact`:
       `UNVERIFIED | VERIFIED_HEURISTIC | VERIFIED_LEAN | FAILED`
-- [ ] `MockLeanVerifier` can only produce `VERIFIED_HEURISTIC`; asserted by a test
+- [x] `MockLeanVerifier` can only produce `VERIFIED_HEURISTIC`; asserted by a test
       that fails if the mock ever yields `VERIFIED_LEAN`
-- [ ] `Artifact.verified` becomes a read-only property → `status is VERIFIED_LEAN`,
+- [x] `Artifact.verified` becomes a read-only property → `status is VERIFIED_LEAN`,
       so every existing call site keeps working but tightens to real-Lean-only
-- [ ] `ArtifactLibrary.get_verified()` returns only `VERIFIED_LEAN`
-- [ ] `metadata.json` gains `verifier: {kind, id, lean_version, mathlib_rev}`
-- [ ] Backward-compatible load: `Artifact.from_dict` maps a legacy
+- [x] `ArtifactLibrary.get_verified()` returns only `VERIFIED_LEAN`
+- [x] `metadata.json` gains `verifier: {kind, id, lean_version, mathlib_rev}`
+- [x] Backward-compatible load: `Artifact.from_dict` maps a legacy
       `verified: true` with no status field to `VERIFIED_HEURISTIC` — **never** to
       `VERIFIED_LEAN`. Historical runs must not be silently promoted
-- [ ] `lms/run.py` prints a loud banner when running with the mock verifier
-- [ ] Tests: mock→heuristic, real→lean, legacy-load demotion, metadata round-trip
+- [x] `lms/run.py` prints a loud banner when running with the mock verifier
+- [x] Tests: mock→heuristic, real→lean, legacy-load demotion, metadata round-trip
 
 ---
 
@@ -82,6 +84,14 @@ verified value.
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `uv run pytest`, `uv run ruff check`, `uv run mypy` clean
-- [ ] PR opened, tests included
+- [x] All acceptance criteria checked off
+- [x] `uv run pytest` clean — 431 passed
+- [~] `uv run ruff check` / `uv run mypy` — **no new findings vs `main`**, not
+      absolutely clean. The repo carries 14 ruff and 18 mypy findings that
+      predate this branch; 5 pre-existing ruff errors in touched test files and
+      8 pre-existing mypy errors in `society.py` are fixed here. Absolute
+      cleanliness is its own chore, not this card's scope.
+- [x] PR opened (#14), tests included
+- [x] Verify script `scripts/verify/26Q3-01/verify_26Q3-HARN-01.sh` — PASS on
+      branch, 11 of 12 checks FAIL at the merge base (the twelfth is the
+      full-suite regression guard, which passes at base by design)
