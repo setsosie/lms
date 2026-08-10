@@ -21,6 +21,22 @@ class RealLeanVerifier(LeanVerifier):
     imports are detected to prevent 'object file does not exist' errors.
     """
 
+    # Passed to `lean` itself, NOT set as `leanOptions` in lakefile.toml:
+    # `lake env lean <file>` only exports the package environment, so library
+    # options never reach a file compiled this way.
+    #
+    # With autoImplicit on (Lean's default), an identifier the file cannot
+    # resolve becomes an auto-bound implicit variable instead of an error. A
+    # missing `import` then surfaces as "Function expected at Category, but
+    # this term has type ?m.1" somewhere further down, which reads like the
+    # agent's mathematics is wrong when the real fault is that the foundation
+    # never made it onto disk. Off, the same failure reads "unknown identifier".
+    # Mathlib disables both for the same reason.
+    STRICTNESS_FLAGS: tuple[str, ...] = (
+        "-DautoImplicit=false",
+        "-DrelaxedAutoImplicit=false",
+    )
+
     verifier_kind: VerifierKind = "real"
 
     def __init__(
@@ -197,11 +213,12 @@ class RealLeanVerifier(LeanVerifier):
                 self.lake_path,
                 "env",
                 "lean",
+                *self.STRICTNESS_FLAGS,
                 str(temp_path),
             )
             cwd: Path | None = self.project.project_dir
         else:
-            command = (self.lean_path, str(temp_path))
+            command = (self.lean_path, *self.STRICTNESS_FLAGS, str(temp_path))
             cwd = None
 
         try:

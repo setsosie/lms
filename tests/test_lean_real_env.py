@@ -67,10 +67,32 @@ class TestVerifierUsesProjectEnvironment:
         # $ELAN_HOME/bin rather than being found on PATH.
         assert Path(args[0]).name == "lake", f"expected lake, got {args[0]!r}"
         assert args[1:3] == ("env", "lean"), f"expected `lake env lean`, got {args[:3]}"
-        assert args[3].endswith(".lean")
+        # The file is last, after any option flags — assert by position from the
+        # end rather than a fixed index, so adding a flag is not a test failure.
+        assert args[-1].endswith(".lean")
         assert kwargs.get("cwd") == tmp_path, (
             "lake env must run from the Lean project directory"
         )
+
+    async def test_strictness_flags_reach_the_command(self, tmp_path):
+        """26Q3-HARN-09: autoImplicit off, or a missing import is not an error.
+
+        With it on, an unresolvable name becomes an auto-bound implicit and the
+        failure surfaces as `Function expected ... ?m.1` further down the file —
+        which reads as bad mathematics rather than a broken import.
+        """
+        verifier = RealLeanVerifier(lean_path="/fake/lean", project_dir=tmp_path)
+        recorder = _Recorder()
+
+        with patch("asyncio.create_subprocess_exec", new=recorder):
+            await verifier.verify(IMPORTING_CODE)
+
+        args, _ = recorder.lean_invocation
+        assert "-DautoImplicit=false" in args, args
+        assert "-DrelaxedAutoImplicit=false" in args, args
+        # Options must precede the file, and the file stays last.
+        assert args.index("-DautoImplicit=false") < len(args) - 1
+        assert args[-1].endswith(".lean")
 
     async def test_falls_back_to_bare_lean_without_project(self, tmp_path):
         """No project configured → unchanged behavior, so existing tests hold."""

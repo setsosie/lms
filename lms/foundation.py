@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -128,6 +128,13 @@ import Mathlib.Algebra.Ring.Basic
 
 universe u v w
 
+-- Matches the flags RealLeanVerifier passes to `lean` (STRICTNESS_FLAGS).
+-- An entry is verified standalone and then recompiled here as part of the
+-- library; if the two disagree on autoImplicit, code can pass verification
+-- and then fail the foundation build, or vice versa.
+set_option autoImplicit false
+set_option relaxedAutoImplicit false
+
 namespace LMS.Foundation
 
 """
@@ -145,8 +152,12 @@ end LMS.Foundation
         self.path = Path(path)
         self.entries: list[FoundationEntry] = []
         self._artifact_ids: set[str] = set()  # Track added artifacts
-        self._definition_names: set[str] = set()  # Track defined names to avoid duplicates
-        self._claimed_concepts: set[str] = set()  # Track which core concepts have definitions
+        self._definition_names: set[str] = (
+            set()
+        )  # Track defined names to avoid duplicates
+        self._claimed_concepts: set[str] = (
+            set()
+        )  # Track which core concepts have definitions
 
     def __len__(self) -> int:
         """Return number of entries in foundation."""
@@ -214,16 +225,20 @@ end LMS.Foundation
                     # Find existing structure name for this concept
                     existing_name = None
                     for existing in self.entries:
-                        if (existing.entry_type == "structure" and
-                            existing.name in self.CORE_CONCEPTS and
-                            self.CORE_CONCEPTS[existing.name] == concept):
+                        if (
+                            existing.entry_type == "structure"
+                            and existing.name in self.CORE_CONCEPTS
+                            and self.CORE_CONCEPTS[existing.name] == concept
+                        ):
                             existing_name = existing.name
                             break
 
                     if existing_name and existing_name != entry.name:
                         # TRUE CONFLICT: Different names for same concept (e.g., Category vs Cat)
                         # Reject entire artifact to avoid incompatible definitions
-                        self._artifact_ids.add(artifact.id)  # Mark as seen to prevent retry
+                        self._artifact_ids.add(
+                            artifact.id
+                        )  # Mark as seen to prevent retry
                         return
                     # If same name, it's just a duplicate - will be skipped below
 
@@ -417,7 +432,15 @@ Create foundational definitions that future generations can build upon.
             gen_entries = by_gen[gen]
             lines.append(f"── Generation {gen} ──")
             for entry in gen_entries:
-                lines.append(f"  {entry.entry_type} {entry.name}")
+                # The real declaration header, not just the name. Listing
+                # `structure Category` with a field list led an agent to write
+                # `C.Ob`, because nothing showed that the objects are a
+                # *parameter* -- `structure Category (obj : Type u)` -- rather
+                # than a field. An agent cannot use what it cannot see the
+                # shape of.
+                header = f"  {entry.entry_type} {entry.name}{entry.signature}".rstrip()
+                lines.append(header)
+
                 # Show key fields for structures
                 if entry.entry_type == "structure":
                     # Extract field names from code
@@ -433,7 +456,9 @@ Create foundational definitions that future generations can build upon.
                         lines.append(f"    fields: {fields}")
             lines.append("")
 
-        lines.append("═══════════════════════════════════════════════════════════════════════════════")
+        lines.append(
+            "═══════════════════════════════════════════════════════════════════════════════"
+        )
 
         return "\n".join(lines)
 

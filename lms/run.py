@@ -217,6 +217,13 @@ async def run_experiment(
         society.iterative_mode = True
         society.max_attempts = max_attempts
 
+    # Clear the shared foundation before generation 1 proposes anything.
+    # It lives inside the Lean project (imports must resolve through Lake), so
+    # it persists between runs unless something clears it. Left alone, this
+    # run's agents build on the previous run's leftovers -- or, on a fresh
+    # clone, on the December mock-verified corpus checked into the repo.
+    await society.reset_foundation()
+
     # Setup signal handlers for graceful shutdown
     setup_signal_handlers(society, output_dir, goal)
 

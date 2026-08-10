@@ -89,6 +89,25 @@ class LeanProject:
 
         return True
 
+    async def rebuild_changed_sources(self) -> bool:
+        """Rebuild unconditionally, bypassing the import-change heuristic.
+
+        `ensure_built` rebuilds only when a *new* import name appears, which is
+        the wrong test for `LMS.Foundation`: its name never changes while its
+        contents change every generation. Left to that heuristic the stale
+        `.olean` is reused for the whole run, so `import LMS.Foundation`
+        resolves to a module that predates every artifact in it.
+
+        Returns:
+            True if the build succeeded.
+        """
+        success = await self.build()
+        if success:
+            # Let the import heuristic re-evaluate from scratch: the tree it
+            # last built against no longer exists.
+            self._last_build_hash = None
+        return success
+
     async def build(self, clean: bool = False) -> bool:
         """Run lake build in the project directory.
 
