@@ -471,6 +471,17 @@ Healthy progress, in order: `world_size=2` with an `nccl` backend →
 Until that last line, `curl` returning `Connection refused` is expected. Use
 `curl -sS`, not `-s`, or connection failures are silent.
 
+**Result, 2026-08-10 (first successful serve):** `Available KV cache memory:
+52.19 GiB` → **`GPU KV cache size: 1,139,984 tokens`**; engine init (profile,
+create KV cache, warmup) 40.7 s after weights loaded.
+
+At `--max-model-len 131072` that is ~8.7 full-length sequences resident
+simultaneously, so a 1-agent Gate B run uses roughly 11% of KV capacity.
+**Phase C sizing follows from this**: there is headroom for substantially more
+concurrent agents on GPUs 0–1, or for BFS-Prover-V1-7B on GPUs 2–3, without
+revisiting `--gpu-memory-utilization` (left at its 0.9 default) or
+`--max-model-len`.
+
 If you already ran `uv pip install vllm` against the project, `cd ~/code/lms &&
 uv sync` prunes vLLM and torch back out of `.venv` and restores the pinned
 `openai`. The harness side keeps using `uv run` exactly as before — Steps 3, 5
@@ -515,6 +526,14 @@ curl -s http://localhost:8000/v1/chat/completions \
 ```
 
 **Checkpoint 4**: the model is listed and the completion returns `ok`.
+
+Check `max_model_len` in the `/v1/models` response, not just that the call
+succeeded — it is the field that would otherwise 400 every agent request. Want
+`"max_model_len":131072`.
+
+**Result, 2026-08-10:** ✅ both. `/v1/models` reported `lms-generalist`
+(root `Qwen/Qwen3-Coder-30B-A3B-Instruct`) with `max_model_len: 131072`, and the
+completion returned `ok` in 2 tokens.
 
 ---
 
