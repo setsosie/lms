@@ -45,7 +45,7 @@ Disposition of Sprint 1 scope:
 |--------|-------|
 | Planned points | 24 (+3 stretch) |
 | Carryover | 3 (`26Q3-INFRA-01`) |
-| Delivered to date | 6 (`26Q3-CHORE-01`, `26Q3-HARN-07`, `26Q3-INFRA-01`) |
+| Delivered to date | 12 (`26Q3-CHORE-01`, `26Q3-HARN-07`, `26Q3-INFRA-01`, `26Q3-HARN-01`, `26Q3-HARN-02`, `26Q3-CHORE-02`) |
 | Track | Harness honesty (Phase A of the calibration program) |
 | Execution | Local, Claude-executed; cluster not required |
 | Status | 🔄 ACTIVE |
@@ -59,8 +59,8 @@ harness has never enforced. Gate numbering matches
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
 | 26Q3-CHORE-01: Fix test environment | 1 | HIGH | CHORE | ✅ DONE | #11 | `pytest-asyncio` missing from `.venv` → 44 spurious failures. Move to `[dependency-groups] dev`. Real baseline was **57** failed, not 44; suite now 392 passed |
-| 26Q3-HARN-01: Verifier provenance + mock can't mark verified | 3 | CRITICAL | HARN | 🔲 PENDING | — | Record verifier in `metadata.json`; mock emits `verified_heuristic`, never `verified`. **Root cause of the bad roadmap numbers** |
-| 26Q3-HARN-02: Fix `lean_code` extraction | 2 | CRITICAL | HARN | ✅ DONE | `26Q3-HARN-02-lean-code-extraction` | Leading `"\|\n  "` YAML block-scalar leak reaches the verifier as source. Also strips markdown fences — the live 2026-08-10 cluster run emitted ```` ``` ````-wrapped payloads, a second form of the same bug |
+| 26Q3-HARN-01: Verifier provenance + mock can't mark verified | 3 | CRITICAL | HARN | ✅ DONE | #14 | Record verifier in `metadata.json`; mock emits `verified_heuristic`, never `verified`. **Root cause of the bad roadmap numbers**. Paid off 2026-08-10: the first Gate B success reads `verifier.kind: real` / `verified_lean: 1`, which the mock cannot write |
+| 26Q3-HARN-02: Fix `lean_code` extraction | 2 | CRITICAL | HARN | ✅ DONE | #22 | Leading `"\|\n  "` YAML block-scalar leak reaches the verifier as source. Also strips markdown fences — the live 2026-08-10 cluster run emitted ```` ``` ````-wrapped payloads, a second form of the same bug |
 | 26Q3-HARN-03: T2 / T4 machine gates | 5 | CRITICAL | HARN | 🔲 PENDING | — | Gate 2 (no `sorry`/new `axiom`/`native_decide`) + Gate 3 (non-vacuity; reject trivial `example`) |
 | 26Q3-HARN-04: Novelty classifier (N0 / N1) | 5 | CRITICAL | HARN | 🔲 PENDING | — | Gate 4. Mathlib name search + `exact?`/`loogle` via lean-lsp MCP. Every artifact produced to date is N0 |
 | 26Q3-HARN-05: Per-statement cost accounting | 3 | HIGH | HARN | 🔲 PENDING | — | Tokens + wall-clock attributed per statement incl. failed attempts; replaces per-generation totals. This is the CVFN numerator |
@@ -68,7 +68,7 @@ harness has never enforced. Gate numbering matches
 | 26Q3-INFRA-01: Local OpenAI-compatible serving path | 3 | HIGH | INFRA | ✅ DONE | #18 | Carryover. `base_url` on `ProviderConfig`. Also the API-fallback lever for the Aug 21 contingency |
 | 26Q3-INFRA-02: Per-request token cap is configurable | 2 | HIGH | INFRA | 🔲 PENDING | — | Issue #17. `max_tokens` is a hardcoded Claude-shaped 64k with no env lever; 400s against any server whose `max_model_len` is not oversized. Worked around in the runbook, not fixed |
 | 26Q3-HARN-07: Verifier must invoke Lean with the project env | 2 | CRITICAL | HARN | ✅ DONE | #12 | Found on the box 2026-07-28. `real.py` runs bare `lean` with no `LEAN_PATH`, so it can only check **import-free** Lean. Every real agent proof imports Mathlib → CVFN numerator is structurally 0 until fixed. Use `lake env lean` |
-| 26Q3-CHORE-02: Rename "Tasmania effect" → ratchet failure | 1 | MEDIUM | CHORE | ✅ DONE | `26Q3-CHORE-02-rename-ratchet-failure` | Label described loss of existing tech; metric measures failure to accumulate. Also had no library-size guard, so it fired on every run ever recorded including the 2026-08-10 Gate B success |
+| 26Q3-CHORE-02: Rename "Tasmania effect" → ratchet failure | 1 | MEDIUM | CHORE | ✅ DONE | #23 | Label described loss of existing tech; metric measures failure to accumulate. Also had no library-size guard, so it fired on every run ever recorded including the 2026-08-10 Gate B success |
 | 26Q3-HARN-06: D4 side-by-side review view | 3 | STRETCH | HARN | 🔲 PENDING | — | Book quote ‖ Lean statement. If D4 is slow because the format is bad, Phase D measures the wrong thing |
 
 ## Gate A — sprint exit criterion
@@ -106,6 +106,26 @@ Phase B of the calibration program. Contents:
   API fallback ($300 cap) so the Sep 30 verdict date holds
 
 ## Sync Log
+
+- **2026-08-10** — 6 tasks reconciled: `26Q3-HARN-01` → DONE (#14),
+  `26Q3-HARN-02` → DONE (#22), `26Q3-CHORE-02` → DONE (#23); task-def status
+  fields for `26Q3-CHORE-01`, `26Q3-HARN-07`, `26Q3-INFRA-01` caught up with the
+  board, which had them ✅ while their cards still read PENDING. Delivered
+  6 → 12 pts of 24. No open PRs.
+  Also merged, not sprint rows: #20 (runbook Phase B day 1), #21 (`project_dir`
+  must resolve absolute before the verifier writes its temp file — found on the
+  box during Phase B).
+  **Phase B day 1 result**: the Lean oracle went live and the first
+  `verified_lean` artifact in the project's history was produced against goal
+  `stacks-ch4-phase1` (`experiments/gateB_iter`, `verifier.kind: real`,
+  `mathlib_rev` pinned). Gate B-minus is green. It is **not** yet a CVFN
+  numerator — T2 non-vacuity and N0/N1 novelty are unbuilt, so the harness
+  cannot yet distinguish a formalization from a Mathlib re-export, and tag
+  `0013: Category` is exactly where a re-export would land.
+  Found during Phase B, now carded: `26Q3-HARN-08` (agents emit Lean 3, no
+  imports). Also observed, uncarded: `society.py:356` counts
+  `len(response.attempts)` as artifacts created, inflating the denominator in
+  iterative mode — belongs to `26Q3-HARN-05`.
 
 - **2026-07-28** — 2 tasks reconciled: `26Q3-CHORE-01` → DONE (#11),
   `26Q3-HARN-07` → DONE (#12). Delivered 0 → 3 pts. Also merged: #10 (runbook

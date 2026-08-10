@@ -7,7 +7,7 @@ actually run, so that the suite's pass/fail signal is trustworthy.
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q3-CHORE-01-fix-test-environment` |
 | **Dependencies** | None |
 | **PR Size Target** | <30 lines |

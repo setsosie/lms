@@ -12,7 +12,7 @@ vLLM server or against a hosted API by changing configuration only.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q3-INFRA-01-local-serving-path` |
 | **Dependencies** | 26Q3-CHORE-01 |
 | **PR Size Target** | <300 lines |

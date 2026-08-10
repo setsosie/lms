@@ -8,7 +8,7 @@ a missing search path.
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | CRITICAL |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q3-HARN-07-verifier-lean-path` |
 | **Dependencies** | 26Q3-CHORE-01 |
 | **PR Size Target** | <120 lines |
