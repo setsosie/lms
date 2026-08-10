@@ -18,6 +18,8 @@ class ProviderConfig:
     api_key: str
     model: str
     max_tokens: int = DEFAULT_MAX_TOKENS
+    # OpenAI-compatible endpoint (vLLM, SGLang, Ollama). None = the hosted API.
+    base_url: str | None = None
 
 
 @dataclass
@@ -52,12 +54,17 @@ class Config:
 
         config = cls()
 
+        # Every read below uses `or`, not os.getenv's default argument: a `.env`
+        # copied from `.env.example` leaves keys bare, which yields "" rather
+        # than an unset variable. An empty string is never a valid model name,
+        # provider name, or URL, so treat blank as absent throughout.
+
         # Load Anthropic config
         anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         if anthropic_key:
             config.anthropic = ProviderConfig(
                 api_key=anthropic_key,
-                model=os.getenv("LMS_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250514"),
+                model=os.getenv("LMS_ANTHROPIC_MODEL") or "claude-sonnet-4-5-20250514",
             )
 
         # Load OpenAI config
@@ -65,7 +72,9 @@ class Config:
         if openai_key:
             config.openai = ProviderConfig(
                 api_key=openai_key,
-                model=os.getenv("LMS_OPENAI_MODEL", "gpt-5.2"),
+                model=os.getenv("LMS_OPENAI_MODEL") or "gpt-5.2",
+                # Blank here would hand the SDK a relative URL.
+                base_url=os.getenv("LMS_OPENAI_BASE_URL") or None,
             )
 
         # Load Google config
@@ -73,10 +82,10 @@ class Config:
         if google_key:
             config.google = ProviderConfig(
                 api_key=google_key,
-                model=os.getenv("LMS_GOOGLE_MODEL", "gemini-3"),
+                model=os.getenv("LMS_GOOGLE_MODEL") or "gemini-3",
             )
 
-        config.default_provider = os.getenv("LMS_DEFAULT_PROVIDER", "anthropic")
+        config.default_provider = os.getenv("LMS_DEFAULT_PROVIDER") or "anthropic"
 
         return config
 
