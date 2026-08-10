@@ -10,6 +10,21 @@ Paste output back into the session after each checkpoint. Every step has an
 explicit expected result; if you get something else, stop at that step rather than
 continuing.
 
+## State of the box as of 2026-08-10
+
+Steps 0 through 2c ran early, on 2026-07-28. **Start at Step 2 (branch switch),
+then go to Step 3.**
+
+| Step | State |
+|---|---|
+| 0, 0.5, 1 — prereqs, scratch routing, elan | ✅ done |
+| 2 — Mathlib cache + corpus build | ✅ done (0 errors, 1 `sorry`). Needs only the switch to `main` |
+| 2c — axiom audit | ✅ done. Four Localization theorems clean on `[propext, Classical.choice, Quot.sound]` |
+| 3 — Lean reachable from Python | ⬜ **today.** Expectation changed: 3c now **passes** (`26Q3-HARN-07` landed) |
+| 4 — serve the model | ⬜ **today.** `--max-model-len` corrected below |
+| 5 — point the harness at it | ⬜ **today.** Unblocked: `26Q3-INFRA-01` merged as #18 |
+| 6 — Gate B | ⬜ **partial today.** Only checkbox 1 of 5 is reachable; see Step 6 |
+
 ---
 
 ## Step 0 — Prerequisites
@@ -114,6 +129,9 @@ inside the scratch mount.
 ## Step 2 — Build the LMS Lean project
 
 The repo pins Lean `v4.27.0-rc1` and Mathlib rev `fe3134f0c3508d` (Dec 2025).
+`main` carries the **same** pin as the July branches, so if the box already ran
+Step 2 on 2026-07-28 its `$SCRATCH/lake-artifacts` cache is still valid — the
+switch to `main` costs a re-elaboration of the LMS modules, not of Mathlib.
 
 **The repo itself lives in home, not scratch.** Only two directories inside it
 are bulky — `lean/.lake/` (unpacked Mathlib oleans, ~20-30 GB) and `.venv/`.
@@ -122,15 +140,16 @@ purgeable mount. Symlink the bulk out instead. Keeping artifacts off `/` also
 protects the root filesystem: a full `/` destabilizes the box, a full scratch
 mount only costs a re-download.
 
+**Use `main`.** As of 2026-08-10 both chore branches have landed, and `main` is a
+strict superset of the merge the July run used: all 19 modules including
+`TwoCat.lean` and `TwoFibreProduct.lean` (which `chore/wire-lean-build` was
+missing), the `globs = ["LMS.+"]` line, and `LMS/Temp/` dropped from the corpus
+and gitignored. Do **not** re-create the July two-branch merge.
+
 ```bash
 git clone git@github.com:setsosie/lms.git ~/code/lms   # or `git fetch origin` if it exists
 cd ~/code/lms
-
-# Until chore/track-wc3-lean-corpus and chore/wire-lean-build are merged to main,
-# check out BOTH — neither alone gives a build that reaches the corpus. One has
-# the 14 .lean files, the other has the `globs` that make Lake compile them.
-git checkout chore/track-wc3-lean-corpus
-git merge origin/chore/wire-lean-build      # verified conflict-free
+git checkout main && git pull origin main
 
 # Route build artifacts to scratch BEFORE the first cache get
 mkdir -p "$SCRATCH/lake-artifacts"
@@ -288,22 +307,26 @@ print(asyncio.run(v.verify(code)))
 "
 ```
 
-**Checkpoint 3c**: **this is expected to FAIL today**, with `unknown module
-prefix 'Mathlib'`. That is not a broken install — it is a defect in the verifier.
+**Checkpoint 3c**: **this must now PASS.** It is the single most important
+checkpoint in the runbook.
 
-`RealLeanVerifier.verify` invokes `lean <temp_path>` with no `LEAN_PATH` and no
-`cwd` (`lms/lean/real.py:111-116`), so nothing puts the project's
-`.lake/packages/*/build/lib/lean` directories on the module search path. The
-verifier can therefore only check **import-free** Lean. Checkpoints 3 and 3b pass
-only because their snippets import nothing.
+It was expected to fail when this runbook was written on 2026-07-28:
+`RealLeanVerifier.verify` invoked bare `lean <temp_path>` with no `LEAN_PATH` and
+no `cwd`, so nothing put the project's `.lake/packages/*/build/lib/lean`
+directories on the module search path, and the verifier could only check
+**import-free** Lean. Every real agent proof imports Mathlib, so the CVFN
+numerator was structurally 0 for reasons having nothing to do with the models.
 
-Every real agent proof imports Mathlib, so without this fix Gate B measures an
-environment bug rather than the pipeline — it would report 0 verified statements
-for reasons having nothing to do with the models. The correct invocation is the
-one used for the axiom audit in Step 2c: `lake env lean <file>`, run from the
-Lean project directory.
+`26Q3-HARN-07` fixed it (PR #12, merged 2026-07-28): `real.py` now runs
+`lake env lean` from the Lean project directory, the same invocation the Step 2c
+axiom audit uses.
 
-Record the failure and proceed; Step 4 does not depend on it.
+**If 3c still fails with `unknown module prefix 'Mathlib'`, stop.** Either the
+checkout is behind `main` or the `lake env` path is broken on this box, and
+everything downstream would measure the environment instead of the pipeline.
+Note that 3 and 3b passing tells you nothing here — their snippets import
+nothing, and `sorry` is caught by a Python substring test in `lms/lean/real.py`
+that returns the same answer on a machine with no Lean at all.
 
 ---
 
@@ -323,9 +346,28 @@ uv pip install vllm
 CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --port 8000 \
   --tensor-parallel-size 2 \
-  --max-model-len 65536 \
+  --max-model-len 131072 \
   --served-model-name lms-generalist
 ```
+
+> **`--max-model-len` must exceed 64k, which is why it is 131072 and not the
+> 65536 this runbook originally said.** `ProviderConfig.max_tokens` defaults to
+> `DEFAULT_MAX_TOKENS = 64_000` (`lms/config.py:11`), sized for Claude Opus's
+> output cap, and nothing overrides it per request — `lms/agent.py` calls
+> `generate()` without a `max_tokens` argument, so every request reaches vLLM
+> asking for 64,000 completion tokens. vLLM rejects a request when
+> `prompt_tokens + max_tokens > max_model_len`, so at 65536 every call with a
+> prompt over ~1,536 tokens returns HTTP 400 — and the agent system prompts are
+> far larger than that. The symptom is a run that fails on the very first
+> generation with a 400 that looks like a malformed request.
+>
+> 131072 is inside Qwen3-Coder-30B-A3B's native 262144 window and costs nothing
+> at rest: KV is ~96 KB/token (48 layers × 4 KV heads × 128 dim × 2 × 2 bytes),
+> so a full-length sequence is ~12.6 GB, ~6.3 GB per GPU at TP=2, against 94 GB
+> H100 NVLs already holding ~30.5 GB of weights each.
+>
+> The real fix is to make the per-request cap configurable rather than to size
+> the server around a Claude-shaped constant — tracked as `26Q3-INFRA-02`.
 
 Run it inside `tmux` (or `nohup`) so it survives your SSH session — the model
 download (~61 GB to `$HF_HOME`) plus startup can take a while on first run.
@@ -344,7 +386,9 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 ## Step 5 — Point the harness at it
 
-Requires `26Q3-INFRA-01` (Sprint 2) to have landed.
+`26Q3-INFRA-01` landed as PR #18 on 2026-08-10, so this step is unblocked. It
+threads `base_url` from the environment onto `ProviderConfig` and into
+`AsyncOpenAI`; an unset or blank value leaves hosted-OpenAI behavior untouched.
 
 `.env` is gitignored, so the clone starts without one — this creates it. No real
 API keys are needed for local serving (`.env.example` is in the repo for
@@ -371,6 +415,37 @@ print(c.openai.base_url, c.openai.model)
 
 ## Step 6 — Gate B: end-to-end smoke
 
+**Only checkbox 1 of the 5 below is reachable on 2026-08-10.** `26Q3-HARN-01`
+(provenance) is open as PR #14; `-03` (T2/T4 gates), `-04` (novelty) and `-05`
+(cost accounting) are not started. Today's target is therefore **Gate B-minus**:
+the loop closes and at least one artifact clears *real* Lean. That is a genuine
+first — the pipeline has never once run against a live oracle — but it is not
+Gate B, and the Aug 21 checkpoint still judges the full five.
+
+> ### Guard the corpus before you run
+>
+> `Society.__init__` defaults its accumulator to `FoundationFile(Path("lean/LMS/Foundation.lean"))`
+> (`lms/society.py:122`) and `lms/run.py` never passes `foundation_path`, so
+> **the run overwrites the tracked 127-line WC-3 corpus file.** This is issue #19
+> in a second guise — it is by design that verified artifacts accumulate there,
+> but that file is also a build input, so a later `lake build` would be
+> elaborating harness-mutated source and Step 2's result would stop meaning what
+> it says.
+>
+> ```bash
+> cd ~/code/lms
+> git status --short lean/          # expect clean before the run
+> cp lean/LMS/Foundation.lean "$SCRATCH/Foundation.lean.orig"
+> ```
+>
+> After the run, keep the mutated copy as evidence, then restore:
+>
+> ```bash
+> cp lean/LMS/Foundation.lean "$SCRATCH/Foundation.lean.after-gateB"
+> git checkout -- lean/LMS/Foundation.lean
+> git status --short lean/          # must be clean again
+> ```
+
 Invoke the module, **not** `uv run lms`. The project declares
 `[project.scripts] lms` but has no `[build-system]` and no
 `tool.uv.package = true`, so `uv sync` prints *"Skipping installation of entry
@@ -378,15 +453,21 @@ points (`project.scripts`) because this project is not packaged"* and `uv run
 lms` dies with `Failed to spawn: lms`. `python -m lms.run` takes the identical
 arguments and is verified working.
 
+Run this from a shell that has the elan PATH. `RealLeanVerifier.__init__` calls
+`_find_lean()`, which raises `FileNotFoundError` when `lean` is not on `PATH` — so
+a fresh `tmux` pane that never sourced `~/.bashrc` crashes before a single token
+is generated. Check with `which lean lake` first.
+
 ```bash
 cd ~/code/lms
+which lean lake                     # both must resolve, inside $ELAN_HOME
 uv run python -m lms.run \
   --provider openai \
   --verifier real \
   --agents 1 \
   --generations 1 \
   --output experiments/gateB_smoke \
-  2>&1 | tee /tmp/gateB.log
+  2>&1 | tee "$SCRATCH/gateB.log"
 ```
 
 Then score it through the Sprint 2 gates. Requires `26Q3-HARN-01`, `-03`, `-04`
@@ -399,11 +480,41 @@ uv run python -m lms.metrics cvfn_report experiments/gateB_smoke
 
 **Checkpoint 6 — Gate B passes when**:
 
-- [ ] ≥1 artifact reaches `VERIFIED_LEAN` (not `VERIFIED_HEURISTIC`)
-- [ ] `metadata.json` records `verifier.kind == "real"` plus Lean/Mathlib versions
-- [ ] gate results are populated for every artifact (pass or fail, with reasons)
-- [ ] the novelty classifier emits a level for each verified artifact
-- [ ] `cvfn_report` produces a number, even if that number is terrible
+- [ ] ≥1 artifact reaches `VERIFIED_LEAN` (not `VERIFIED_HEURISTIC`) — *reachable today*
+- [ ] `metadata.json` records `verifier.kind == "real"` plus Lean/Mathlib versions — *blocked on `26Q3-HARN-01`, PR #14*
+- [ ] gate results are populated for every artifact (pass or fail, with reasons) — *blocked on `26Q3-HARN-03`*
+- [ ] the novelty classifier emits a level for each verified artifact — *blocked on `26Q3-HARN-04`*
+- [ ] `cvfn_report` produces a number, even if that number is terrible — *blocked on `26Q3-HARN-05`*
+
+**Checkpoint 6-minus — what to check today instead.** Since `metadata.json` does
+not yet carry provenance, the only way to tell a real verification from a
+heuristic one is that you launched with `--verifier real` and Checkpoint 3c
+passed. Record both facts alongside the artifacts, because this run's outputs
+will otherwise be indistinguishable from the mock-verified runs that produced the
+retracted roadmap numbers.
+
+```bash
+uv run python -c "
+import json, collections
+d = json.load(open('experiments/gateB_smoke/artifacts.json'))
+a = d['artifacts']
+print('artifacts     :', len(a))
+print('verified      :', collections.Counter(str(x.get('verified')) for x in a))
+print('by type       :', collections.Counter(x.get('type') for x in a))
+print('with an error :', sum(1 for x in a if x.get('verification_error')))
+print('total tokens  :', d.get('total_tokens_used'))
+for x in a:
+    if x.get('verification_error'):
+        print('---', x['id'], x['verification_error'][:300])
+"
+```
+
+Report that histogram, the wall-clock, and the GPU-hours. **A histogram of
+all-failures is a pass for today** — it means the instrument ran end to end
+against a live oracle. What would *not* be a pass is a high verified count: the
+archived `experiments/mixed_3llm` reads 21/25 `verified: true` and every one of
+those came from the mock. If this run reports a similar rate, suspect the
+verifier wiring before believing the number.
 
 **A terrible number here is a pass.** Gate B tests that the instrument works, not
 that the pipeline is good. Phase C measures the pipeline.
@@ -415,6 +526,20 @@ that the pipeline is good. Phase C measures the pipeline.
 Paste: checkpoint results 0–6, `wall-clock` for `lake exe cache get` and
 `lake build`, the `cvfn_report` output, and the gate-failure histogram. That plus
 GPU-hours consumed is everything needed to configure Phase C.
+
+**For the 2026-08-10 Gate B-minus run specifically**, `cvfn_report` does not
+exist yet, so paste instead:
+
+1. Checkpoint 3c verbatim — pass/fail decides whether anything after it means
+   something.
+2. The Step 4 vLLM startup banner (it prints the resolved `max_model_len`, the
+   KV-cache blocks allocated, and the dtype).
+3. The Step 6 histogram, plus every `verification_error` string. **The error
+   strings are the most valuable output of the day**: they say whether the models
+   are producing malformed Lean, unprovable goals, or hitting the `lean_code`
+   YAML block-scalar leak that `26Q3-HARN-02` is meant to fix.
+4. Wall-clock for the run and `nvidia-smi` peak memory.
+5. `git status --short lean/` after the restore in Step 6's guard.
 
 ## What not to do
 
