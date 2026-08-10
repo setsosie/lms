@@ -264,7 +264,7 @@ uv sync
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
 import asyncio, pathlib
-v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
 code = 'theorem cal_smoke (n : Nat) : n + 0 = n := by simp'
 print(asyncio.run(v.verify(code)))
 "
@@ -280,7 +280,7 @@ Then confirm it **rejects** what it should:
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
 import asyncio, pathlib
-v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
 print(asyncio.run(v.verify('theorem bad (n : Nat) : n + 0 = n := by sorry')))
 print(asyncio.run(v.verify('theorem nonsense : 1 = 2 := by rfl')))
 "
@@ -300,7 +300,7 @@ Now the test that actually matters — code with an import:
 uv run python -c "
 from lms.lean.real import RealLeanVerifier
 import asyncio, pathlib
-v = RealLeanVerifier(project_dir=pathlib.Path('lean'))
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
 code = '''import Mathlib.Logic.Basic
 theorem cal_import_smoke (p : Prop) [Decidable p] : ¬¬p ↔ p := not_not'''
 print(asyncio.run(v.verify(code)))
@@ -327,6 +327,42 @@ everything downstream would measure the environment instead of the pipeline.
 Note that 3 and 3b passing tells you nothing here — their snippets import
 nothing, and `sorry` is caught by a Python substring test in `lms/lean/real.py`
 that returns the same answer on a machine with no Lean at all.
+
+### 3d — Confirm it rejects an import-bearing statement too
+
+3b only ever exercised import-free code, so it could not tell a working oracle
+from one that says no for the wrong reason. Run the negative case through the
+*same* path as 3c:
+
+```bash
+uv run python -c "
+from lms.lean.real import RealLeanVerifier
+import asyncio, pathlib
+v = RealLeanVerifier(project_dir=pathlib.Path('lean').resolve())
+code = '''import Mathlib.Logic.Basic
+theorem cal_import_reject (p : Prop) : p ↔ ¬p := not_not'''
+print(asyncio.run(v.verify(code)))
+"
+```
+
+**Checkpoint 3d**: `success=False` carrying a real elaborator message
+(`Type mismatch ... has type ¬¬?m.1 ↔ ?m.1 but is expected to have type p ↔ ¬p`).
+A bare `no such file or directory` is **not** a pass — see the note below.
+
+> **`.resolve()` is load-bearing in these snippets.** `RealLeanVerifier` runs
+> Lean with `cwd=project_dir` and separately hands it a temp path derived from
+> the same value. With a relative `project_dir`, Lean runs inside `lean/` and is
+> given `lean/.lake/verify-temp/x.lean`, so it looks for `lean/lean/.lake/...`
+> and returns `no such file or directory (error code: 2)` — a false negative
+> shaped exactly like a failed proof. Fixed in `LeanProject.__init__` (PR #21);
+> the `.resolve()` here is belt-and-braces and works either way.
+> `lms/run.py:146` always built an absolute path, so Step 6 was never affected.
+
+**Result, 2026-08-10 (first live run of the oracle):** 3c `success=True`, 3d
+`success=False` with the type mismatch above. Both adjudicated by the compiler
+against pinned Mathlib. This is the first time the project has verified
+import-bearing Lean end to end — every previously recorded "verified" figure came
+from the mock or from import-free snippets.
 
 ---
 
