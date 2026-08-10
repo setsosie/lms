@@ -209,6 +209,34 @@ class Society:
         if len(self.foundation) == 0:
             return True
 
+        return await self._write_and_build_foundation()
+
+    async def reset_foundation(self) -> bool:
+        """Start a run from an empty foundation, on disk and compiled.
+
+        The foundation cannot live under the experiment directory: `import
+        LMS.Foundation` resolves through Lake's `LEAN_PATH`, so the file has to
+        sit inside the Lean project. That makes it shared mutable state across
+        every run, and it was never reset.
+
+        The consequences were real. The copy committed to the repo is the
+        output of a December *mock-verified* run -- its own header reads
+        "Verified by: 15x Gemini 3 Flash Preview agents" -- so agents have been
+        importing a `Category` that Lean never checked. And each run inherited
+        whatever the previous one left behind, which means no run was
+        independent of the one before it.
+
+        Writing the empty foundation rather than deleting it keeps `import
+        LMS.Foundation` resolving from the first generation; an empty module is
+        valid, a missing one is not.
+
+        Returns:
+            True if the empty foundation is on disk and compiled.
+        """
+        return await self._write_and_build_foundation()
+
+    async def _write_and_build_foundation(self) -> bool:
+        """Write the foundation and recompile so imports see current contents."""
         self.foundation.save()
 
         # MockLeanVerifier has no project; nothing to compile against.

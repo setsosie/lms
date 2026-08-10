@@ -34,6 +34,21 @@ src = inspect.getsource(Society.run_generation)
 assert 'persist_foundation' in src, src
 \""
 
+section "1b. Runs start independent of each other"
+check "Society.reset_foundation exists" \
+  "uv run python -c \"from lms.society import Society; assert callable(Society.reset_foundation)\""
+check "run_experiment clears the foundation before generation 1" \
+  "uv run python -c \"
+import inspect
+from lms import run as r
+src = inspect.getsource(r.run_experiment)
+assert 'reset_foundation' in src, 'a run inherits the previous run(s) definitions'
+\""
+check "reset writes an empty but still-importable module" \
+  "uv run pytest tests/test_foundation_persistence.py::test_reset_writes_an_empty_but_importable_foundation -q"
+check "reset discards a previous run's definitions" \
+  "uv run pytest tests/test_foundation_persistence.py::test_reset_discards_a_previous_runs_definitions -q"
+
 section "2. Persisting recompiles, so the .olean is not stale"
 check "LeanProject.rebuild_changed_sources exists" \
   "uv run python -c \"from lms.lean.project import LeanProject; assert callable(LeanProject.rebuild_changed_sources)\""

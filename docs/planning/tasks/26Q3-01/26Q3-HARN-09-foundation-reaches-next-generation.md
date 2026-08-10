@@ -85,6 +85,10 @@ brain hypothesis has not yet been tested — the apparatus for it was broken.
 - [x] `get_context_for_agent` shows the real declaration signature
 - [x] End-to-end regression test through `run_generation`, not only unit tests
       of the helper — the helper test passes vacuously if the call is dropped
+- [x] A run starts from an empty foundation (`reset_foundation`), so no run
+      inherits the previous one's definitions
+- [x] The reset writes an empty-but-valid module rather than deleting the file,
+      so `import LMS.Foundation` resolves from generation 1
 
 ---
 
@@ -98,6 +102,30 @@ brain hypothesis has not yet been tested — the apparatus for it was broken.
 | `lms/foundation.py` | MODIFY | Header options; signature in agent context |
 | `tests/test_foundation_persistence.py` | CREATE | 9 tests incl. end-to-end |
 | `tests/test_lean_real_env.py` | MODIFY | Assert file position from the end |
+
+---
+
+#### Found while fixing this — deliberately NOT fixed here
+
+Both surfaced because per-generation persistence made them consequential.
+
+1. **`lean/LMS/Foundation.lean` is generated output but is tracked.** Its own
+   header reads *"Verified by: 15x Gemini 3 Flash Preview agents"* — it is the
+   product of a December **mock-verified** run, committed at "Initial commit"
+   and never updated. On a fresh clone, agents import a `Category` that Lean
+   has never checked. `reset_foundation` neutralizes this at run start, so the
+   correctness problem is closed; what remains is hygiene (issue #19 — every
+   run dirties the tree). Untracking it changes what `git pull` does to a
+   working checkout, which is not something to spring on a cluster mid-series.
+   → follow-up card.
+
+2. **The resume path persists to a non-importable location.** `Society.load`
+   sets `foundation` to `FoundationFile.load(output_dir / "LMS" /
+   "Foundation.lean")`, so a resumed run writes to the experiment directory
+   rather than the Lean project, where `import LMS.Foundation` cannot see it.
+   This predates the card (it applied to checkpoint saves too) and resume is
+   not in the current critical path; correcting it needs its own test design.
+   → follow-up card.
 
 ---
 

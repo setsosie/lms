@@ -179,6 +179,53 @@ async def test_run_generation_persists_only_when_something_verified(
     assert project.rebuild_calls == 0
 
 
+@pytest.mark.asyncio
+async def test_reset_writes_an_empty_but_importable_foundation(
+    tmp_path: Path,
+) -> None:
+    """A run must start from an empty foundation that still imports.
+
+    The foundation cannot live under the experiment directory -- `import
+    LMS.Foundation` resolves through Lake's LEAN_PATH -- so it is shared
+    mutable state across runs, and nothing used to clear it. Writing the empty
+    module rather than deleting it keeps the import resolving from generation
+    1; an empty module is valid, a missing one is not.
+    """
+    verifier = StubLeanVerifier()
+    project = RecordingProject()
+    verifier.project = project  # type: ignore[attr-defined]
+
+    society = _society(tmp_path, verifier)
+
+    assert await society.reset_foundation() is True
+
+    assert society.foundation.path.exists()
+    text = society.foundation.path.read_text()
+    assert "namespace LMS.Foundation" in text, "must still be a valid module"
+    assert "-- From " not in text, "must carry no entries from a previous run"
+    assert project.rebuild_calls == 1, "an unbuilt module is not importable"
+
+
+@pytest.mark.asyncio
+async def test_reset_discards_a_previous_runs_definitions(tmp_path: Path) -> None:
+    """Regression: runs were not independent.
+
+    The copy checked into the repo is the output of a December mock-verified
+    run, so on a fresh clone agents imported a `Category` that Lean had never
+    checked. On a used box they imported whatever the last run left behind.
+    """
+    stale = tmp_path / "Foundation.lean"
+    stale.write_text(
+        "-- From definition-Stale-00000000 (gen 0, ghost)\nstructure Stale where\n"
+    )
+
+    society = _society(tmp_path, StubLeanVerifier())
+
+    await society.reset_foundation()
+
+    assert "Stale" not in society.foundation.path.read_text()
+
+
 # --- Fix 2: autoImplicit off, consistently ---------------------------------
 
 
