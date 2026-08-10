@@ -336,19 +336,47 @@ Per `docs/infrastructure/2026Q2-lean-codegen-base-model-selection.md`, start wit
 the generalist only — one model is enough for Gate B. Add BFS-Prover-V1-7B for
 Phase C.
 
-Run from the repo root, after Step 3's `uv sync` — `uv pip install` targets the
-project's `.venv`, so `vllm` lands there and must be invoked with `uv run`
-(a bare `vllm serve` will not be on `PATH`).
+**vLLM gets its own virtualenv, and it is the one thing in this repo you do not
+launch with `uv run`.** Confirmed on the box 2026-08-10.
+
+An earlier version of this step said to `uv pip install vllm` into the project's
+`.venv` and launch it with `uv run vllm serve`. That cannot work. vLLM requires a
+newer `openai` than `uv.lock` pins (2.12.0), so the install upgrades it — and then
+`uv run` re-syncs the environment to the lockfile *before* running the command,
+silently downgrading `openai` back. vLLM then dies during import:
+
+```
+Uninstalled 2 packages in 2ms
+Installed 2 packages in 28ms
+ImportError: cannot import name 'NamespaceTool' from 'openai.types.responses'
+```
+
+That "uninstalled/installed" pair immediately above the traceback is the tell.
+Re-installing does not help; `uv run` undoes it every launch.
+
+The two sides have no reason to share an interpreter — since `26Q3-INFRA-01` they
+communicate over HTTP. Keeping them apart also puts vLLM's ~10 GB of wheels on
+scratch instead of the home quota, and makes a later `uv sync` unable to break a
+running server.
 
 ```bash
-cd ~/code/lms
-uv pip install vllm
-CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
+cd ~
+echo "$SCRATCH"                     # must be non-empty
+export UV_LINK_MODE=copy            # cache and venv are on different filesystems
+uv venv "$SCRATCH/vllm-env" --python 3.12
+uv pip install --python "$SCRATCH/vllm-env/bin/python" vllm
+
+CUDA_VISIBLE_DEVICES=0,1 "$SCRATCH/vllm-env/bin/vllm" serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
   --port 8000 \
   --tensor-parallel-size 2 \
   --max-model-len 131072 \
   --served-model-name lms-generalist
 ```
+
+If you already ran `uv pip install vllm` against the project, `cd ~/code/lms &&
+uv sync` prunes vLLM and torch back out of `.venv` and restores the pinned
+`openai`. The harness side keeps using `uv run` exactly as before — Steps 3, 5
+and 6 are unchanged.
 
 > **`--max-model-len` must exceed 64k, which is why it is 131072 and not the
 > 65536 this runbook originally said.** `ProviderConfig.max_tokens` defaults to
