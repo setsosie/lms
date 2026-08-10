@@ -8,7 +8,7 @@ parsing artifact.
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | CRITICAL |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q3-HARN-02-lean-code-extraction` |
 | **Dependencies** | 26Q3-CHORE-01 |
 | **PR Size Target** | <200 lines |
@@ -50,16 +50,16 @@ Consequences:
 
 #### Acceptance Criteria
 
-- [ ] A leading YAML block-scalar marker (`|`, `|-`, `|+`, `>`, `>-`, `>+`,
+- [x] A leading YAML block-scalar marker (`|`, `|-`, `|+`, `>`, `>-`, `>+`,
       optionally followed by an indent indicator) is stripped from the `lean` group
-- [ ] Common markdown fencing (` ```lean ` … ` ``` `) is also stripped
-- [ ] Block indentation is dedented (`textwrap.dedent` after marker removal)
-- [ ] Extraction is a named, separately tested function
+- [x] Common markdown fencing (` ```lean ` … ` ``` `) is also stripped
+- [x] Block indentation is dedented (`textwrap.dedent` after marker removal)
+- [x] Extraction is a named, separately tested function
       (`lms/agent.py::_clean_lean_code`) rather than inline regex behavior
-- [ ] Table-driven tests over the real malformed payloads: pull ≥5 samples from
+- [x] Table-driven tests over the real malformed payloads: pull ≥5 samples from
       `experiments/stacks_ch4_phase1/artifacts.json` as fixtures
-- [ ] A canary test asserts no extracted `lean_code` starts with `|`, `>`, or ```` ``` ````
-- [ ] **Re-extraction script**: `scripts/reextract_lean_code.py` rewrites archived
+- [x] A canary test asserts no extracted `lean_code` starts with `|`, `>`, or ```` ``` ````
+- [x] **Re-extraction script**: `scripts/reextract_lean_code.py` rewrites archived
       `artifacts.json` files into a `*.reextracted.json` sibling (never in place),
       so Gate A can re-score historical runs on clean source
 
@@ -88,5 +88,10 @@ Consequences:
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `uv run pytest`, `uv run ruff check`, `uv run mypy` clean
+- [x] All acceptance criteria checked off
+- [x] `uv run pytest` clean — 476 passed
+- [x] `uv run ruff check` and `uv run mypy` clean **on the files this card
+      touches**. Repo-wide they are not: 62 ruff errors (mostly unused imports
+      in `tests/`) and 12 mypy errors (`config.py`, `providers/`, `society.py`,
+      `run.py`) pre-date this branch and are unchanged by it. Verified by
+      diffing both against the merge base rather than by reading the totals.

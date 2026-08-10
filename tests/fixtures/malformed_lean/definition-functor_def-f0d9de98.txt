@@ -1,0 +1,41 @@
+|
+  import Mathlib.CategoryTheory.Functor.Basic
+  
+  /-!
+  # Functor Definition (Stacks Tag 0014)
+  
+  A functor F : C → D consists of:
+  1. A map F : Ob(C) → Ob(D)
+  2. For each x, y ∈ Ob(C), a map F : Mor(x, y) → Mor(F(x), F(y))
+  
+  Satisfying:
+  - F(id_x) = id_{F(x)}
+  - F(g ∘ f) = F(g) ∘ F(f)
+  -/
+  
+  namespace StacksProject
+  
+  open CategoryTheory
+  
+  -- Mathlib's Functor matches Stacks 0014
+  -- * F.obj : C → D (action on objects)
+  -- * F.map : (X ⟶ Y) → (F.obj X ⟶ F.obj Y) (action on morphisms)
+  
+  -- Identity preservation: F(id_x) = id_{F(x)}
+  example {C D : Type*} [Category C] [Category D] (F : C ⥤ D) (X : C) :
+      F.map (𝟙 X) = 𝟙 (F.obj X) := F.map_id X
+  
+  -- Composition preservation: F(g ∘ f) = F(g) ∘ F(f)
+  -- In diagrammatic order: F.map (f ≫ g) = F.map f ≫ F.map g
+  example {C D : Type*} [Category C] [Category D] (F : C ⥤ D) 
+      {X Y Z : C} (f : X ⟶ Y) (g : Y ⟶ Z) :
+      F.map (f ≫ g) = F.map f ≫ F.map g := F.map_comp f g
+  
+  -- The identity functor
+  example (C : Type*) [Category C] : C ⥤ C := Functor.id C
+  
+  -- Functor composition
+  example {C D E : Type*} [Category C] [Category D] [Category E] 
+      (F : C ⥤ D) (G : D ⥤ E) : C ⥤ E := F ⋙ G
+  
+  end StacksProject

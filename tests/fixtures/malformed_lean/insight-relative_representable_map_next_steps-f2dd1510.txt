@@ -1,0 +1,26 @@
+|
+  /-
+  Future direction (not code):
+
+  In geometry, one often has:
+    i : D ⥤ C  (e.g. Schemes ⥤ Sheaves)
+  and says: a morphism f : X ⟶ Y in C is representable (by objects of D) if for every
+  g : i.obj T ⟶ Y (or more generally any g : Y' ⟶ Y), the pullback X ×_Y Y'
+  is isomorphic to i.obj T' for some T' : D.
+
+  In Lean/Mathlib, this can be expressed via:
+    ∃ T' : D, Nonempty (pullback f g ≅ i.obj T')
+  or via essential image:
+    pullback f g ∈ Functor.essImage i
+  (there is a bundled predicate `Functor.essImage`).
+
+  Then base change stability is almost tautological:
+  if for all g we land in essImage i, then for all k we also land in essImage i
+  by composing k with g and using associativity of pullbacks (or existence of an
+  isomorphism between iterated pullbacks).
+
+  You will likely want:
+    - a lemma giving an iso between (pullback (pullback.snd f g) k) and pullback f (k ≫ g)
+      (`pullbackAssoc`-style)
+    - then transport membership in the essential image across isomorphisms.
+  -/
