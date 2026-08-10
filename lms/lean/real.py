@@ -1,11 +1,13 @@
 """Real LEAN 4 verifier using the actual LEAN compiler."""
 
 import asyncio
+import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
-from lms.lean.interface import LeanVerifier, VerificationResult
+from lms.lean.interface import LeanVerifier, VerificationResult, VerifierKind
 from lms.lean.project import LeanProject
 
 
@@ -18,6 +20,8 @@ class RealLeanVerifier(LeanVerifier):
     When a project_dir is provided, automatically rebuilds when new
     imports are detected to prevent 'object file does not exist' errors.
     """
+
+    verifier_kind: VerifierKind = "real"
 
     def __init__(
         self,
@@ -100,6 +104,48 @@ class RealLeanVerifier(LeanVerifier):
 
         return "lake"
 
+    def toolchain_info(self) -> dict[str, str | None]:
+        """Report the Lean toolchain and Mathlib revision this verifier binds.
+
+        A `VERIFIED_LEAN` result is only meaningful relative to the toolchain
+        that produced it, so the versions are recorded with the run rather than
+        inferred later from whatever happens to be installed.
+        """
+        lean_version: str | None = None
+        try:
+            proc = subprocess.run(
+                (self.lean_path, "--version"),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if proc.returncode == 0:
+                lean_version = proc.stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+        return {
+            "lean_version": lean_version,
+            "mathlib_rev": self._mathlib_rev(),
+        }
+
+    def _mathlib_rev(self) -> str | None:
+        """Pinned Mathlib revision from the project's lake manifest, if any."""
+        if not self.project:
+            return None
+
+        manifest = self.project.project_dir / "lake-manifest.json"
+        try:
+            data = json.loads(manifest.read_text())
+        except (OSError, json.JSONDecodeError):
+            return None
+
+        for package in data.get("packages", []):
+            if package.get("name") == "mathlib":
+                rev = package.get("rev")
+                return str(rev) if rev else None
+        return None
+
     async def verify(self, code: str) -> VerificationResult:
         """Verify LEAN code using the real compiler.
 
@@ -111,7 +157,7 @@ class RealLeanVerifier(LeanVerifier):
         """
         # Empty code always fails
         if not code or not code.strip():
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Empty code provided",
@@ -119,7 +165,7 @@ class RealLeanVerifier(LeanVerifier):
 
         # Check for sorry (incomplete proofs) - we reject these
         if "sorry" in code:
-            return VerificationResult(
+            return self._result(
                 success=False,
                 code=code,
                 error="Code contains 'sorry' - incomplete proof not allowed",
@@ -168,7 +214,7 @@ class RealLeanVerifier(LeanVerifier):
                     stderr=asyncio.subprocess.PIPE,
                 )
             except FileNotFoundError:
-                return VerificationResult(
+                return self._result(
                     success=False,
                     code=code,
                     error=(
@@ -185,7 +231,7 @@ class RealLeanVerifier(LeanVerifier):
                 )
             except asyncio.TimeoutError:
                 proc.kill()
-                return VerificationResult(
+                return self._result(
                     success=False,
                     code=code,
                     error=f"LEAN verification timed out after {self.timeout}s",
@@ -193,7 +239,7 @@ class RealLeanVerifier(LeanVerifier):
 
             # Check result
             if proc.returncode == 0:
-                return VerificationResult(
+                return self._result(
                     success=True,
                     code=code,
                     error=None,
@@ -205,7 +251,7 @@ class RealLeanVerifier(LeanVerifier):
                 if not error_msg:
                     error_msg = f"LEAN returned exit code {proc.returncode}"
 
-                return VerificationResult(
+                return self._result(
                     success=False,
                     code=code,
                     error=error_msg,

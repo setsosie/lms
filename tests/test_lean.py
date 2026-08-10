@@ -15,6 +15,8 @@ class TestVerificationResult:
             success=True,
             code="theorem test : True := trivial",
             error=None,
+            verifier_kind="real",
+            verifier_id="RealLeanVerifier",
         )
         assert result.success is True
         assert result.error is None
@@ -25,6 +27,8 @@ class TestVerificationResult:
             success=False,
             code="theorem broken : False := sorry",
             error="Type mismatch: expected True, got False",
+            verifier_kind="real",
+            verifier_id="RealLeanVerifier",
         )
         assert result.success is False
         assert "Type mismatch" in result.error
@@ -60,7 +64,9 @@ class TestMockLeanVerifier:
     async def test_verify_valid_lemma(self):
         """Mock verifier accepts well-formed lemma syntax."""
         verifier = MockLeanVerifier()
-        code = "lemma even_add (a b : Nat) : Even a -> Even b -> Even (a + b) := by omega"
+        code = (
+            "lemma even_add (a b : Nat) : Even a -> Even b -> Even (a + b) := by omega"
+        )
         result = await verifier.verify(code)
         assert result.success is True
 
@@ -106,7 +112,7 @@ class TestMockLeanVerifier:
     @pytest.mark.asyncio
     async def test_configurable_success_rate(self):
         """Mock verifier can be configured with custom success rate."""
-        verifier = MockLeanVerifier(success_rate=0.0)
+        MockLeanVerifier(success_rate=0.0)
         code = "lemma test : True := trivial"
         # With 0% success rate, everything should fail (except it still checks syntax)
         # Let's make a truly random verifier
