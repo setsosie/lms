@@ -172,6 +172,53 @@ class Society:
         ]
 
     async def run_generation(self, generation: int) -> GenerationResult:
+        """Run one generation, then make its verified work importable.
+
+        Persisting the foundation is part of finishing a generation, not part
+        of checkpointing. `Society.save()` only runs every `checkpoint_interval`
+        generations (default 10), so on any shorter run the foundation stayed
+        in memory for the whole experiment and every later generation imported
+        a `Foundation.lean` that predated the run. Agents cited prior artifacts
+        correctly and got an empty module back.
+
+        Args:
+            generation: Current generation number
+
+        Returns:
+            GenerationResult with metrics for this generation
+        """
+        result = await self._run_generation_impl(generation)
+
+        if result.artifacts_verified > 0:
+            await self.persist_foundation()
+
+        return result
+
+    async def persist_foundation(self) -> bool:
+        """Write the foundation to disk and recompile it.
+
+        Both halves are required. Writing without rebuilding leaves a stale
+        `.olean`, and `import LMS.Foundation` keeps resolving to the previous
+        contents -- silently, because an import that succeeds against an old
+        module looks exactly like one that succeeds against a current one.
+
+        Returns:
+            True if the foundation is on disk and compiled (or if there is
+            nothing to persist, or no real project to build against).
+        """
+        if len(self.foundation) == 0:
+            return True
+
+        self.foundation.save()
+
+        # MockLeanVerifier has no project; nothing to compile against.
+        project = getattr(self.verifier, "project", None)
+        if project is None:
+            return True
+
+        return await project.rebuild_changed_sources()
+
+    async def _run_generation_impl(self, generation: int) -> GenerationResult:
         """Run a single generation of the society using three phases.
 
         Phase 1 (PROPOSE): All agents propose artifacts in parallel
