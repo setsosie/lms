@@ -8,16 +8,16 @@
 #   sbatch --export=ALL,AGENTS=6,GENERATIONS=5 scripts/slurm/lms_run.sbatch
 #
 # ---------------------------------------------------------------------------
-# SITE CONFIG -- fill these in once. Discover the values with:
-#   sinfo -o '%P %l %G %N' && sacctmgr -nP show assoc user=$USER format=account
+# SITE CONFIG -- resolved 2026-08-10 on mahpiya:
+#   sinfo  -> "gpu* infinite gpu:h100:4 localhost"  (single node, default part.)
+#   sacctmgr -> no accounting_storage plugin, so --account must NOT be set
 # ---------------------------------------------------------------------------
 #SBATCH --job-name=lms-run
-#SBATCH --partition=PARTITION_HERE
-##SBATCH --account=ACCOUNT_HERE          # uncomment if your site requires it
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:h100:2
 #SBATCH --time=04:00:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
@@ -85,7 +85,30 @@ fi
 command -v lake >/dev/null 2>&1 || { echo "FATAL: lake not on PATH; check ELAN_HOME=$ELAN_HOME"; exit 1; }
 [ -d "lean/.lake" ] || { echo "FATAL: lean/.lake missing -- Mathlib not built on this node"; exit 1; }
 [ -x "$SCRATCH/vllm-env/bin/vllm" ] || { echo "FATAL: no vLLM venv at $SCRATCH/vllm-env"; exit 1; }
-nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader || true
+
+# Refuse to load onto a GPU that is already busy.
+#
+# This box runs a single-node Slurm over the same four H100s that a tmux vLLM
+# may be holding. A server started outside Slurm is invisible to the scheduler,
+# so Slurm believes all four are free and can allocate the two already in use.
+# Without this check the failure is a confusing mid-load CUDA OOM rather than
+# "something else is on this GPU".
+echo "--- GPU state ---"
+nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
+BUSY=$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits \
+  | awk -F', ' '$2 > 1024 {printf "%s ", $1}')
+if [ -n "$BUSY" ]; then
+  echo "FATAL: GPU(s) $BUSY already hold >1 GiB. A vLLM started outside Slurm"
+  echo "       (e.g. in tmux) is invisible to the scheduler and will collide."
+  echo "       Stop it first, or free those GPUs, then resubmit."
+  exit 1
+fi
+
+# The port has to be free too, for the same reason.
+if curl -sS --max-time 3 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; then
+  echo "FATAL: something already answers on port $PORT. Stop it or set PORT=..."
+  exit 1
+fi
 
 # --- Start vLLM -------------------------------------------------------------
 # Absolute path into vLLM's OWN venv. Never `uv run vllm`: uv re-syncs uv.lock,
