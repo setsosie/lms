@@ -1,7 +1,20 @@
 """Metrics and analysis for LMS experiments.
 
 Provides functions to analyze artifact libraries and generation results
-to detect cultural accumulation vs. decay (Tasmania effect).
+to detect cultural accumulation vs. ratchet failure.
+
+"Ratchet failure" is named for Tomasello's cultural ratchet (Tomasello,
+Kruger & Ratner 1993) -- the mechanism by which a population holds onto
+what it has learned so the next generation starts from there rather than
+from scratch. When agents keep re-deriving results the library already
+contains, the ratchet is not engaging.
+
+This was previously called the "Tasmania effect", after Henrich (2004),
+"Demography and Cultural Evolution: How Adaptive Cultural Processes Can
+Produce Maladaptive Losses -- The Tasmanian Case". Renamed because that
+describes the *loss* of existing technology, which is not what is measured
+here -- these agents never accumulated anything to lose. The underlying
+demographic claim is also contested (Vaesen et al. 2016, PNAS).
 """
 
 from dataclasses import dataclass
@@ -32,7 +45,7 @@ def calculate_reuse_rate(library: ArtifactLibrary) -> float:
 def calculate_fresh_creation_rate(library: ArtifactLibrary) -> float:
     """Calculate the fraction of artifacts created without references.
 
-    High fresh creation rates may indicate the Tasmania effect -
+    High fresh creation rates may indicate ratchet failure -
     knowledge is being recreated rather than built upon.
 
     Args:
@@ -103,7 +116,8 @@ class LibraryAnalysis:
         fresh_creation_rate: Fraction created without references
         verification_rate: Fraction that passed verification
         growth_rate: Average artifacts added per generation
-        potential_tasmania_effect: True if metrics suggest knowledge decay
+        potential_ratchet_failure: True if the library is large enough to
+            reuse and agents are not reusing it
     """
 
     total_artifacts: int
@@ -112,21 +126,29 @@ class LibraryAnalysis:
     fresh_creation_rate: float
     verification_rate: float
     growth_rate: float
-    potential_tasmania_effect: bool
+    potential_ratchet_failure: bool
+
+
+# Below these, "nobody reused anything" is a statement about the library being
+# empty, not about agent behavior. A one-artifact library offers nothing to
+# build on, so a warning there is guaranteed noise -- and a warning that always
+# fires is one nobody reads on the run where it means something.
+MIN_ARTIFACTS_FOR_RATCHET = 5
+MIN_GENERATIONS_FOR_RATCHET = 2
 
 
 def analyze_library(
     library: ArtifactLibrary,
     results: list[GenerationResult],
-    tasmania_threshold: float = 0.8,
+    ratchet_threshold: float = 0.8,
 ) -> LibraryAnalysis:
     """Perform comprehensive analysis of an artifact library.
 
     Args:
         library: Artifact library to analyze
         results: Generation results for the experiment
-        tasmania_threshold: Fresh creation rate above which to flag
-            potential Tasmania effect (default 0.8)
+        ratchet_threshold: Fresh creation rate above which to flag
+            potential ratchet failure (default 0.8)
 
     Returns:
         LibraryAnalysis with all computed metrics
@@ -136,10 +158,17 @@ def analyze_library(
     verification_rate = calculate_verification_rate(results)
     growth_rate = calculate_growth_rate(results)
 
-    # Detect potential Tasmania effect:
+    # Detect potential ratchet failure:
+    # - Enough prior work existed to be worth reusing
     # - High fresh creation rate (not building on prior work)
     # - Low reuse rate (prior work not being used)
-    potential_tasmania = fresh_rate >= tasmania_threshold and reuse_rate < 0.2
+    had_something_to_reuse = (
+        len(library) >= MIN_ARTIFACTS_FOR_RATCHET
+        and len(results) >= MIN_GENERATIONS_FOR_RATCHET
+    )
+    potential_ratchet_failure = (
+        had_something_to_reuse and fresh_rate >= ratchet_threshold and reuse_rate < 0.2
+    )
 
     return LibraryAnalysis(
         total_artifacts=len(library),
@@ -148,7 +177,7 @@ def analyze_library(
         fresh_creation_rate=fresh_rate,
         verification_rate=verification_rate,
         growth_rate=growth_rate,
-        potential_tasmania_effect=potential_tasmania,
+        potential_ratchet_failure=potential_ratchet_failure,
     )
 
 
@@ -168,10 +197,14 @@ def print_analysis(analysis: LibraryAnalysis) -> None:
     print(f"Verification Rate: {analysis.verification_rate:.1%}")
     print(f"Growth Rate: {analysis.growth_rate:+.1f} artifacts/generation")
 
-    if analysis.potential_tasmania_effect:
-        print("\n[!] WARNING: Potential Tasmania Effect detected!")
-        print("    Agents may be creating from scratch instead of")
+    if analysis.potential_ratchet_failure:
+        print("\n[!] WARNING: Ratchet failure detected!")
+        print("    Agents are creating from scratch instead of")
         print("    building on accumulated knowledge.")
+    elif analysis.total_artifacts < MIN_ARTIFACTS_FOR_RATCHET:
+        # Saying accumulation "appears healthy" off one or two artifacts would
+        # be the same overclaim in the opposite direction.
+        print("\n[.] Library too small to judge accumulation.")
     else:
         print("\n[+] Cultural accumulation appears healthy.")
 

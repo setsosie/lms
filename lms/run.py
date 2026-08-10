@@ -365,7 +365,7 @@ async def run_experiment(
             "fresh_creation_rate": analysis.fresh_creation_rate,
             "verification_rate": analysis.verification_rate,
             "growth_rate": analysis.growth_rate,
-            "potential_tasmania_effect": analysis.potential_tasmania_effect,
+            "potential_ratchet_failure": analysis.potential_ratchet_failure,
         },
     }
     # Add provider details
@@ -573,7 +573,7 @@ async def resume_experiment(
         "fresh_creation_rate": analysis.fresh_creation_rate,
         "verification_rate": analysis.verification_rate,
         "growth_rate": analysis.growth_rate,
-        "potential_tasmania_effect": analysis.potential_tasmania_effect,
+        "potential_ratchet_failure": analysis.potential_ratchet_failure,
     }
     (checkpoint_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
