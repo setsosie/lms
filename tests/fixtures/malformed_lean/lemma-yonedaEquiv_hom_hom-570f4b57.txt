@@ -1,0 +1,24 @@
+|
+  import Mathlib.CategoryTheory.Yoneda
+
+  namespace Stacks
+
+  open CategoryTheory
+
+  universe v u
+  variable {C : Type u} [Category.{v} C]
+
+  /-- Natural transformations between representables correspond to morphisms. -/
+  noncomputable
+  def yonedaEquiv_hom (X Y : C) :
+      (yoneda.obj X ⟶ yoneda.obj Y) ≃ (X ⟶ Y) :=
+    (yonedaEquiv (yoneda.obj Y) X).trans (by
+      -- `yoneda.obj Y` evaluated at `op X` *is* `Hom(X, Y)`.
+      rfl)
+
+  @[simp]
+  lemma yonedaEquiv_hom_apply (X Y : C) (τ : yoneda.obj X ⟶ yoneda.obj Y) :
+      yonedaEquiv_hom (C := C) X Y τ = τ.app (Opposite.op X) (𝟙 X) :=
+    rfl
+
+  end Stacks

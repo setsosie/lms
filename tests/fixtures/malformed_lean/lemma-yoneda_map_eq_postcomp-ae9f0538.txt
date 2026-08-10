@@ -1,0 +1,16 @@
+|
+  import Mathlib.CategoryTheory.Yoneda
+
+  namespace Stacks
+
+  open CategoryTheory
+
+  universe v u
+  variable {C : Type u} [Category.{v} C]
+  variable {X Y Z : C} (f : X ⟶ Y) (g : Z ⟶ X)
+
+  lemma yoneda_map_app_apply :
+      (yoneda.map f).app (Opposite.op Z) g = g ≫ f := by
+    rfl
+
+  end Stacks

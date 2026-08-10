@@ -1,0 +1,44 @@
+|
+  import Mathlib.CategoryTheory.NatTrans
+  
+  /-!
+  # Natural Transformation Definition (Stacks Tag 0015)
+  
+  A natural transformation t : F → G between functors F, G : C → D consists of:
+  For each x ∈ Ob(C), a morphism t_x : F(x) → G(x)
+  
+  Naturality: For f : x → y, G(f) ∘ t_x = t_y ∘ F(f)
+  
+      F(x) --F(f)--> F(y)
+        |             |
+       t_x           t_y
+        v             v
+      G(x) --G(f)--> G(y)
+  -/
+  
+  namespace StacksProject
+  
+  open CategoryTheory
+  
+  -- Mathlib's NatTrans matches Stacks 0015
+  -- * τ.app X : F.obj X ⟶ G.obj X (component at X)
+  -- * τ.naturality : naturality condition
+  
+  -- The naturality square (in diagrammatic order):
+  -- F.map f ≫ τ.app Y = τ.app X ≫ G.map f
+  example {C D : Type*} [Category C] [Category D] 
+      {F G : C ⥤ D} (τ : F ⟶ G) {X Y : C} (f : X ⟶ Y) :
+      F.map f ≫ τ.app Y = τ.app X ≫ G.map f := τ.naturality f
+  
+  -- Natural transformations can be composed vertically
+  example {C D : Type*} [Category C] [Category D] 
+      {F G H : C ⥤ D} (τ : F ⟶ G) (σ : G ⟶ H) : F ⟶ H := τ ≫ σ
+  
+  -- The identity natural transformation
+  example {C D : Type*} [Category C] [Category D] (F : C ⥤ D) : F ⟶ F := 𝟙 F
+  
+  -- Natural isomorphism (when all components are isomorphisms)
+  example {C D : Type*} [Category C] [Category D] 
+      {F G : C ⥤ D} (τ : F ≅ G) : F ⟶ G := τ.hom
+  
+  end StacksProject
