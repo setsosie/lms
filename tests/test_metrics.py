@@ -308,8 +308,8 @@ class TestLibraryAnalysis:
         assert analysis.reuse_rate >= 0
         assert analysis.fresh_creation_rate >= 0
 
-    def test_analysis_detects_tasmania_effect(self):
-        """Analysis flags potential Tasmania effect."""
+    def test_analysis_detects_ratchet_failure(self):
+        """Analysis flags potential ratchet failure."""
         library = ArtifactLibrary()
         # All artifacts are fresh - no reuse
         for i in range(10):
@@ -339,7 +339,70 @@ class TestLibraryAnalysis:
         # With 100% fresh creation and 0 reuse, should flag potential problem
         assert analysis.fresh_creation_rate == 1.0
         assert analysis.reuse_rate == 0.0
-        assert analysis.potential_tasmania_effect is True
+        assert analysis.potential_ratchet_failure is True
+
+    def test_ratchet_failure_not_flagged_on_a_tiny_library(self):
+        """A library with nothing to reuse cannot exhibit ratchet failure.
+
+        Regression test for a flag that fired on every run ever recorded,
+        including single-artifact smoke runs where reuse was impossible by
+        construction. A warning that always fires carries no information.
+        """
+        library = ArtifactLibrary()
+        library.add(
+            Artifact(
+                id="only",
+                type=ArtifactType.THEOREM,
+                natural_language="",
+                created_by="",
+                generation=0,
+            )
+        )
+        results = [
+            GenerationResult(
+                generation=0,
+                artifacts_created=1,
+                artifacts_verified=1,
+                artifacts_referenced=0,
+                fresh_creations=1,
+            )
+        ]
+
+        analysis = analyze_library(library, results)
+
+        # The underlying rates still read as bad...
+        assert analysis.fresh_creation_rate == 1.0
+        assert analysis.reuse_rate == 0.0
+        # ...but there was never anything to build on, so it is not a finding.
+        assert analysis.potential_ratchet_failure is False
+
+    def test_ratchet_failure_needs_more_than_one_generation(self):
+        """One generation cannot show a failure to carry work forward."""
+        library = ArtifactLibrary()
+        for i in range(10):
+            library.add(
+                Artifact(
+                    id=f"a{i}",
+                    type=ArtifactType.LEMMA,
+                    natural_language="",
+                    created_by="",
+                    generation=0,
+                )
+            )
+        results = [
+            GenerationResult(
+                generation=0,
+                artifacts_created=10,
+                artifacts_verified=0,
+                artifacts_referenced=0,
+                fresh_creations=10,
+            )
+        ]
+
+        analysis = analyze_library(library, results)
+
+        assert analysis.fresh_creation_rate == 1.0
+        assert analysis.potential_ratchet_failure is False
 
     def test_analysis_healthy_culture(self):
         """Analysis recognizes healthy cultural accumulation."""
@@ -434,7 +497,7 @@ class TestLibraryAnalysis:
 
         analysis = analyze_library(library, results)
 
-        # Should not flag Tasmania effect
-        assert analysis.potential_tasmania_effect is False
+        # Should not flag ratchet failure
+        assert analysis.potential_ratchet_failure is False
         # Should show healthy reuse
         assert analysis.reuse_rate > 0.5

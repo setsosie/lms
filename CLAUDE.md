@@ -11,8 +11,13 @@
 ### Collective Brain Theory (Henrich)
 - Human innovation is collective, not individual
 - Larger, connected populations → more innovation
-- Below critical mass, knowledge *decays* (Tasmania effect)
+- Below critical mass, knowledge *decays* — Henrich's Tasmanian case (2004),
+  an interpretation contested since (Vaesen et al. 2016, PNAS)
 - LLM societies may exhibit similar dynamics
+
+**Naming**: the metric is `potential_ratchet_failure`, after Tomasello's cultural
+ratchet — *not* "the Tasmania effect". It measures failure to accumulate, not
+loss of existing technology. Use "ratchet failure" in code and prose.
 
 ### The LEAN Advantage
 - Humans: weak verification (social, slow, error-prone), strong intuition

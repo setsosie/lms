@@ -390,7 +390,7 @@ class ArtifactLibrary:
     def fresh_creation_count(self) -> int:
         """Count artifacts created without referencing existing work.
 
-        High fresh creation rates might indicate the 'Tasmania effect' -
+        High fresh creation rates might indicate ratchet failure -
         knowledge is being recreated from scratch rather than built upon.
 
         Returns:

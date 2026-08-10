@@ -92,7 +92,7 @@ not by API rate limits or budget.
 **The wildcard is the phase transition.** Core hypothesis: lemma-reuse rate jumps
 discontinuously past a critical mass. If it fires during Stacks (Phase 3, the
 tail), the aggressive column becomes realistic and the back ~180 cycles go much
-faster than the front. If it never fires (Tasmania effect), conservative holds.
+faster than the front. If it never fires (ratchet failure), conservative holds.
 **Phase 3 is where both the science and the schedule are decided.**
 
 Local-first caveat on the schedule: if the local model is materially weaker than

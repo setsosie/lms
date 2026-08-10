@@ -34,7 +34,7 @@ Drawing from Joseph Henrich's collective brain theory: network size and connecti
 ## Theoretical Foundation
 
 - **Henrich's Collective Brain**: Human innovation emerges from interconnected populations, not individual genius
-- **The Tasmania Effect**: Isolated populations lose technology; there's a critical mass for knowledge maintenance
+- **Critical mass for maintenance**: Below a threshold population size, knowledge can fail to propagate. Henrich's Tasmanian case (2004) is the classic illustration, though the demographic claim is contested (Vaesen et al. 2016, PNAS). The metric here is **ratchet failure** — it measures failure to accumulate, not loss
 - **LEAN as Cultural Ratchet**: Perfect verification prevents backward slippage, like writing preserved mathematics
 
 ## Status
