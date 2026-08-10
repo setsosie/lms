@@ -119,7 +119,14 @@ Both surfaced because per-generation persistence made them consequential.
    working checkout, which is not something to spring on a cluster mid-series.
    → follow-up card.
 
-2. **The resume path persists to a non-importable location.** `Society.load`
+2. **`verify_26Q3-HARN-02.sh` has the same inline-Python problem** this card's
+   script was corrected for (13 `uv run python -c` blocks). The convention is
+   now written down in `scripts/verify/README.md`. Reworking that script means
+   first adding tests for `scripts/reextract_lean_code.py`, whose behaviour is
+   currently asserted only inside the shell script — so it is its own small
+   card, not a drive-by edit on an open PR. → follow-up card.
+
+3. **The resume path persists to a non-importable location.** `Society.load`
    sets `foundation` to `FoundationFile.load(output_dir / "LMS" /
    "Foundation.lean")`, so a resumed run writes to the experiment directory
    rather than the Lean project, where `import LMS.Foundation` cannot see it.

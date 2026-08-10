@@ -23,10 +23,11 @@ from pathlib import Path
 import pytest
 
 from lms.artifacts import Artifact, ArtifactType
-from lms.config import ProviderConfig
+from lms.config import Config, ProviderConfig
 from lms.foundation import FoundationFile
 from lms.lean.mock import MockLeanVerifier
 from lms.lean.real import RealLeanVerifier
+from lms.run import run_experiment
 from lms.society import Society
 from tests.test_society import MockProvider, StubLeanVerifier
 
@@ -224,6 +225,44 @@ async def test_reset_discards_a_previous_runs_definitions(tmp_path: Path) -> Non
     await society.reset_foundation()
 
     assert "Stale" not in society.foundation.path.read_text()
+
+
+@pytest.mark.asyncio
+async def test_run_experiment_resets_before_generating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reset has to be wired into the actual entry point.
+
+    `run_experiment` has no other test coverage, so without this the only
+    guard on the call was grepping the function's source from a shell script.
+
+    `DEFAULT_FOUNDATION_PATH` is redirected because `run_experiment` does not
+    take a foundation path — left alone this test would rewrite the tracked
+    corpus, which is the very problem the card is about (issue #19).
+    """
+    monkeypatch.setattr(
+        "lms.society.DEFAULT_FOUNDATION_PATH", tmp_path / "Foundation.lean"
+    )
+    monkeypatch.setattr("lms.run.create_provider", lambda name, cfg: MockProvider(cfg))
+
+    calls: list[str] = []
+
+    async def _spy(self: Society) -> bool:
+        calls.append("reset")
+        return True
+
+    monkeypatch.setattr(Society, "reset_foundation", _spy)
+
+    await run_experiment(
+        n_agents=1,
+        n_generations=0,
+        provider_name="anthropic",
+        output_dir=tmp_path / "out",
+        config=Config(anthropic=ProviderConfig(api_key="k", model="m")),
+        verifier_type="mock",
+    )
+
+    assert calls == ["reset"], "a run must not inherit the previous run's foundation"
 
 
 # --- Fix 2: autoImplicit off, consistently ---------------------------------
