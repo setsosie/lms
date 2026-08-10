@@ -355,13 +355,35 @@ end LMS.Foundation
 
         return entries
 
+    #: Namespace every foundation entry is written inside (FOUNDATION_HEADER).
+    NAMESPACE = "LMS.Foundation"
+
     def get_import_statement(self) -> str:
         """Return the import statement agents should use.
 
         Returns:
             Import statement string
         """
-        return "import LMS.Foundation"
+        return f"import {self.NAMESPACE}"
+
+    def get_preamble(self) -> str:
+        """Return the lines agents need to actually *use* the foundation.
+
+        Importing alone is not enough, and that was the whole failure. Entries
+        are written inside `namespace LMS.Foundation`, so a verified `Category`
+        is `LMS.Foundation.Category`. An agent that imports and then writes
+        `Category` gets `unknown identifier` -- the module resolved, the name
+        never did.
+
+        This was invisible until `autoImplicit` was turned off in
+        26Q3-HARN-09: before that the unresolved name was silently auto-bound
+        as an implicit variable, and the error surfaced somewhere else entirely
+        as a type mismatch.
+
+        Returns:
+            The import and open lines, newline separated.
+        """
+        return f"{self.get_import_statement()}\nopen {self.NAMESPACE}"
 
     def get_available_definitions(self) -> str:
         """Return a summary of available definitions.
@@ -417,7 +439,14 @@ Create foundational definitions that future generations can build upon.
             "The following definitions are VERIFIED and available for import.",
             "USE THEM! Do not redefine what already exists.",
             "",
-            f"To use: Add `{self.get_import_statement()}` at the top of your code.",
+            "To use, put BOTH of these at the top of your code:",
+            "",
+            f"    {self.get_preamble()}",
+            "",
+            f"The `open` is required. Every definition below lives inside the "
+            f"`{self.NAMESPACE}` namespace, so with only the import you must "
+            f"write `{self.NAMESPACE}.Category` in full; a bare `Category` is "
+            f"an unknown identifier.",
             "",
         ]
 
