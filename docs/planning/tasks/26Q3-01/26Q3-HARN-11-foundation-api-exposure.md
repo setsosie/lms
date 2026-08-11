@@ -130,6 +130,19 @@ print(f.get_context_for_agent())"
 - [x] **AC-6** That committee summary carries the declaration shape
       (`(obj : Type u)`), not names alone.
 
+Added 2026-08-10 after the first `/pre-merge` review found a regression in the
+first implementation (see *Outcome*):
+
+- [x] **AC-7** A doc-commented declaration renders its **declaration**, not its
+      comment. `/-- A category. -/\nstructure Category …` must render
+      `structure Category (obj : Type u) where`, with its fields.
+- [x] **AC-8** `class` fields and `inductive` constructors render, not just
+      `structure` fields.
+- [x] **AC-9** A theorem statement that wraps across lines renders to its
+      conclusion; the proof body does not render.
+- [x] **AC-10** No renderer in `lms/foundation.py` retains a silent character
+      cap (`signature[:80]` is gone).
+
 ---
 
 #### Files to Create/Modify
@@ -168,6 +181,30 @@ lines is bounded by the declaration's own width and is what an agent needs to
 *apply* an entry. Theorem entries have no fields, so they cost one line. If a
 cap is needed later, it belongs on entry count with an explicit count, not on
 characters mid-token.
+
+**Regression found at the gate (2026-08-10).** The first implementation read
+"the first non-blank line of `lean_code`" as the declaration. `lean_code` does
+not start there. `_strip_block_comments` blanks `/-- … -/` to spaces before
+matching, `DEFINITION_PATTERN`'s leading `\s*` reaches back across the blanked
+region, and `_extract_entries` slices the **original** source from that offset —
+so a doc-commented declaration carries its comment as line 1. A doc-commented
+`Category` rendered as `/-- A category. -/` and nothing else: no declaration, no
+parameter, no fields, and `field_lines()` returned `[]` because it consumed the
+comment as the header and broke on the unindented `structure` below.
+
+That was *worse than base*, which at least emitted a garbled header containing
+the parameter. 425 of 870 corpus artifacts carry a doc comment; 85% of extracted
+entries rendered one as their header. Now 0 of 4474.
+
+The fix is in the renderers (`FoundationEntry._code()` strips leading comments),
+**not** at the slice boundary — correcting `_extract_entries` would change what
+`save()` writes into `Foundation.lean`, which the gate below rules out. The cost
+is that `lean_code` still starts at a comment for every other consumer.
+
+**Growth story, measured.** A real 140-entry foundation
+(`experiments/stacks_ch4_phase1`) renders 15,927 chars ≈ 4K tokens of
+agent-facing context — all declarations and typed fields, zero comment lines.
+Against a 131,072-token model context that is ~3%.
 
 **Outcome (2026-08-10).** All four gates below held; none fired.
 `_extract_entries` and `DEFINITION_PATTERN` are untouched, so `entry.signature`
