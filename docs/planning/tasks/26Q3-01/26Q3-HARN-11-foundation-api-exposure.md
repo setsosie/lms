@@ -143,6 +143,16 @@ first implementation (see *Outcome*):
 - [x] **AC-10** No renderer in `lms/foundation.py` retains a silent character
       cap (`signature[:80]` is gone).
 
+Added after the second `/pre-merge` round:
+
+- [x] **AC-11** A `:=` inside Lean 4 named arguments does not cut the statement
+      (`pullback.fst (f := f) (g := g) …` renders whole).
+- [x] **AC-12** `instance … where` renders every field, not one bare name.
+- [x] **AC-13** A proof body never renders, including `:= by` on the
+      declaration line and tactic blocks under a `where` field.
+- [x] **AC-14** Foreign declarations (`@[ext] theorem`, `section`, `variable`,
+      `example`) do not render as fields of the preceding entry.
+
 ---
 
 #### Files to Create/Modify
@@ -200,6 +210,18 @@ The fix is in the renderers (`FoundationEntry._code()` strips leading comments),
 **not** at the slice boundary — correcting `_extract_entries` would change what
 `save()` writes into `Foundation.lean`, which the gate below rules out. The cost
 is that `lean_code` still starts at a comment for every other consumer.
+
+**Corpus health, 4474 entries** (measured each round, not asserted):
+
+| Defect | Before | Round 1 | Round 2 |
+|---|---|---|---|
+| Comment rendered as header | 85% | 0 | 0 |
+| Foreign declarations as fields | 4.2% | 4.2% | 0 |
+| Unbalanced-bracket renders | 31 | 31 | 2 |
+| Leaked tactic lines | — | 522 | 1 |
+
+The 2 residual unbalanced renders (0.04%) come from a `by` opening inside a
+type-level application; left as known residue rather than chased further.
 
 **Growth story, measured.** A real 140-entry foundation
 (`experiments/stacks_ch4_phase1`) renders 15,927 chars ≈ 4K tokens of
