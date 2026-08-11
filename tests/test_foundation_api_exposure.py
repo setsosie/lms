@@ -214,3 +214,119 @@ def test_proof_body_is_not_rendered(tmp_path: Path) -> None:
     ).get_context_for_agent()
 
     assert "rfl_marker_do_not_render" not in context
+
+
+def test_proof_body_on_the_header_line_is_not_rendered(tmp_path: Path) -> None:
+    """`:= by` on line 1 means no continuation line carries `:=` to stop at."""
+    src = (
+        "theorem add_comm2 (a b : Nat) : a + b = b + a := by\n"
+        "  induction a with\n"
+        "  | zero => simp [tactic_marker_do_not_render]"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="addcomm"
+    ).get_context_for_agent()
+
+    assert "tactic_marker_do_not_render" not in context
+
+
+def test_named_argument_assign_does_not_cut_the_statement(tmp_path: Path) -> None:
+    """Lean 4 named args put `:=` *inside* the statement; a blind find() amputates it."""
+    src = (
+        "theorem pullback_commutes {X Y Z : C} (f : X ⟶ Z) (g : Y ⟶ Z) :\n"
+        "    pullback.fst (f := f) (g := g) ≫ f = pullback.snd ≫ g :=\n"
+        "  pullback.condition"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="pullback"
+    ).get_context_for_agent()
+
+    assert "pullback.fst (f := f) (g := g) ≫ f = pullback.snd ≫ g" in context
+    assert "pullback.condition" not in context
+
+
+def test_instance_with_a_where_body_renders_all_its_fields(tmp_path: Path) -> None:
+    """`instance … where` is a body-is-API declaration, not a signature."""
+    src = (
+        "instance TypeCat : Category.{u} (Type u) where\n"
+        "  Hom X Y := X → Y\n"
+        "  id X := fun x => x\n"
+        "  comp f g := g ∘ f"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="TypeCat"
+    ).get_context_for_agent()
+
+    assert "Hom X Y := X → Y" in context
+    assert "id X := fun x => x" in context
+    assert "comp f g := g ∘ f" in context
+
+
+def test_foreign_declarations_do_not_render_as_fields(tmp_path: Path) -> None:
+    """`_extract_entries` slices to the next match, and it does not match these."""
+    src = (
+        "structure IsProduct (C : Type u) where\n"
+        "  fst : C\n"
+        "  section\n"
+        "  variable {x y : C}\n"
+        "  example : True := trivial"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="IsProduct"
+    ).get_context_for_agent()
+
+    assert "fst : C" in context
+    assert "variable" not in context
+    assert "example" not in context
+
+
+def test_where_body_keeps_its_fields_but_not_their_proofs(tmp_path: Path) -> None:
+    """`def … where` fields are API; the tactic blocks under them are not."""
+    src = (
+        "def nat_trans_vcomp (α : F ⟶ G) (β : G ⟶ H) : F ⟶ H where\n"
+        "  app := fun X => α.app X ≫ β.app X\n"
+        "  naturality := by\n"
+        "    intros X Y f\n"
+        "    simp only [tactic_marker_do_not_render]"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="vcomp"
+    ).get_context_for_agent()
+
+    assert "app := fun X => α.app X ≫ β.app X" in context
+    assert "naturality" in context
+    assert "tactic_marker_do_not_render" not in context
+
+
+def test_wrapped_field_type_is_not_mistaken_for_a_proof(tmp_path: Path) -> None:
+    """The deeper-indent rule must not eat a type that simply wrapped."""
+    src = (
+        "structure IsPullback (C : Type u) where\n"
+        "  univ : ∀ {S : C} (a : S ⟶ X),\n"
+        "      ∃! (l : S ⟶ W), l ≫ f = a"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="IsPullback"
+    ).get_context_for_agent()
+
+    assert "∃! (l : S ⟶ W), l ≫ f = a" in context
+
+
+def test_omitted_entries_are_counted_not_dropped(tmp_path: Path) -> None:
+    """A silent elision is the bug class this card exists to remove."""
+    foundation = _foundation_with(tmp_path / "Foundation.lean", CATEGORY_SRC)
+    foundation.add_artifact(
+        Artifact(
+            id="definition-notes-0000beef",
+            type=ArtifactType.DEFINITION,
+            natural_language="a comment-only artifact",
+            lean_code="/- roadmap notes, no declaration here -/",
+            status=VerificationStatus.VERIFIED_LEAN,
+            created_by="agent-0",
+            generation=0,
+        )
+    )
+
+    context = foundation.get_context_for_agent()
+
+    assert "1" in context and "omitted" in context.lower()

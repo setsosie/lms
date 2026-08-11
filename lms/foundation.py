@@ -20,6 +20,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lms.artifacts import Artifact
 
+#: A `by` ending a line opens a tactic block, whether written `:= by`,
+#: `(by`, or bare `by`.
+_BY_TAIL = re.compile(r"\bby$")
+
 
 @dataclass
 class FoundationEntry:
@@ -55,11 +59,55 @@ class FoundationEntry:
             "author": self.author,
         }
 
-    #: Declarations whose indented body *is* the API an agent needs.
+    #: Declarations whose indented body *is* the API an agent needs. An
+    #: `instance ... where` qualifies too; that is decided by the `where`
+    #: suffix in `body_is_api()`, not by the keyword.
     BODY_IS_API = frozenset({"structure", "class", "inductive"})
 
     #: Declarations whose body is a proof or a value -- signature only.
     SIGNATURE_ONLY = frozenset({"theorem", "lemma", "def", "abbrev", "instance"})
+
+    #: Keywords that begin a *new* declaration or command. `_extract_entries`
+    #: slices to the next `DEFINITION_PATTERN` match, and that pattern misses
+    #: these -- so without this stop list they render as fields of whatever
+    #: entry precedes them.
+    FOREIGN_TOKENS = frozenset(
+        {
+            "section",
+            "end",
+            "variable",
+            "variables",
+            "open",
+            "namespace",
+            "example",
+            "noncomputable",
+            "private",
+            "protected",
+            "partial",
+            "mutual",
+            "attribute",
+            "deriving",
+            "macro",
+            "notation",
+            "syntax",
+            # Declaration keywords too: an `@[ext] theorem` is indented and
+            # carries an attribute, so `DEFINITION_PATTERN`'s `^\s*` never
+            # matches it and it is never extracted as its own entry.
+            "theorem",
+            "lemma",
+            "def",
+            "structure",
+            "class",
+            "instance",
+            "abbrev",
+            "inductive",
+        }
+    )
+
+    #: Bracket pairs `:=` can hide inside. Lean 4 named arguments (`(f := f)`)
+    #: and autoparams (`(h : P := by simp)` ) sit at depth > 0.
+    _OPEN_BRACKETS = "([{⟨"
+    _CLOSE_BRACKETS = ")]}⟩"
 
     def _code(self) -> str:
         """`lean_code` with any leading comments removed.
@@ -73,6 +121,12 @@ class FoundationEntry:
 
         Fixing the slice boundary instead would change what `save()` writes
         into `Foundation.lean`, which the accumulated corpus cannot absorb.
+
+        Like `_strip_block_comments`, this does not handle *nested* block
+        comments. The two agree by construction: a nested comment leaves
+        residual non-whitespace that stops `DEFINITION_PATTERN` reaching back,
+        so `lean_code` starts at the declaration and this method is not
+        needed. Make one of them nest and the other must follow.
         """
         text = self.lean_code
         while True:
@@ -104,33 +158,130 @@ class FoundationEntry:
         for line in self._code().splitlines():
             if line.strip():
                 return line.strip()
-        return self.signature
+        return ""
+
+    def body_is_api(self) -> bool:
+        """Whether the indented body is the declaration's API surface.
+
+        Keyed on the `where` suffix as well as the keyword: an
+        `instance TypeCat : Category (Type u) where` has fields exactly like a
+        structure, and classifying it as signature-only rendered one bare
+        field name and silently dropped the other five.
+        """
+        return (
+            self.entry_type in self.BODY_IS_API
+            or self.declaration_header().endswith("where")
+        )
+
+    @classmethod
+    def _trim_unbalanced(cls, text: str) -> str:
+        """Drop a trailing unclosed bracket group.
+
+        Cutting a line at its proof can leave `... → map (` behind. An
+        unbalanced fragment presented as the API is worse than a shorter one.
+        """
+        while True:
+            depth = 0
+            last_open = -1
+            for i, char in enumerate(text):
+                if char in cls._OPEN_BRACKETS:
+                    if depth == 0:
+                        last_open = i
+                    depth += 1
+                elif char in cls._CLOSE_BRACKETS:
+                    depth = max(0, depth - 1)
+            if depth == 0 or last_open == -1:
+                return text.rstrip(" \t:=,→⟶")
+            text = text[:last_open]
+
+    @classmethod
+    def _scan_for_assign(cls, text: str, depth: int) -> tuple[int, int | None]:
+        """Track bracket depth across `text`, returning the top-level `:=`.
+
+        A blind `find(":=")` cuts inside Lean 4 named arguments -- it turned
+        `pullback.fst (f := f) (g := g) ≫ f = pullback.snd ≫ g` into
+        `pullback.fst (f`, an unbalanced fragment presented as the API.
+        """
+        for i, char in enumerate(text):
+            if char in cls._OPEN_BRACKETS:
+                depth += 1
+            elif char in cls._CLOSE_BRACKETS:
+                depth = max(0, depth - 1)
+            elif depth == 0 and text.startswith(":=", i):
+                return depth, i
+        return depth, None
 
     def _continuation_lines(self, *, stop_at_body: bool) -> list[str]:
-        """Indented lines belonging to the declaration, comments dropped."""
-        out: list[str] = []
-        for line in self._code().splitlines()[1:]:
+        """Indented lines belonging to the declaration, comments dropped.
+
+        Relative indentation is preserved: a wrapped field type flattened to
+        the same column reads as a separate field.
+        """
+        lines = self._code().splitlines()
+        if not lines:
+            return []
+
+        depth, header_assign = self._scan_for_assign(lines[0], 0)
+        if stop_at_body and header_assign is not None:
+            # `:= by` on the declaration line: the body starts there, so no
+            # continuation line carries a `:=` to stop at and the whole proof
+            # would otherwise render.
+            return []
+
+        kept: list[str] = []
+        in_comment = False
+        proof_indent: int | None = None
+        for line in lines[1:]:
             text = line.strip()
-            if (
-                not text
-                or text.startswith("--")
-                or text.startswith("/-")
-                or text == "-/"
-            ):
+            if in_comment:
+                if "-/" in text:
+                    in_comment = False
+                continue
+            if not text or text.startswith("--"):
+                continue
+            if text.startswith("/-"):
+                in_comment = "-/" not in text[2:]
                 continue
             if not line[0].isspace():
                 break
+            indent = len(line) - len(line.lstrip())
+            if proof_indent is not None:
+                # Inside a field's tactic proof. Anything indented deeper than
+                # the `:= by` line belongs to the proof, not to the API. A line
+                # that simply *wrapped* is not deeper than its own field.
+                if indent > proof_indent:
+                    continue
+                proof_indent = None
+            if (
+                text.startswith("@[")
+                or text.split(maxsplit=1)[0] in self.FOREIGN_TOKENS
+            ):
+                break
             if stop_at_body:
-                assign = text.find(":=")
-                if assign != -1:
-                    head = text[:assign].strip()
-                    if head:
-                        out.append(head)
-                    break
                 if text == "by" or text.startswith("by "):
                     break
-            out.append(text)
-        return out
+                depth, assign = self._scan_for_assign(text, depth)
+                if assign is not None:
+                    head = line[: len(line) - len(line.lstrip()) + assign].rstrip()
+                    if head.strip():
+                        kept.append(head)
+                    break
+            # A field whose value is a tactic proof: keep the field's own
+            # signature, drop the proof under it.
+            proof_start = _BY_TAIL.search(text)
+            if proof_start:
+                _, assign = self._scan_for_assign(text, 0)
+                cut = assign if assign is not None else proof_start.start()
+                head = self._trim_unbalanced(text[:cut])
+                kept.append(" " * indent + head if head else line.rstrip())
+                proof_indent = indent
+                continue
+            kept.append(line.rstrip())
+
+        if not kept:
+            return []
+        base = min(len(k) - len(k.lstrip()) for k in kept)
+        return [k[base:] for k in kept]
 
     def field_lines(self) -> list[str]:
         """Fields of a structure/class, or constructors of an inductive.
@@ -553,6 +704,7 @@ Create foundational definitions that future generations can build upon.
                 by_gen[entry.generation] = []
             by_gen[entry.generation].append(entry)
 
+        omitted = 0
         for gen in sorted(by_gen.keys()):
             gen_entries = by_gen[gen]
             lines.append(f"── Generation {gen} ──")
@@ -566,16 +718,26 @@ Create foundational definitions that future generations can build upon.
                 # the shape of.
                 header = entry.declaration_header()
                 if not header:
+                    omitted += 1
                     continue
                 lines.append(f"  {header}")
 
                 # The rest of the API surface, with types. Names alone hide
                 # arity and argument order, and the old `[:5]` dropped the
                 # sixth field onward behind a bare `...`.
-                if entry.entry_type in FoundationEntry.BODY_IS_API:
+                if entry.body_is_api():
                     lines.extend(f"    {field}" for field in entry.field_lines())
                 elif entry.entry_type in FoundationEntry.SIGNATURE_ONLY:
                     lines.extend(f"    {rest}" for rest in entry.statement_lines())
+            lines.append("")
+
+        # An elision the agent cannot see is the bug this card exists to
+        # remove, so say how many rather than quietly shortening the list.
+        if omitted:
+            plural = "entry" if omitted == 1 else "entries"
+            lines.append(
+                f"({omitted} {plural} omitted: no declaration found in the code)"
+            )
             lines.append("")
 
         lines.append(
