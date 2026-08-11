@@ -953,17 +953,24 @@ class Society:
         return result
 
     def _get_foundation_summary(self) -> str:
-        """Get a summary of what's in Foundation.lean."""
+        """Get a summary of what's in Foundation.lean, for committee prompts.
+
+        This used to be a second, weaker renderer: `- {tag}: {name}` for the
+        first ten entries. It never ran -- `FoundationFile.entries` is a list,
+        not a dict, and `FoundationEntry` has no `tag`, so both lines raised
+        `AttributeError` on any non-empty foundation. Committee mode is
+        unreachable today (26Q3-HARN-12), which is the only reason nobody saw
+        it.
+
+        Rather than repair the weaker renderer, defer to the one agents get.
+        A work committee was being told strictly less than the agent that
+        already failed on API shape; two renderers that must stay in sync is
+        how that happened.
+        """
         if not self.foundation or len(self.foundation) == 0:
             return "Foundation.lean is empty. You must define everything from scratch."
 
-        entries = list(self.foundation.entries.values())
-        summary_lines = ["Foundation.lean contains:"]
-        for entry in entries[:10]:  # Limit to first 10
-            summary_lines.append(f"- {entry.tag}: {entry.name}")
-        if len(entries) > 10:
-            summary_lines.append(f"  ... and {len(entries) - 10} more definitions")
-        return "\n".join(summary_lines)
+        return self.foundation.get_context_for_agent()
 
     def _get_task_content(self, task_tag: str) -> str:
         """Get the full content for a task from the goal."""

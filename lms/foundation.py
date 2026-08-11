@@ -55,6 +55,41 @@ class FoundationEntry:
             "author": self.author,
         }
 
+    def declaration_header(self) -> str:
+        """The declaration line as LEAN accepted it.
+
+        Read from `lean_code`, never from `signature`. `signature` is a lossy
+        reconstruction: `_extract_entries` strips the whitespace between the
+        name and its parameters, so `Category (obj : Type u)` comes back as
+        `Category(obj : Type u)`. `lean_code` is what was verified and what
+        `save()` writes, so it cannot drift from the file agents are told to
+        import.
+        """
+        for line in self.lean_code.splitlines():
+            if line.strip():
+                return line.strip()
+        return self.signature
+
+    def field_lines(self) -> list[str]:
+        """Typed fields of a structure, in source order, none elided.
+
+        A bare `Hom` does not tell an agent the arity or the argument order;
+        `Hom : obj → obj → Type v` does. That gap is what let a generation-2
+        agent treat `Category` as a bare type and fail to elaborate.
+        """
+        fields: list[str] = []
+        seen_header = False
+        for line in self.lean_code.splitlines():
+            if not line.strip():
+                continue
+            if not seen_header:
+                seen_header = True
+                continue
+            if not line[0].isspace():
+                break
+            fields.append(line.strip())
+        return fields
+
     @classmethod
     def from_dict(cls, d: dict) -> FoundationEntry:
         """Create from dictionary."""
@@ -461,28 +496,20 @@ Create foundational definitions that future generations can build upon.
             gen_entries = by_gen[gen]
             lines.append(f"── Generation {gen} ──")
             for entry in gen_entries:
-                # The real declaration header, not just the name. Listing
-                # `structure Category` with a field list led an agent to write
-                # `C.Ob`, because nothing showed that the objects are a
-                # *parameter* -- `structure Category (obj : Type u)` -- rather
-                # than a field. An agent cannot use what it cannot see the
-                # shape of.
-                header = f"  {entry.entry_type} {entry.name}{entry.signature}".rstrip()
-                lines.append(header)
+                # The declaration exactly as verified. The previous rendering
+                # concatenated `entry_type`, `name` and `signature`, but
+                # `signature` already begins with the first two -- so agents
+                # were handed `structure Categorystructure Category(obj :
+                # Type u) where`, which is not valid Lean and appears nowhere
+                # in Foundation.lean. An agent cannot use what it cannot see
+                # the shape of.
+                lines.append(f"  {entry.declaration_header()}")
 
-                # Show key fields for structures
+                # Every field, with its type. Names alone hide arity and
+                # argument order, and the old `[:5]` dropped the sixth field
+                # onward behind a bare `...`.
                 if entry.entry_type == "structure":
-                    # Extract field names from code
-                    field_match = re.findall(
-                        r"^\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:",
-                        entry.lean_code,
-                        re.MULTILINE,
-                    )
-                    if field_match:
-                        fields = ", ".join(field_match[:5])
-                        if len(field_match) > 5:
-                            fields += ", ..."
-                        lines.append(f"    fields: {fields}")
+                    lines.extend(f"    {field}" for field in entry.field_lines())
             lines.append("")
 
         lines.append(
