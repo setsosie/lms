@@ -167,11 +167,26 @@ class FoundationEntry:
         `instance TypeCat : Category (Type u) where` has fields exactly like a
         structure, and classifying it as signature-only rendered one bare
         field name and silently dropped the other five.
+
+        The suffix is looked for across the whole header *region*, not just
+        line 1. When the binders wrap, `where` lands on line 2 -- checking
+        only the first line reintroduced the same one-bare-field bug on 10.6%
+        of corpus entries. The region ends at the first top-level `:=`, which
+        is where a proof or value body begins.
         """
-        return (
-            self.entry_type in self.BODY_IS_API
-            or self.declaration_header().endswith("where")
-        )
+        if self.entry_type in self.BODY_IS_API:
+            return True
+        depth = 0
+        for line in self._code().splitlines():
+            text = line.strip()
+            if not text or text.startswith(("--", "/-")):
+                continue
+            depth, assign = self._scan_for_assign(text, depth)
+            if assign is not None:
+                return False
+            if depth == 0 and text.endswith("where"):
+                return True
+        return False
 
     @classmethod
     def _trim_unbalanced(cls, text: str) -> str:

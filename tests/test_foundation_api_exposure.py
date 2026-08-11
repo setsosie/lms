@@ -298,6 +298,23 @@ def test_where_body_keeps_its_fields_but_not_their_proofs(tmp_path: Path) -> Non
     assert "tactic_marker_do_not_render" not in context
 
 
+def test_where_on_a_wrapped_header_still_means_body_is_api(tmp_path: Path) -> None:
+    """`where` lands on line 2 when the binders wrap; line 1 alone misses it."""
+    src = (
+        "theorem iso_is_equivalence {C : Type u} [Category C] :\n"
+        "    Equivalence (fun X Y : C => Nonempty (X ≅ Y)) where\n"
+        "  refl := fun X => ⟨Iso.refl X⟩\n"
+        "  symm := fun {X Y} h => h.map Iso.symm\n"
+        "  trans := fun {X Y Z} h₁ h₂ => h₁.map2 h₂"
+    )
+    context = _foundation_with(
+        tmp_path / "Foundation.lean", src, name="isoequiv"
+    ).get_context_for_agent()
+
+    assert "symm := fun {X Y} h => h.map Iso.symm" in context
+    assert "trans := fun {X Y Z} h₁ h₂ => h₁.map2 h₂" in context
+
+
 def test_wrapped_field_type_is_not_mistaken_for_a_proof(tmp_path: Path) -> None:
     """The deeper-indent rule must not eat a type that simply wrapped."""
     src = (
