@@ -9,7 +9,7 @@ guessing and failing to elaborate.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🟡 IN REVIEW |
 | **Branch** | `26Q3-HARN-11-foundation-api-exposure` |
 | **Dependencies** | 26Q3-HARN-09, 26Q3-HARN-10 (both merged) |
 | **PR Size Target** | <500 lines (max 1000) |
@@ -85,10 +85,10 @@ empty branch. `entries[:10]` is a third silent truncation waiting behind them.
 
 `_get_foundation_summary()`'s output is passed as `foundation_summary` into
 `PlanningPanel` (`lms/society.py:779`) and `WorkingGroup`
-(`lms/working_group.py:231`, used at `:297`). So a work committee is told the
-*names* of verified definitions and nothing else — strictly less than what
-agent-1 had when it failed. **Both summaries are in scope for this card**;
-fixing only one leaves `26Q3-HARN-12`'s committee mode inheriting the bug that
+(`lms/working_group.py:231`, used at `:297`). So the moment `26Q3-HARN-12` makes
+committee mode reachable, planning and work committees crash on the first
+non-empty foundation. **Both summaries are in scope for this card**; fixing only
+one leaves HARN-12 inheriting both this crash and the API-shape blindness that
 caused the failure documented above.
 
 **Current State**:
@@ -117,17 +117,17 @@ print(f.get_context_for_agent())"
 > Each criterion must be verifiable with a single command returning exit code 0.
 > All of AC-1..AC-6 are covered by `uv run pytest tests/test_foundation_api_exposure.py`.
 
-- [ ] **AC-1** `get_context_for_agent()` renders each declaration header exactly
+- [x] **AC-1** `get_context_for_agent()` renders each declaration header exactly
       once — no `structure Categorystructure Category`.
-- [ ] **AC-2** The rendered header reproduces the source declaration line
+- [x] **AC-2** The rendered header reproduces the source declaration line
       verbatim, space intact: `structure Category (obj : Type u) where`.
-- [ ] **AC-3** Structure fields are rendered with their types
+- [x] **AC-3** Structure fields are rendered with their types
       (`Hom : obj → obj → Type v`), not as bare names.
-- [ ] **AC-4** No structure field is dropped silently; a 6-field structure shows
+- [x] **AC-4** No structure field is dropped silently; a 6-field structure shows
       all 6 (any elision is explicit and counted).
-- [ ] **AC-5** `Society._get_foundation_summary()` returns a string instead of
+- [x] **AC-5** `Society._get_foundation_summary()` returns a string instead of
       raising on a non-empty foundation.
-- [ ] **AC-6** That committee summary carries the declaration shape
+- [x] **AC-6** That committee summary carries the declaration shape
       (`(obj : Type u)`), not names alone.
 
 ---
@@ -136,8 +136,8 @@ print(f.get_context_for_agent())"
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `lms/foundation.py` | MODIFY | Fix the duplicated header (`:470`), the eaten space (`:313`), render typed fields uncapped (`:474-485`) |
-| `lms/society.py` | MODIFY | Make `_get_foundation_summary()` (`:955-966`) read `FoundationFile` correctly and emit declaration headers |
+| `lms/foundation.py` | MODIFY | Add `FoundationEntry.declaration_header()` / `.field_lines()` reading `lean_code`; render from them instead of `signature` (`:470`, `:474-485`) |
+| `lms/society.py` | MODIFY | `_get_foundation_summary()` (`:955-966`) defers to `get_context_for_agent()` instead of raising |
 | `tests/test_foundation_api_exposure.py` | CREATE | AC-1..AC-6 |
 | `docs/planning/tasks/26Q3-01/26Q3-HARN-11-foundation-api-exposure.md` | MODIFY | This card |
 | `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh` | MODIFY | Verification |
@@ -168,6 +168,15 @@ lines is bounded by the declaration's own width and is what an agent needs to
 *apply* an entry. Theorem entries have no fields, so they cost one line. If a
 cap is needed later, it belongs on entry count with an explicit count, not on
 characters mid-token.
+
+**Outcome (2026-08-10).** All four gates below held; none fired.
+`_extract_entries` and `DEFINITION_PATTERN` are untouched, so `entry.signature`
+and `foundation.json` round-trip unchanged and `Foundation.lean`'s on-disk format
+is identical. `signature` is now a persisted-metadata field with no renderer
+reading it — worth deleting once nothing else depends on it, but not here.
+`_get_foundation_summary()` was collapsed onto `get_context_for_agent()` rather
+than repaired: two renderers that must stay in sync is how the committee path
+drifted into raising `AttributeError` unnoticed in the first place.
 
 ---
 
@@ -233,9 +242,9 @@ verification rate.
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh` exits 0
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run mypy` clean
+- [x] All acceptance criteria checked off
+- [x] `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh` exits 0 (and exits 1 at merge base `a93c262`)
+- [x] `uv run ruff format`, `uv run ruff check` clean on touched files; `mypy` 12 → 11 errors (all remaining pre-existing)
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
-- [ ] Tests included with implementation
+- [x] Tests included with implementation
 - [ ] Outcome Demo run by a human validator (or the card explicitly says `N/A` and why)
