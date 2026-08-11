@@ -336,21 +336,65 @@ a script that passes without the change gates nothing.
 
 ---
 
-#### Outcome Demo
+#### Outcome Demo — RUN 2026-08-11, and it FALSIFIED THE CARD'S HYPOTHESIS
 
-**Where**: mahpiya (4×H100)
+The demo below was run on `shakedown_3x3_e` at commit `e3230a2` (this branch,
+all ten review fixes in). **It did not pass, and the reason is not the code.**
+
+> The original demo command was also broken: it grepped
+> `experiments/<run>/artifacts/*.lean`, but a run writes a single
+> `artifacts.json` with `lean_code` inline — there is no `artifacts/`
+> directory. It would have returned nothing on a *successful* run.
+
+**Result.** 7 artifacts, 1 verified (gen 0, `Category`). Zero verified at
+gen ≥1, so reuse could not be exercised in either direction. All **6 failures
+were gen1–gen2 with `open LMS.Foundation` present**, and **4 of 6** failed with
+the exact error this card was written to remove:
+
+    error: type expected, got (Category : Type v → Type (max v (u + 1)))
+
+**The renderer was doing its job.** Rendering the run's own foundation gives
+the binder and every field, intact:
+
+    structure Category (obj : Type u) where
+      Hom : obj → obj → Type v
+      id : (x : obj) → Hom x x
+      comp : {x y z : obj} → Hom x y → Hom y z → Hom x z
+      assoc : ∀ {x y z w : obj} {f : Hom x y} {g : Hom y z} {h : Hom z w},
+        comp (comp f g) h = comp f (comp g h)
+      id_l / id_r …
+
+`open LMS.Foundation` appears *only* in that context block, so all six agents
+provably read the text carrying `(obj : Type u)` — and four wrote `Category`
+unapplied anyway.
+
+**What they actually get wrong is arity/kind, from Mathlib priors.** Observed
+in the same run: `structure Functor (CatC : Category v₁ u₁) …` (applied to
+universes rather than an object type) and `[CatC : Category.{v₁, u}]` (square
+brackets — Mathlib's `Category` *is* a class used as `[Category C]`; this
+foundation's is a structure applied to an object type).
+
+**Conclusion.** Information availability was never the binding constraint. A
+declaration header states the shape but shows no **use site**. The next lever
+is a rendered usage line (`-- use as: (C : Category YourObj)`) or an explicit
+goal-prompt instruction — the latter is known to land, since all six agents
+obeyed HARN-10's `open` instruction. Carded separately; it is not this task.
+
+#### Outcome Demo (amended) — what this renderer can be held to
+
+**Where**: any checkout with the corpus.
 **Run**:
 ```bash
-uv run lms run --goal stacks-ch4-phase1 --agents 3 --generations 3 --iterative --output experiments/shakedown_3x3_e
+uv run python -c "import json;from pathlib import Path;from lms.foundation import FoundationFile;from lms.artifacts import Artifact,ArtifactType;from lms.lean.interface import VerificationStatus;a=json.load(open('experiments/shakedown_3x3_e/artifacts.json'))['artifacts'];v=[x for x in a if x.get('verified')];f=FoundationFile(Path('/tmp/x.lean'));[f.add_artifact(Artifact(id=x['id'],type=ArtifactType.DEFINITION,natural_language=x.get('natural_language',''),lean_code=x['lean_code'],status=VerificationStatus.VERIFIED_LEAN,created_by=x.get('created_by','a'),generation=x.get('generation',0))) for x in v];print(f.get_context_for_agent())"
 ```
-Then, over the run's artifacts:
-```bash
-grep -l "open LMS.Foundation" experiments/shakedown_3x3_e/artifacts/*.lean | xargs grep -c "\.Hom\|\.comp\|Category " 
-```
-**Expect**: a gen ≥1 artifact that references a prior definition **and**
-elaborates — i.e. it names the foundation's actual fields (`Hom`, `comp`, …)
-rather than treating the structure as a bare type. Success is not the
-verification rate.
+**Expect**: every entry renders its declaration line **with binders intact**,
+followed by its typed fields or its statement — no truncation, no dangling
+`:=`, no unbalanced brackets, no Lean commands as fields. Confirmed
+2026-08-11 on the `shakedown_3x3_e` foundation, and at corpus scale by the
+four defect classes measured to 0 over 4,474 entries above.
+
+This is a bar the renderer alone can meet or fail. Whether agents *act* on
+what they are shown is a different task's outcome.
 
 ---
 
@@ -359,6 +403,12 @@ verification rate.
 - [x] All acceptance criteria checked off
 - [x] `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh` exits 0 (and exits 1 at merge base `a93c262`)
 - [x] `uv run ruff format`, `uv run ruff check` clean on touched files; `mypy` 12 → 11 errors (all remaining pre-existing)
-- [ ] PR opened with <500 lines changed (target) / <1000 (max)
+- [x] PR opened — [#28](https://github.com/setsosie/lms/pull/28), 571 production
+      lines against the amended target of 600 (see the size-target note at the
+      top; total churn is 1590 including 612 test lines and this card)
 - [x] Tests included with implementation
-- [ ] Outcome Demo run by a human validator (or the card explicitly says `N/A` and why)
+- [x] Outcome Demo run by a human validator — run on the box 2026-08-11 at
+      `e3230a2`. The **original** demo did not pass and **falsified this card's
+      hypothesis**; the **amended** demo passes. Both are recorded in full
+      above rather than quietly swapped. The renderer is correct; agents not
+      acting on what they are shown is a separate, now-carded problem.
