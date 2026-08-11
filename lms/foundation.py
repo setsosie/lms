@@ -55,6 +55,42 @@ class FoundationEntry:
             "author": self.author,
         }
 
+    #: Declarations whose indented body *is* the API an agent needs.
+    BODY_IS_API = frozenset({"structure", "class", "inductive"})
+
+    #: Declarations whose body is a proof or a value -- signature only.
+    SIGNATURE_ONLY = frozenset({"theorem", "lemma", "def", "abbrev", "instance"})
+
+    def _code(self) -> str:
+        """`lean_code` with any leading comments removed.
+
+        `lean_code` does not begin at the declaration. `_strip_block_comments`
+        blanks `/-- ... -/` to spaces before matching, and
+        `DEFINITION_PATTERN`'s leading `^\\s*` then reaches back across the
+        blanked region -- but `_extract_entries` slices the *original* source
+        from that offset. So every doc-commented declaration carries its
+        comment as line 1, and roughly half the corpus is doc-commented.
+
+        Fixing the slice boundary instead would change what `save()` writes
+        into `Foundation.lean`, which the accumulated corpus cannot absorb.
+        """
+        text = self.lean_code
+        while True:
+            stripped = text.lstrip()
+            if stripped.startswith("/-"):
+                close = stripped.find("-/")
+                if close == -1:
+                    return ""
+                text = stripped[close + 2 :]
+                continue
+            if stripped.startswith("--"):
+                newline = stripped.find("\n")
+                if newline == -1:
+                    return ""
+                text = stripped[newline + 1 :]
+                continue
+            return stripped
+
     def declaration_header(self) -> str:
         """The declaration line as LEAN accepted it.
 
@@ -65,30 +101,55 @@ class FoundationEntry:
         `save()` writes, so it cannot drift from the file agents are told to
         import.
         """
-        for line in self.lean_code.splitlines():
+        for line in self._code().splitlines():
             if line.strip():
                 return line.strip()
         return self.signature
 
-    def field_lines(self) -> list[str]:
-        """Typed fields of a structure, in source order, none elided.
-
-        A bare `Hom` does not tell an agent the arity or the argument order;
-        `Hom : obj → obj → Type v` does. That gap is what let a generation-2
-        agent treat `Category` as a bare type and fail to elaborate.
-        """
-        fields: list[str] = []
-        seen_header = False
-        for line in self.lean_code.splitlines():
-            if not line.strip():
-                continue
-            if not seen_header:
-                seen_header = True
+    def _continuation_lines(self, *, stop_at_body: bool) -> list[str]:
+        """Indented lines belonging to the declaration, comments dropped."""
+        out: list[str] = []
+        for line in self._code().splitlines()[1:]:
+            text = line.strip()
+            if (
+                not text
+                or text.startswith("--")
+                or text.startswith("/-")
+                or text == "-/"
+            ):
                 continue
             if not line[0].isspace():
                 break
-            fields.append(line.strip())
-        return fields
+            if stop_at_body:
+                assign = text.find(":=")
+                if assign != -1:
+                    head = text[:assign].strip()
+                    if head:
+                        out.append(head)
+                    break
+                if text == "by" or text.startswith("by "):
+                    break
+            out.append(text)
+        return out
+
+    def field_lines(self) -> list[str]:
+        """Fields of a structure/class, or constructors of an inductive.
+
+        A bare `Hom` does not tell an agent the arity or the argument order;
+        `Hom : obj → obj → Type v` does. That gap is what let a generation-2
+        agent treat `Category` as a bare type and fail to elaborate. In source
+        order, none elided -- a silent cap here is the bug, not the fix.
+        """
+        return self._continuation_lines(stop_at_body=False)
+
+    def statement_lines(self) -> list[str]:
+        """The rest of a theorem or def signature, without its proof or value.
+
+        For a theorem the *statement* is the API, and it routinely wraps:
+        rendering line 1 alone leaves an agent half the binders and no
+        conclusion. The proof below it is noise that grows without bound.
+        """
+        return self._continuation_lines(stop_at_body=True)
 
     @classmethod
     def from_dict(cls, d: dict) -> FoundationEntry:
@@ -441,12 +502,12 @@ end LMS.Foundation
             lines.append(f"\n{entry_type.upper()}S:")
             for entry in type_entries:
                 lines.append(f"  - {entry.name} (gen {entry.generation})")
-                if entry.signature:
-                    # Show first part of signature
-                    sig = entry.signature[:80]
-                    if len(entry.signature) > 80:
-                        sig += "..."
-                    lines.append(f"    {sig}")
+                # The declaration, not a `signature[:80]` amputated mid-token.
+                # Same renderer as the agent-facing context, so the two cannot
+                # disagree about what the foundation contains.
+                header = entry.declaration_header()
+                if header:
+                    lines.append(f"    {header}")
 
         return "\n".join(lines)
 
@@ -503,13 +564,18 @@ Create foundational definitions that future generations can build upon.
                 # Type u) where`, which is not valid Lean and appears nowhere
                 # in Foundation.lean. An agent cannot use what it cannot see
                 # the shape of.
-                lines.append(f"  {entry.declaration_header()}")
+                header = entry.declaration_header()
+                if not header:
+                    continue
+                lines.append(f"  {header}")
 
-                # Every field, with its type. Names alone hide arity and
-                # argument order, and the old `[:5]` dropped the sixth field
-                # onward behind a bare `...`.
-                if entry.entry_type == "structure":
+                # The rest of the API surface, with types. Names alone hide
+                # arity and argument order, and the old `[:5]` dropped the
+                # sixth field onward behind a bare `...`.
+                if entry.entry_type in FoundationEntry.BODY_IS_API:
                     lines.extend(f"    {field}" for field in entry.field_lines())
+                elif entry.entry_type in FoundationEntry.SIGNATURE_ONLY:
+                    lines.extend(f"    {rest}" for rest in entry.statement_lines())
             lines.append("")
 
         lines.append(
