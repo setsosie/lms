@@ -86,6 +86,13 @@ class Society:
     18th century mathematicians.
     """
 
+    #: Entries rendered into a committee prompt's foundation summary. The
+    #: agent-facing context is unbounded on purpose -- an agent needs the whole
+    #: API it is being asked to build on -- but a committee prompt carries this
+    #: alongside the goal, the roster and the round history, so it needs a
+    #: ceiling. Matches the `entries[:10]` the previous renderer used.
+    COMMITTEE_SUMMARY_MAX_ENTRIES = 10
+
     def __init__(
         self,
         n_agents: int,
@@ -966,11 +973,21 @@ class Society:
         A work committee was being told strictly less than the agent that
         already failed on API shape; two renderers that must stay in sync is
         how that happened.
+
+        Bounded, unlike the agent-facing call. This string is interpolated
+        into the chair and planning-panel prompts alongside much else, and the
+        old `entries[:10]` cap went away with nothing replacing it. At the
+        measured ~118 chars/entry, a multi-thousand-statement foundation would
+        push the prompt past the served `max_model_len` -- and the truncation
+        would silently remove the section the prompt tells the committee to
+        rely on. The count of what was left out is rendered, not hidden.
         """
         if not self.foundation or len(self.foundation) == 0:
             return "Foundation.lean is empty. You must define everything from scratch."
 
-        return self.foundation.get_context_for_agent()
+        return self.foundation.get_context_for_agent(
+            max_entries=self.COMMITTEE_SUMMARY_MAX_ENTRIES
+        )
 
     def _get_task_content(self, task_tag: str) -> str:
         """Get the full content for a task from the goal."""

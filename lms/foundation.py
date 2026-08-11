@@ -90,6 +90,22 @@ class FoundationEntry:
             "macro",
             "notation",
             "syntax",
+            # The notation family. These carry a precedence suffix
+            # (`infixr:80`, `notation:max`) or a scope modifier
+            # (`scoped notation`, `local infixl`), so a whole-token match
+            # walked straight past them -- see `_is_foreign`.
+            "infix",
+            "infixl",
+            "infixr",
+            "prefix",
+            "postfix",
+            "scoped",
+            "local",
+            "set_option",
+            "universe",
+            "universes",
+            "elab",
+            "initialize",
             # Declaration keywords too: an `@[ext] theorem` is indented and
             # carries an attribute, so `DEFINITION_PATTERN`'s `^\s*` never
             # matches it and it is never extracted as its own entry.
@@ -104,10 +120,57 @@ class FoundationEntry:
         }
     )
 
+    #: Binders that consume a `:=` inside a *type*. ART/CNF-style Lean opens a
+    #: return type with `letI := toMathlib C; …`, and cutting the statement at
+    #: that `:=` left the return type as the bare token `letI`.
+    _BINDER_TOKENS = frozenset({"let", "letI", "have", "haveI", "suffices"})
+
     #: Bracket pairs `:=` can hide inside. Lean 4 named arguments (`(f := f)`)
     #: and autoparams (`(h : P := by simp)` ) sit at depth > 0.
     _OPEN_BRACKETS = "([{⟨"
     _CLOSE_BRACKETS = ")]}⟩"
+
+    #: Brackets, `:=`, and identifiers -- the only tokens `_scan_for_assign`
+    #: needs to distinguish. Scanning raw characters could not tell a binder
+    #: keyword from a fragment of one.
+    _TOKENS = re.compile(r"[([{⟨)\]}⟩]|:=|[A-Za-z_][A-Za-z_0-9'!?]*")
+
+    @classmethod
+    def _strip_line_comment(cls, text: str) -> str:
+        """Drop a trailing `--` comment, respecting string literals.
+
+        Only whole-line comments were dropped before, so a trailing comment
+        stayed in the text that `_scan_for_assign`, `body_is_api` and
+        `_BY_TAIL` all read. One `(` inside such a comment held bracket depth
+        above zero for the rest of the declaration, and the top-level `:=` was
+        then never found -- the entire proof body rendered as the API.
+        """
+        in_string = False
+        i = 0
+        while i < len(text):
+            char = text[i]
+            if char == '"' and (i == 0 or text[i - 1] != "\\"):
+                in_string = not in_string
+            elif not in_string and text.startswith("--", i):
+                return text[:i].rstrip()
+            i += 1
+        return text
+
+    @classmethod
+    def _is_foreign(cls, text: str) -> bool:
+        """Whether `text` begins a new declaration or command.
+
+        Matching the whole first token missed every precedence-suffixed and
+        `#`-prefixed command: `infixr:80`, `notation:max`, `#check`. Those
+        rendered as fields of the preceding structure, and an agent that reads
+        them as fields writes `{ Hom := …, infixr := … }`, which Lean rejects.
+        """
+        if text.startswith(("@[", "#")):
+            return True
+        first = text.split(maxsplit=1)[0]
+        return (
+            first in cls.FOREIGN_TOKENS or first.split(":", 1)[0] in cls.FOREIGN_TOKENS
+        )
 
     def _code(self) -> str:
         """`lean_code` with any leading comments removed.
@@ -154,10 +217,20 @@ class FoundationEntry:
         `Category(obj : Type u)`. `lean_code` is what was verified and what
         `save()` writes, so it cannot drift from the file agents are told to
         import.
+
+        The header stops at the first top-level `:=`. 18 corpus entries write
+        the proof on the declaration line, and returning that line raw handed
+        agents `lemma mem_span_singleton … :=` -- a declaration with no body,
+        which does not compile if copied.
         """
         for line in self._code().splitlines():
-            if line.strip():
-                return line.strip()
+            text = self._strip_line_comment(line.strip())
+            if not text:
+                continue
+            _, assign = self._scan_for_assign(text, 0)
+            if assign is not None:
+                return self._trim_unbalanced(text[:assign])
+            return text
         return ""
 
     def body_is_api(self) -> bool:
@@ -168,6 +241,14 @@ class FoundationEntry:
         structure, and classifying it as signature-only rendered one bare
         field name and silently dropped the other five.
 
+        The exception is keyed on `where`, not on the keyword: a
+        `theorem … where` or `def … where` builds a structure term, and its
+        fields are as much the API as a structure's. What the review caught was
+        not the routing but the *output* -- `_continuation_lines` fell back to
+        the raw source line whenever its trim came back empty, so a wrapped
+        field value like `{ app := by` reached agents with an unclosed brace.
+        That fallback is gone; an unrenderable line is dropped instead.
+
         The suffix is looked for across the whole header *region*, not just
         line 1. When the binders wrap, `where` lands on line 2 -- checking
         only the first line reintroduced the same one-bare-field bug on 10.6%
@@ -177,9 +258,20 @@ class FoundationEntry:
         if self.entry_type in self.BODY_IS_API:
             return True
         depth = 0
+        in_comment = False
         for line in self._code().splitlines():
             text = line.strip()
-            if not text or text.startswith(("--", "/-")):
+            if in_comment:
+                if "-/" in text:
+                    in_comment = False
+                continue
+            if text.startswith("/-"):
+                # Only the *first* line of a block comment was skipped before,
+                # so interior lines were scanned for brackets as if code.
+                in_comment = "-/" not in text[2:]
+                continue
+            text = self._strip_line_comment(text)
+            if not text:
                 continue
             depth, assign = self._scan_for_assign(text, depth)
             if assign is not None:
@@ -210,20 +302,51 @@ class FoundationEntry:
             text = text[:last_open]
 
     @classmethod
+    def _bracket_delta(cls, text: str) -> int:
+        """Net bracket depth change across `text`, trailing comment ignored."""
+        text = cls._strip_line_comment(text)
+        delta = 0
+        for char in text:
+            if char in cls._OPEN_BRACKETS:
+                delta += 1
+            elif char in cls._CLOSE_BRACKETS:
+                delta -= 1
+        return delta
+
+    @classmethod
     def _scan_for_assign(cls, text: str, depth: int) -> tuple[int, int | None]:
         """Track bracket depth across `text`, returning the top-level `:=`.
 
         A blind `find(":=")` cuts inside Lean 4 named arguments -- it turned
         `pullback.fst (f := f) (g := g) ≫ f = pullback.snd ≫ g` into
         `pullback.fst (f`, an unbalanced fragment presented as the API.
+
+        A `:=` claimed by a `letI`/`have` binder in the *type* is skipped for
+        the same reason: `… : letI := toMathlib C; CategoryTheory.Functor …`
+        is one return type, not a type and a body, and cutting at the binder
+        rendered six shipped `Compat.lean` entries as `… : letI`.
+
+        The trailing `--` comment is dropped first. `assign` indexes into
+        `text`, and stripping only truncates the tail, so callers slicing the
+        original line with the returned index stay correct.
         """
-        for i, char in enumerate(text):
-            if char in cls._OPEN_BRACKETS:
+        text = cls._strip_line_comment(text)
+        pending_binders = 0
+        for match in cls._TOKENS.finditer(text):
+            token = match.group()
+            if token in cls._OPEN_BRACKETS:
                 depth += 1
-            elif char in cls._CLOSE_BRACKETS:
+            elif token in cls._CLOSE_BRACKETS:
                 depth = max(0, depth - 1)
-            elif depth == 0 and text.startswith(":=", i):
-                return depth, i
+            elif token == ":=":
+                if depth != 0:
+                    continue
+                if pending_binders:
+                    pending_binders -= 1
+                    continue
+                return depth, match.start()
+            elif depth == 0 and token in cls._BINDER_TOKENS:
+                pending_binders += 1
         return depth, None
 
     def _continuation_lines(self, *, stop_at_body: bool) -> list[str]:
@@ -246,6 +369,7 @@ class FoundationEntry:
         kept: list[str] = []
         in_comment = False
         proof_indent: int | None = None
+        skip_depth = 0
         for line in lines[1:]:
             text = line.strip()
             if in_comment:
@@ -260,6 +384,14 @@ class FoundationEntry:
             if not line[0].isspace():
                 break
             indent = len(line) - len(line.lstrip())
+            if skip_depth > 0:
+                # Inside a bracket group whose opening line was cut. Its
+                # closers sit at the field's own indent, so `proof_indent`
+                # cannot see them; count brackets until the group closes.
+                skip_depth = max(0, skip_depth + self._bracket_delta(line.strip()))
+                if skip_depth == 0:
+                    proof_indent = None
+                continue
             if proof_indent is not None:
                 # Inside a field's tactic proof. Anything indented deeper than
                 # the `:= by` line belongs to the proof, not to the API. A line
@@ -267,13 +399,18 @@ class FoundationEntry:
                 if indent > proof_indent:
                     continue
                 proof_indent = None
-            if (
-                text.startswith("@[")
-                or text.split(maxsplit=1)[0] in self.FOREIGN_TOKENS
-            ):
+            text = self._strip_line_comment(text)
+            if not text:
+                continue
+            if self._is_foreign(text):
                 break
             if stop_at_body:
                 if text == "by" or text.startswith("by "):
+                    break
+                # `def f : Nat → Nat` / `| 0 => 1` -- an equation-style def has
+                # no top-level `:=` to stop at, so its whole value body used to
+                # render as the statement.
+                if text.startswith("|"):
                     break
                 depth, assign = self._scan_for_assign(text, depth)
                 if assign is not None:
@@ -288,7 +425,31 @@ class FoundationEntry:
                 _, assign = self._scan_for_assign(text, 0)
                 cut = assign if assign is not None else proof_start.start()
                 head = self._trim_unbalanced(text[:cut])
-                kept.append(" " * indent + head if head else line.rstrip())
+                # Falling back to the raw line here is what put `{ app := by`
+                # -- an unclosed brace and a bare `by` -- in front of agents.
+                # If nothing balanced survives the trim, there is no API line
+                # to show, and a fragment is worse than nothing.
+                if head:
+                    kept.append(" " * indent + head)
+                # The unclosed group can sit on either side of the cut:
+                # `map (by` leaves it in the head, `:= funext (λ g => by`
+                # leaves it in the dropped tail. The head is balanced after
+                # the trim, so the whole line's delta is what stays open.
+                skip_depth = max(0, self._bracket_delta(text))
+                proof_indent = indent
+                continue
+
+            # Never emit a line that leaves a bracket group open. `map_id :
+            # (x : C.Obj) → map (by` cut to `... → map`, and the group's
+            # closing `)` sat on a later line at this same indent -- an indent
+            # test cannot see it, so it rendered as a bare `)` "field". 22 of
+            # the 23 remaining unbalanced corpus blocks were this.
+            delta = self._bracket_delta(text)
+            if delta > 0:
+                head = self._trim_unbalanced(text)
+                if head:
+                    kept.append(" " * indent + head)
+                skip_depth = delta
                 proof_indent = indent
                 continue
             kept.append(line.rstrip())
@@ -669,18 +830,41 @@ end LMS.Foundation
             for entry in type_entries:
                 lines.append(f"  - {entry.name} (gen {entry.generation})")
                 # The declaration, not a `signature[:80]` amputated mid-token.
-                # Same renderer as the agent-facing context, so the two cannot
-                # disagree about what the foundation contains.
+                # Same renderer *and the same continuation lines* as the
+                # agent-facing context: the header alone is one physical line,
+                # so on the 10.6% of entries whose binders wrap this printed a
+                # dangling binder list -- no better than the cut it replaced.
                 header = entry.declaration_header()
                 if header:
                     lines.append(f"    {header}")
+                    lines.extend(f"      {rest}" for rest in self._api_lines(entry))
 
         return "\n".join(lines)
 
-    def get_context_for_agent(self) -> str:
+    @staticmethod
+    def _api_lines(entry: FoundationEntry) -> list[str]:
+        """The entry's API surface below its declaration line.
+
+        One helper for both renderers. Two copies of this decision is how they
+        came to disagree about what the foundation contains.
+        """
+        if entry.body_is_api():
+            return entry.field_lines()
+        if entry.entry_type in FoundationEntry.SIGNATURE_ONLY:
+            return entry.statement_lines()
+        return []
+
+    def get_context_for_agent(self, max_entries: int | None = None) -> str:
         """Get full context string for agent prompts.
 
         This tells agents what's available for import and how to use it.
+
+        Args:
+            max_entries: Render at most this many entries, then say how many
+                were left out. Agents get the whole foundation (`None`); the
+                committee prompts that embed this string alongside much else
+                pass a bound. Unbounded, this section alone outgrows the
+                served `max_model_len` on the corpora this program targets.
 
         Returns:
             Context string to include in agent prompts
@@ -720,10 +904,15 @@ Create foundational definitions that future generations can build upon.
             by_gen[entry.generation].append(entry)
 
         omitted = 0
+        rendered = 0
+        truncated = 0
         for gen in sorted(by_gen.keys()):
             gen_entries = by_gen[gen]
             lines.append(f"── Generation {gen} ──")
             for entry in gen_entries:
+                if max_entries is not None and rendered >= max_entries:
+                    truncated += 1
+                    continue
                 # The declaration exactly as verified. The previous rendering
                 # concatenated `entry_type`, `name` and `signature`, but
                 # `signature` already begins with the first two -- so agents
@@ -735,15 +924,29 @@ Create foundational definitions that future generations can build upon.
                 if not header:
                     omitted += 1
                     continue
+                rendered += 1
+
+                # A fallback `code` entry has no parsed declaration, so its
+                # header is just whatever line the artifact happens to open
+                # with. Without its name the agent cannot cite the artifact at
+                # all -- and if it recreates that name, `add_artifact` drops
+                # the new verified work as a duplicate.
+                if entry.entry_type == "code":
+                    lines.append(f"  {entry.name} (no declaration parsed)")
+                    lines.append(f"    begins: {header}")
+                    continue
+
                 lines.append(f"  {header}")
 
                 # The rest of the API surface, with types. Names alone hide
                 # arity and argument order, and the old `[:5]` dropped the
                 # sixth field onward behind a bare `...`.
-                if entry.body_is_api():
-                    lines.extend(f"    {field}" for field in entry.field_lines())
-                elif entry.entry_type in FoundationEntry.SIGNATURE_ONLY:
-                    lines.extend(f"    {rest}" for rest in entry.statement_lines())
+                lines.extend(f"    {rest}" for rest in self._api_lines(entry))
+            lines.append("")
+
+        if truncated:
+            plural = "definition" if truncated == 1 else "definitions"
+            lines.append(f"(... and {truncated} more {plural} not shown here)")
             lines.append("")
 
         # An elision the agent cannot see is the bug this card exists to

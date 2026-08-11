@@ -153,6 +153,35 @@ Added after the second `/pre-merge` round:
 - [x] **AC-14** Foreign declarations (`@[ext] theorem`, `section`, `variable`,
       `example`) do not render as fields of the preceding entry.
 
+Added after the high-effort `/pre-merge` review (2026-08-11), which returned 10
+findings — 6 confirmed correctness bugs — against the round-2 code:
+
+- [x] **AC-15** The notation family does not render as fields: `infixr:80`,
+      `notation:max`, `postfix:max`, `scoped`/`local notation`, and
+      `#`-commands are all recognised as foreign.
+- [x] **AC-16** No rendered field or statement leaves a bracket group open. A
+      cut landing inside a group skips to the group's close rather than
+      emitting its closer as a bare `)` field.
+- [x] **AC-17** The `instance … where` exception of AC-12 still holds, and so
+      does `theorem … where` / `def … where` — these build structure terms and
+      their fields are API.
+- [x] **AC-18** `letI := …;` opening a *return type* is a binder, not the
+      body: the return type renders whole instead of truncating to `letI`.
+- [x] **AC-19** A trailing `--` comment cannot change what renders. Bracket
+      depth, `where` detection, `by` detection and the header all ignore it.
+- [x] **AC-20** A block comment's interior lines are not scanned as code.
+- [x] **AC-21** `declaration_header()` never ends in a dangling `:=` and never
+      carries an inline proof term.
+- [x] **AC-22** An equation-style `def` (`| 0 => 1`) does not render its value
+      body as the statement.
+- [x] **AC-23** A fallback `code` entry renders its own name, so the agent can
+      cite the artifact.
+- [x] **AC-24** `get_available_definitions()` renders the same API surface as
+      `get_context_for_agent()` — the comment claiming they cannot disagree is
+      now true.
+- [x] **AC-25** The committee-facing summary is bounded and says how many
+      entries it left out.
+
 ---
 
 #### Files to Create/Modify
@@ -213,15 +242,30 @@ is that `lean_code` still starts at a comment for every other consumer.
 
 **Corpus health, 4474 entries** (measured each round, not asserted):
 
-| Defect | Before | Round 1 | Round 2 |
-|---|---|---|---|
-| Comment rendered as header | 85% | 0 | 0 |
-| Foreign declarations as fields | 4.2% | 4.2% | 0 |
-| Unbalanced-bracket renders | 31 | 31 | 2 |
-| Leaked tactic lines | — | 522 | 1 |
+| Defect | Before | Round 1 | Round 2 | Round 2 *actual* | Round 3 |
+|---|---|---|---|---|---|
+| Comment rendered as header | 85% | 0 | 0 | 0 | 0 |
+| Foreign declarations as fields | 4.2% | 4.2% | ~~0~~ | 131 (2.8%) | 0 |
+| Unbalanced-bracket renders | 31 | 31 | ~~2~~ | 24 | 0 |
+| Leaked tactic lines | — | 522 | 1 | 1 | 0 |
+| Header ending in a bare `:=` | — | — | — | 18 | 0 |
+| Return type truncated to `letI` | — | — | — | 6 | 0 |
 
-The 2 residual unbalanced renders (0.04%) come from a `by` opening inside a
-type-level application; left as known residue rather than chased further.
+> **The round-2 column was wrong, and that matters more than the bug it hid.**
+> `Foreign declarations as fields: 0` was measured against a token set that
+> excluded every notation-family command, so it reported 0 for a check that
+> could not fail. `2 residual unbalanced renders` was an order of magnitude
+> low. Both were caught by the 2026-08-11 review measuring the same corpus
+> independently, not by this card. On a sprint whose goal is *"make the harness
+> incapable of lying about verification"*, a task card overstating its own
+> gate is the same defect one level up. The round-3 column was produced by a
+> script replaying every `experiments/**/artifacts.json` through
+> `_extract_entries` and rendering with the production renderer.
+>
+> Entry counts differ slightly by extraction path — the review counted 4,612
+> replaying `add_artifact`'s cleaning, this card counts 4,474 calling
+> `_extract_entries` directly. The defect counts are of whole entries and are
+> not sensitive to that difference.
 
 **Growth story, measured.** A real 140-entry foundation
 (`experiments/stacks_ch4_phase1`) renders 15,927 chars ≈ 4K tokens of
