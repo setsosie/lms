@@ -1,0 +1,6 @@
+# Slurm writes job stdout/stderr here (see scripts/slurm/lms_run.sbatch).
+#
+# This directory is tracked but its contents are not. Slurm creates the output
+# file *before* the job script runs, so a `mkdir -p` inside the script is too
+# late -- the directory has to exist in the checkout or sbatch fails to write
+# and the job dies with no log to explain why.

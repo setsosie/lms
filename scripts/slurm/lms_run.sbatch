@@ -19,8 +19,8 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:h100:2
 #SBATCH --time=04:00:00
-#SBATCH --output=%x-%j.out
-#SBATCH --error=%x-%j.err
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.err
 
 set -uo pipefail
 
@@ -73,13 +73,21 @@ echo "commit=$(git rev-parse --short HEAD) branch=$(git rev-parse --abbrev-ref H
 echo "logs=$LOG_DIR"
 
 # --- Guard the tracked Lean corpus ------------------------------------------
-# A run rewrites lean/LMS/Foundation.lean, which is a tracked build input
-# (issue #19). Back it up so a crashed job cannot leave the corpus mutated.
-FOUNDATION="lean/LMS/Foundation.lean"
-if [ -f "$FOUNDATION" ]; then
-  cp "$FOUNDATION" "$LOG_DIR/Foundation.lean.bak"
-  echo "backed up $FOUNDATION"
-fi
+# A run rewrites the foundation, which is a tracked build input (issue #19).
+# Back it up so a crashed job cannot leave the corpus mutated.
+#
+# BOTH files, not just the .lean. `FoundationFile.save()` writes the Lean
+# source and its `Foundation.json` metadata sidecar, and both are tracked.
+# Backing up only the .lean left every run ending with a dirty tree --
+# observed on shakedown_3x3_e, where the restore reported success and
+# `git status` still showed ` M lean/LMS/Foundation.json`.
+FOUNDATION_FILES="lean/LMS/Foundation.lean lean/LMS/Foundation.json"
+for f in $FOUNDATION_FILES; do
+  if [ -f "$f" ]; then
+    cp "$f" "$LOG_DIR/$(basename "$f").bak"
+    echo "backed up $f"
+  fi
+done
 
 # --- Preflight --------------------------------------------------------------
 command -v lake >/dev/null 2>&1 || { echo "FATAL: lake not on PATH; check ELAN_HOME=$ELAN_HOME"; exit 1; }
@@ -197,13 +205,24 @@ print('elapsed_s:', $ELAPSED, '| per artifact:', round($ELAPSED / max(len(d), 1)
 fi
 
 # Restore the corpus and say plainly whether the run moved it.
-if [ -f "$LOG_DIR/Foundation.lean.bak" ]; then
-  if ! diff -q "$LOG_DIR/Foundation.lean.bak" "$FOUNDATION" >/dev/null 2>&1; then
-    echo "NOTE: the run modified $FOUNDATION; restoring from backup"
-    cp "$LOG_DIR/Foundation.lean.bak" "$FOUNDATION"
+for f in $FOUNDATION_FILES; do
+  bak="$LOG_DIR/$(basename "$f").bak"
+  [ -f "$bak" ] || continue
+  if ! diff -q "$bak" "$f" >/dev/null 2>&1; then
+    echo "NOTE: the run modified $f; restoring from backup"
+    cp "$bak" "$f"
   fi
+done
+
+# The restore above is not trusted -- it is verified. A "restored" message on
+# a tree that is still dirty is exactly the class of harness dishonesty this
+# sprint exists to remove, and it shipped once already.
+if [ -n "$(git status --porcelain lean/ 2>/dev/null)" ]; then
+  echo "WARN: lean/ still dirty after restore:"
+  git status --short lean/
+else
+  echo "lean/ clean after restore"
 fi
-git status --short lean/ || true
 
 echo "=== done: $LOG_DIR ==="
 exit "$RUN_RC"
