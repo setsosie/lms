@@ -45,7 +45,8 @@ Disposition of Sprint 1 scope:
 |--------|-------|
 | Planned points | 24 (+3 stretch) |
 | Carryover | 3 (`26Q3-INFRA-01`) |
-| Delivered to date | 12 (`26Q3-CHORE-01`, `26Q3-HARN-07`, `26Q3-INFRA-01`, `26Q3-HARN-01`, `26Q3-HARN-02`, `26Q3-CHORE-02`) |
+| Scope added after planning | 14 pts — `26Q3-HARN-08` / `-09` / `-10` / `-11` / `-12` / `-13`, every one of them found on the box during Phase B. The table now holds 41 pts against a 24-pt plan |
+| Delivered to date | 16 (`26Q3-CHORE-01`, `26Q3-HARN-07`, `26Q3-INFRA-01`, `26Q3-HARN-01`, `26Q3-HARN-02`, `26Q3-CHORE-02`, `26Q3-HARN-09`, `26Q3-HARN-10`) |
 | Track | Harness honesty (Phase A of the calibration program) |
 | Execution | Local, Claude-executed; cluster not required |
 | Status | 🔄 ACTIVE |
@@ -69,8 +70,11 @@ harness has never enforced. Gate numbering matches
 | 26Q3-INFRA-02: Per-request token cap is configurable | 2 | HIGH | INFRA | 🔲 PENDING | — | Issue #17. `max_tokens` is a hardcoded Claude-shaped 64k with no env lever; 400s against any server whose `max_model_len` is not oversized. Worked around in the runbook, not fixed |
 | 26Q3-HARN-07: Verifier must invoke Lean with the project env | 2 | CRITICAL | HARN | ✅ DONE | #12 | Found on the box 2026-07-28. `real.py` runs bare `lean` with no `LEAN_PATH`, so it can only check **import-free** Lean. Every real agent proof imports Mathlib → CVFN numerator is structurally 0 until fixed. Use `lake env lean` |
 | 26Q3-CHORE-02: Rename "Tasmania effect" → ratchet failure | 1 | MEDIUM | CHORE | ✅ DONE | #23 | Label described loss of existing tech; metric measures failure to accumulate. Also had no library-size guard, so it fired on every run ever recorded including the 2026-08-10 Gate B success |
-| 26Q3-HARN-09: Verified work must reach the next generation | 3 | CRITICAL | HARN | ✅ DONE | `26Q3-HARN-09-foundation-reaches-next-generation` | **New card, found on the box 2026-08-10** in the first 3×3 run. `foundation.save()` only ran at a 10-generation checkpoint, so on any shorter run every `import LMS.Foundation` resolved to a module predating the run; nothing recompiled it either, and `autoImplicit` turned the missing name into a metavariable. **The cumulative-knowledge mechanism had never once worked** |
-| 26Q3-HARN-10: Foundation names need opening, not just importing | 1 | CRITICAL | HARN | ✅ DONE | `26Q3-HARN-10-foundation-names-need-opening` | **Found in `shakedown_3x3_c`**, the first run where the foundation reached the next generation. All 5 gen-1/2 artifacts imported it and died on `Unknown identifier 'Category'` — entries live in `namespace LMS.Foundation`, agents wrote bare names. The module resolved; the name never did. Also fixes two lies in the v2.5 goal prompt |
+| 26Q3-HARN-09: Verified work must reach the next generation | 3 | CRITICAL | HARN | ✅ DONE | #26 | **New card, found on the box 2026-08-10** in the first 3×3 run. `foundation.save()` only ran at a 10-generation checkpoint, so on any shorter run every `import LMS.Foundation` resolved to a module predating the run; nothing recompiled it either, and `autoImplicit` turned the missing name into a metavariable. **The cumulative-knowledge mechanism had never once worked** |
+| 26Q3-HARN-10: Foundation names need opening, not just importing | 1 | CRITICAL | HARN | ✅ DONE | #27 | **Found in `shakedown_3x3_c`**, the first run where the foundation reached the next generation. All 5 gen-1/2 artifacts imported it and died on `Unknown identifier 'Category'` — entries live in `namespace LMS.Foundation`, agents wrote bare names. The module resolved; the name never did. Also fixes two lies in the v2.5 goal prompt |
+| 26Q3-HARN-11: Expose the full API of foundation entries | 3 | HIGH | HARN | 🔄 IN PROGRESS | #28 (open) | **New card, found in `shakedown_3x3_d` 2026-08-10.** Agents saw entries as a name plus an 80-char-truncated signature, so the one cross-generational reuse attempt in project history imported cleanly and then died on API shape. Renders the declaration as LEAN accepted it, from `lean_code` not `signature` |
+| 26Q3-HARN-12: Make the committee architecture reachable + review stage | 3 | HIGH | HARN | 🔲 PENDING | — | **New card, written 2026-08-10; the card file is not yet committed.** `PlanningPanel` / `WorkingGroup` / `DependencyGraph` exist and pass tests but no CLI path reaches them. Iterative mode hardcodes `reviews_total=0`, so the collective and the feedback loop are mutually exclusive. Wire, don't rebuild |
+| 26Q3-HARN-13: Verify an artifact in the namespace it will be stored in | 2 | HIGH | HARN | 🔄 IN PROGRESS | #30 (open — card + verify stub only, no implementation) | **New card, found in `shakedown_3x3_e` 2026-08-11.** `real.py:194` verifies at top level; `foundation.py:138` stores inside `namespace LMS.Foundation`. A false negative in the oracle, so it suppresses the CVFN numerator directly |
 | 26Q3-HARN-06: D4 side-by-side review view | 3 | STRETCH | HARN | 🔲 PENDING | — | Book quote ‖ Lean statement. If D4 is slow because the format is bad, Phase D measures the wrong thing |
 
 ## Gate A — sprint exit criterion
@@ -108,6 +112,25 @@ Phase B of the calibration program. Contents:
   API fallback ($300 cap) so the Sep 30 verdict date holds
 
 ## Sync Log
+
+- **2026-08-12** — 5 tasks reconciled: `26Q3-HARN-09` → PR #26 and
+  `26Q3-HARN-10` → PR #27 (both already ✅ on the board, but the PR column still
+  carried branch names); `26Q3-HARN-11` (#28) and `26Q3-HARN-13` (#30) added as
+  🔄 IN PROGRESS rows; `26Q3-HARN-12` added as 🔲 PENDING. Delivered 12 → 16 pts.
+  **The sprint is 5 days past its Aug 7 end date and still 🔄 ACTIVE**, while the
+  pre-locked Sprint 3 window (Aug 10 – Aug 21) is already open. `/close-sprint`
+  is the next move, not another sync — 6 rows (22 pts) have no signal at all,
+  including all three CRITICAL gate tasks `26Q3-HARN-03/-04/-05`.
+  Scope discipline is the story of this sprint: 14 pts of cards were added after
+  planning, all of them real defects found by running the thing on the box, and
+  none of the originally-planned gate work has started.
+  Also in flight, **not** a sprint row: #29 `26Q3-CHORE-03` (Slurm job logs to
+  `logs/`; the corpus guard restored `Foundation.lean` but not its tracked
+  `Foundation.json` sidecar, so every run ended dirty while reporting a clean
+  restore). It carries a task ID but has no card and no points — card it or drop
+  the ID.
+  `26Q3-HARN-12`'s card and verify script exist only in the working tree; they
+  land with its implementation PR, as HARN-11's and HARN-13's did.
 
 - **2026-08-10** — 6 tasks reconciled: `26Q3-HARN-01` → DONE (#14),
   `26Q3-HARN-02` → DONE (#22), `26Q3-CHORE-02` → DONE (#23); task-def status
