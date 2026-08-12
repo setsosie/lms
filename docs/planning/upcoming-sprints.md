@@ -36,6 +36,20 @@ next-sprint pre-lock. Generated 2026-06-18.
 
 ---
 
+## Sprint overview
+
+| # | Sprint | Dates | Phase | Planned | Delivered | Status |
+|---|--------|-------|-------|--------:|----------:|--------|
+| 1 | ANT shakedown + local serving | 2026-06-16 → 2026-06-27 | 0 | 24 | 0 | ✅ Complete (0%) |
+| 2 | Make the harness incapable of lying | 2026-07-27 → 2026-08-07 | A | 41 | 19 | ✅ Complete (46%) |
+| 3 | Green Gate B — all five machine gates | 2026-08-10 → 2026-08-21 | B | 15 (+8 stretch) | — | 🔄 Active |
+| 4 | The calibration run — 1 / 3 / 9 agents | 2026-08-24 → 2026-09-11 | C | TBD | — | 🔲 Pre-locked |
+| 5 | Human D4 review | 2026-09-14 → 2026-09-18 | D | TBD | — | 🔲 Planned |
+| 6 | Verdict | 2026-09-21 → 2026-09-30 | E | TBD | — | 🔲 Planned |
+
+Closed sprints: [`archive/README.md`](archive/README.md). Velocity across the
+two closed sprints is **9.5 pts/sprint** — two data points, not a forecast.
+
 ## The honest headline
 
 Total **effort** is fairly well-known; **wall-clock is not yet calibrated** —
@@ -60,7 +74,7 @@ quantities are stated precisely; time quantities are scenario ranges.
 
 | Phase | Scope | WC cycles | Gate to advance |
 |---|---|---|---|
-| **0 — Shakedown** *(current)* | INFRA-01 local serving → ANT Ch. I core arc on local LLM | 2–3 | Pipeline metrics healthy (not math coverage) → **calibrates everything below** |
+| **0 — Shakedown** *(current — now the Q3 calibration program, Phase B)* | INFRA-01 local serving → ANT Ch. I core arc on local LLM | 2–3 | Pipeline metrics healthy (not math coverage) → **calibrates everything below** |
 | **1 — Shared kernel** | Spectral sequences + fibred cats + core algebra (3-way parallel) | ~7–10 (~350–500 stmts) | Spectral sequences compile = acid test; unblocks all 3 texts |
 | **2 — ART + CNF** | 1,383 + 800 stmts (post-Mathlib); p-adic bridge shared | ~30–45 | CNF needs OCR of `cnf_2nd.pdf` first |
 | **3 — Stacks** | ~85% of the corpus, the long tail | ~180–220 | bulk parallel formalization; watch for the reuse phase transition |
@@ -115,7 +129,33 @@ INFRA-01 ─→ ANT shakedown ─→ Shared kernel (spectral seq) ─→ ART+CNF
 - **Not the constraint:** money. **The constraints are wall-clock throughput, the
   reuse phase-transition, and local-model capability** (escape hatch absorbs the last).
 
-## Pre-locked next sprint (Sprint 2 — draft) — ✅ RESOLVED 2026-07-24
+## Pre-locked next sprint (Sprint 4 — Phase C, 2026-08-24 → 2026-09-11)
+
+**The calibration run itself.** One fixed slice, three population sizes,
+identical budget. Detail in `calibration-program.md` §3, Phase C; the committed
+form lands in `current-sprint.md` at the Sprint 3 close.
+
+- **Slice**: ~20-statement contiguous arc from Neukirch ANT Ch. I, selected by
+  measured N1 density (`26Q3-CAL-01`, Sprint 3 stretch). See §4 — the
+  currently-decided Ch. I core arc is probably the wrong choice, because
+  Minkowski, class-number finiteness and Dirichlet units are all in Mathlib.
+- **Configs**: 1 agent, 3 agents, 9 agents. Same slice, same per-config token
+  budget, same model — yields CVFN *and* the population-size comparison from one
+  spend. This is the first direct test of the project's core hypothesis.
+- **Budget**: 2M tokens per config, 6M total, hard-capped. A config that
+  exhausts its budget at zero verified statements is a result — record and stop.
+- **Gate C**: ≥1 statement clears all five machine gates in at least one config.
+  If zero across all three, the finding is "the pipeline cannot produce novel
+  verified Lean at current capability" — skip to Phase E and publish that. A
+  legitimate go/no-go outcome, not a failure of the plan.
+- Carries `26Q3-HARN-06` (D4 side-by-side review view) — Phase D opens
+  2026-09-14 and a bad review format would make Phase D measure the wrong thing.
+
+**Entry condition**: Gate B green *and* Gate A run. If Gate B is not green by
+**2026-08-21**, the pre-committed API fallback fires ($300 cap) so the
+2026-09-30 verdict date holds.
+
+### Superseded pre-lock (Sprint 2 — draft) — ✅ RESOLVED 2026-07-24
 
 This section offered three branches. **The third one fired.**
 
@@ -124,8 +164,9 @@ This section offered three branches. **The third one fired.**
 
 The audit found the pipeline problem before the shakedown ran: verification
 itself was not trustworthy, so "metrics are healthy" could not have been assessed.
-Sprint 2 is therefore the fix-the-pipeline sprint — see `current-sprint.md`.
-Credit where due: this file's own gating logic called it correctly.
+Sprint 2 was therefore the fix-the-pipeline sprint — see
+[`archive/sprint-02-26Q3-01.md`](archive/sprint-02-26Q3-01.md). Credit where due:
+this file's own gating logic called it correctly.
 
 Deferred branches, unchanged and still queued behind a green calibration:
 
