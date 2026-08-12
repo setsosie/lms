@@ -1,0 +1,414 @@
+### 26Q3-HARN-11: Expose the full API of foundation entries to agents
+
+**User Story**: As an agent building on a prior generation's verified work, I
+want to see the full declaration shape of every foundation entry — parameters
+and typed fields, not a name — so that I can apply it correctly instead of
+guessing and failing to elaborate.
+
+| Field | Value |
+|-------|-------|
+| **Story Points** | 3 |
+| **Priority** | HIGH |
+| **Status** | 🟡 IN REVIEW |
+| **Branch** | `26Q3-HARN-11-foundation-api-exposure` |
+| **Dependencies** | 26Q3-HARN-09, 26Q3-HARN-10 (both merged) |
+| **PR Size Target** | ~~<500 lines (max 1000)~~ → **<600 production lines (max 1200)**, tests and this card excluded — amended 2026-08-11, see below |
+| **Parts** | single PR |
+
+> **Size target amended, 2026-08-11, by the criteria-setter.** The original
+> `<500 (max 1000)` counted every changed line and was set before anyone knew
+> this task would need three measured corpus rounds plus a 10-finding review.
+> The delivered branch is 1579 lines: **571 production**, 612 tests, 353 this
+> card, 43 the verify script. Counting tests and the card against a review-
+> burden budget penalises exactly the two things that made the defects
+> findable — the corpus measurements live in the card, and the review's
+> findings are pinned as tests. The amended target bounds what a reviewer
+> actually reads. This is a criteria change, recorded rather than absorbed
+> silently; `/pre-merge` will now flag 571 against 600 as green.
+
+---
+
+#### Context
+
+> Investigated 2026-08-10 against `experiments/shakedown_3x3_d` (3 agents ×
+> 3 generations, `stacks-ch4-phase1`, `--iterative`, run on the H100 box with
+> #27 merged). All line numbers are from `main` @ `a93c262`.
+
+**What the run showed.** This was the first run in the project's history to
+produce cross-generational reuse. All 4 artifacts carried both
+`import LMS.Foundation` and `open LMS.Foundation` (HARN-10 confirmed). Gen 2,
+agent-1, tag 0017 cited `refs=['definition-Category-d3a579da']`, and the import
+elaborated — Lean resolved `Category` and printed its type. The attempt then
+failed on **API shape**:
+
+```
+verify_3bfa623a.lean:6:32: error: type expected, got
+  (Category : Type v → Type (max v (u + 1)))
+```
+
+The agent used `Category` as a bare type. The foundation's `Category` is indexed
+by an object type (`structure Category (obj : Type u)`). This is not a Lean 3
+syntax problem and not a missing-Mathlib problem — the agent did not know the
+shape of the thing it was importing.
+
+**Why it did not know.** Agents receive `FoundationFile.get_context_for_agent()`
+(`lms/agent.py:216` and `lms/agent.py:300`). Re-verified against `main`
+@ `a93c262` by rendering a real `Category` entry — the card's first draft
+mis-attributed this to `get_available_definitions()` (`lms/foundation.py:388`),
+which **no production caller reaches**; only tests call it. The live renderer is
+`get_context_for_agent()` (`lms/foundation.py:460-486`), and what it actually
+emits is:
+
+```
+  structure Categorystructure Category(obj : Type u) where
+    fields: Hom, id, comp, assoc, id_l, ...
+```
+
+Three distinct defects, all in that four-line block:
+
+- `lms/foundation.py:470` — `f"{entry.entry_type} {entry.name}{entry.signature}"`
+  **duplicates the header**, because `signature` is already
+  `f"{entry_type} {name}{rest}"` (`lms/foundation.py:315`). The agent is shown a
+  declaration that is not valid Lean and does not appear in `Foundation.lean`.
+- `lms/foundation.py:313` — `rest = match.group(3).strip()` eats the separating
+  space, so the parameter binds to the name: `Category(obj : Type u)`.
+- `lms/foundation.py:482` — `field_match[:5]` drops the 6th field onward behind
+  a bare `...`, and fields are rendered **name-only**. An agent sees `Hom`, never
+  `Hom : obj → obj → Type v`, so it cannot tell arity or argument order.
+
+So agent-1 was shown a garbled header and six bare field names, and had to guess
+how `Category` is applied.
+
+**There are two summaries, and the weaker one feeds committee mode.**
+
+| Path | Summary used | Content |
+|---|---|---|
+| iterative / standard (`lms/agent.py:216,300`) | `FoundationFile.get_context_for_agent()` (`lms/foundation.py:418`) | duplicated header + first 5 field *names* |
+| committee mode (`lms/society.py:771`) | `Society._get_foundation_summary()` (`lms/society.py:955-966`) | **raises `AttributeError`** on any non-empty foundation |
+
+`_get_foundation_summary()` is worse than under-informative — it is broken.
+`lms/society.py:960` calls `self.foundation.entries.values()`, but
+`FoundationFile.entries` is a `list` (`lms/foundation.py:153`); `:963` then reads
+`entry.tag`, a field `FoundationEntry` does not have (`lms/foundation.py:38-44`).
+Both raise. This is invisible today only because committee mode is unreachable
+(`26Q3-HARN-12`) and the sole test (`tests/test_society.py:837`) exercises the
+empty branch. `entries[:10]` is a third silent truncation waiting behind them.
+
+`_get_foundation_summary()`'s output is passed as `foundation_summary` into
+`PlanningPanel` (`lms/society.py:779`) and `WorkingGroup`
+(`lms/working_group.py:231`, used at `:297`). So the moment `26Q3-HARN-12` makes
+committee mode reachable, planning and work committees crash on the first
+non-empty foundation. **Both summaries are in scope for this card**; fixing only
+one leaves HARN-12 inheriting both this crash and the API-shape blindness that
+caused the failure documented above.
+
+**Current State**:
+- `FoundationEntry` already stores the full `lean_code` of each definition
+  (`lms/foundation.py:333`), so parameters and typed fields are available to
+  both summaries; they are simply not rendered.
+- `DEFINITION_PATTERN` (`lms/foundation.py:107-112`) captures `[^\n]*` — the
+  first line only. That is fine: `lean_code` carries the body, so the fix does
+  **not** require touching the pattern (see Decision Gates).
+
+**Investigation**:
+```bash
+uv run python -c "
+from pathlib import Path; import tempfile
+from lms.foundation import FoundationFile
+f = FoundationFile(Path(tempfile.mkdtemp())/'Foundation.lean')
+f.entries = f._extract_entries('structure Category (obj : Type u) where\n  Hom : obj -> obj -> Type v\n', 'a', 0, 'ag')
+print(f.get_context_for_agent())"
+# ->   structure Categorystructure Category(obj : Type u) where
+```
+
+---
+
+#### Acceptance Criteria
+
+> Each criterion must be verifiable with a single command returning exit code 0.
+> All of AC-1..AC-6 are covered by `uv run pytest tests/test_foundation_api_exposure.py`.
+
+- [x] **AC-1** `get_context_for_agent()` renders each declaration header exactly
+      once — no `structure Categorystructure Category`.
+- [x] **AC-2** The rendered header reproduces the source declaration line
+      verbatim, space intact: `structure Category (obj : Type u) where`.
+- [x] **AC-3** Structure fields are rendered with their types
+      (`Hom : obj → obj → Type v`), not as bare names.
+- [x] **AC-4** No structure field is dropped silently; a 6-field structure shows
+      all 6 (any elision is explicit and counted).
+- [x] **AC-5** `Society._get_foundation_summary()` returns a string instead of
+      raising on a non-empty foundation.
+- [x] **AC-6** That committee summary carries the declaration shape
+      (`(obj : Type u)`), not names alone.
+
+Added 2026-08-10 after the first `/pre-merge` review found a regression in the
+first implementation (see *Outcome*):
+
+- [x] **AC-7** A doc-commented declaration renders its **declaration**, not its
+      comment. `/-- A category. -/\nstructure Category …` must render
+      `structure Category (obj : Type u) where`, with its fields.
+- [x] **AC-8** `class` fields and `inductive` constructors render, not just
+      `structure` fields.
+- [x] **AC-9** A theorem statement that wraps across lines renders to its
+      conclusion; the proof body does not render.
+- [x] **AC-10** No renderer in `lms/foundation.py` retains a silent character
+      cap (`signature[:80]` is gone).
+
+Added after the second `/pre-merge` round:
+
+- [x] **AC-11** A `:=` inside Lean 4 named arguments does not cut the statement
+      (`pullback.fst (f := f) (g := g) …` renders whole).
+- [x] **AC-12** `instance … where` renders every field, not one bare name.
+- [x] **AC-13** A proof body never renders, including `:= by` on the
+      declaration line and tactic blocks under a `where` field.
+- [x] **AC-14** Foreign declarations (`@[ext] theorem`, `section`, `variable`,
+      `example`) do not render as fields of the preceding entry.
+
+Added after the high-effort `/pre-merge` review (2026-08-11), which returned 10
+findings — 6 confirmed correctness bugs — against the round-2 code:
+
+- [x] **AC-15** The notation family does not render as fields: `infixr:80`,
+      `notation:max`, `postfix:max`, `scoped`/`local notation`, and
+      `#`-commands are all recognised as foreign.
+- [x] **AC-16** No rendered field or statement leaves a bracket group open. A
+      cut landing inside a group skips to the group's close rather than
+      emitting its closer as a bare `)` field.
+- [x] **AC-17** The `instance … where` exception of AC-12 still holds, and so
+      does `theorem … where` / `def … where` — these build structure terms and
+      their fields are API.
+- [x] **AC-18** `letI := …;` opening a *return type* is a binder, not the
+      body: the return type renders whole instead of truncating to `letI`.
+- [x] **AC-19** A trailing `--` comment cannot change what renders. Bracket
+      depth, `where` detection, `by` detection and the header all ignore it.
+- [x] **AC-20** A block comment's interior lines are not scanned as code.
+- [x] **AC-21** `declaration_header()` never ends in a dangling `:=` and never
+      carries an inline proof term.
+- [x] **AC-22** An equation-style `def` (`| 0 => 1`) does not render its value
+      body as the statement.
+- [x] **AC-23** A fallback `code` entry renders its own name, so the agent can
+      cite the artifact.
+- [x] **AC-24** `get_available_definitions()` renders the same API surface as
+      `get_context_for_agent()` — the comment claiming they cannot disagree is
+      now true.
+- [x] **AC-25** The committee-facing summary is bounded and says how many
+      entries it left out.
+
+---
+
+#### Files to Create/Modify
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `lms/foundation.py` | MODIFY | Add `FoundationEntry.declaration_header()` / `.field_lines()` reading `lean_code`; render from them instead of `signature` (`:470`, `:474-485`) |
+| `lms/society.py` | MODIFY | `_get_foundation_summary()` (`:955-966`) defers to `get_context_for_agent()` instead of raising |
+| `tests/test_foundation_api_exposure.py` | CREATE | AC-1..AC-6 |
+| `docs/planning/tasks/26Q3-01/26Q3-HARN-11-foundation-api-exposure.md` | MODIFY | This card |
+| `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh` | MODIFY | Verification |
+
+> This table is a fence `/pre-merge` checks, not a suggestion: a changed file not
+> named here (tests and this task's own card/verify script excepted) is a
+> blocking finding. Name every file you expect to touch.
+
+---
+
+#### Implementation Notes
+
+**Render from `lean_code`, not from `signature`.** `signature` is a derived,
+lossy string that already caused the duplication bug; `lean_code` is what was
+actually verified and what is actually written to `Foundation.lean`, so it cannot
+drift from the file. The declaration header is `lean_code`'s first line; the
+fields are its indented continuation lines.
+
+**Do not introduce:**
+- A new silent cap. Replacing `[:5]` / `[:10]` / `[:80]` with a bigger silent
+  number is the same bug. If anything is elided, print how many were elided.
+- A change to `DEFINITION_PATTERN` — see Decision Gates.
+- A change to what `save()` writes. This card touches renderers only.
+
+**Token budget / growth story.** The foundation grows one entry per verified
+artifact. Full-body rendering of every entry is unbounded; header + typed field
+lines is bounded by the declaration's own width and is what an agent needs to
+*apply* an entry. Theorem entries have no fields, so they cost one line. If a
+cap is needed later, it belongs on entry count with an explicit count, not on
+characters mid-token.
+
+**Regression found at the gate (2026-08-10).** The first implementation read
+"the first non-blank line of `lean_code`" as the declaration. `lean_code` does
+not start there. `_strip_block_comments` blanks `/-- … -/` to spaces before
+matching, `DEFINITION_PATTERN`'s leading `\s*` reaches back across the blanked
+region, and `_extract_entries` slices the **original** source from that offset —
+so a doc-commented declaration carries its comment as line 1. A doc-commented
+`Category` rendered as `/-- A category. -/` and nothing else: no declaration, no
+parameter, no fields, and `field_lines()` returned `[]` because it consumed the
+comment as the header and broke on the unindented `structure` below.
+
+That was *worse than base*, which at least emitted a garbled header containing
+the parameter. 425 of 870 corpus artifacts carry a doc comment; 85% of extracted
+entries rendered one as their header. Now 0 of 4474.
+
+The fix is in the renderers (`FoundationEntry._code()` strips leading comments),
+**not** at the slice boundary — correcting `_extract_entries` would change what
+`save()` writes into `Foundation.lean`, which the gate below rules out. The cost
+is that `lean_code` still starts at a comment for every other consumer.
+
+**Corpus health, 4474 entries** (measured each round, not asserted):
+
+| Defect | Before | Round 1 | Round 2 | Round 2 *actual* | Round 3 |
+|---|---|---|---|---|---|
+| Comment rendered as header | 85% | 0 | 0 | 0 | 0 |
+| Foreign declarations as fields | 4.2% | 4.2% | ~~0~~ | 131 (2.8%) | 0 |
+| Unbalanced-bracket renders | 31 | 31 | ~~2~~ | 24 | 0 |
+| Leaked tactic lines | — | 522 | 1 | 1 | 0 |
+| Header ending in a bare `:=` | — | — | — | 18 | 0 |
+| Return type truncated to `letI` | — | — | — | 6 | 0 |
+
+> **The round-2 column was wrong, and that matters more than the bug it hid.**
+> `Foreign declarations as fields: 0` was measured against a token set that
+> excluded every notation-family command, so it reported 0 for a check that
+> could not fail. `2 residual unbalanced renders` was an order of magnitude
+> low. Both were caught by the 2026-08-11 review measuring the same corpus
+> independently, not by this card. On a sprint whose goal is *"make the harness
+> incapable of lying about verification"*, a task card overstating its own
+> gate is the same defect one level up. The round-3 column was produced by a
+> script replaying every `experiments/**/artifacts.json` through
+> `_extract_entries` and rendering with the production renderer.
+>
+> Entry counts differ slightly by extraction path — the review counted 4,612
+> replaying `add_artifact`'s cleaning, this card counts 4,474 calling
+> `_extract_entries` directly. The defect counts are of whole entries and are
+> not sensitive to that difference.
+
+**Growth story, measured.** A real 140-entry foundation
+(`experiments/stacks_ch4_phase1`) renders 15,927 chars ≈ 4K tokens of
+agent-facing context — all declarations and typed fields, zero comment lines.
+Against a 131,072-token model context that is ~3%.
+
+**Outcome (2026-08-10).** All four gates below held; none fired.
+`_extract_entries` and `DEFINITION_PATTERN` are untouched, so `entry.signature`
+and `foundation.json` round-trip unchanged and `Foundation.lean`'s on-disk format
+is identical. `signature` is now a persisted-metadata field with no renderer
+reading it — worth deleting once nothing else depends on it, but not here.
+`_get_foundation_summary()` was collapsed onto `get_context_for_agent()` rather
+than repaired: two renderers that must stay in sync is how the committee path
+drifted into raising `AttributeError` unnoticed in the first place.
+
+---
+
+#### Decision Gates
+
+- If rendering typed fields blows the agent's context budget, stop and surface
+  the token math — do not substitute a different silent cap.
+- **Do not touch `DEFINITION_PATTERN`.** `lean_code` already carries the body, so
+  the fix does not need it. Changing it to capture multi-line bodies would change
+  what `_extract_entries` writes into `Foundation.lean` — the accumulated corpus,
+  written verbatim by `save()` (`lms/foundation.py:517`). A regression there
+  invalidates the run.
+- Fixing `rest = match.group(3).strip()` (`lms/foundation.py:313`) changes
+  `entry.signature`, which is persisted in `foundation.json`
+  (`FoundationEntry.to_dict`). If existing metadata must round-trip, prefer
+  fixing the renderer over the extractor and surface the choice.
+- If `_get_foundation_summary()` turns out to need `Society` state this card does
+  not own, stop — `26Q3-HARN-12` owns committee wiring.
+- If the change exceeds the PR Size Target → stop and split.
+
+---
+
+#### Out of Scope
+
+- `26Q3-HARN-12` owns making committee mode reachable (CLI flag, review stage,
+  mode reconciliation) — do not implement any of that here. This card changes
+  only *what the summaries emit*, in both code paths.
+- `26Q3-HARN-08` owns Lean 3 syntax and `import Mathlib` prompting. Note that
+  `shakedown_3x3_d` produced **no** evidence for HARN-08 (zero Lean 3 syntax,
+  zero missing-Mathlib errors in 4/4 artifacts) — do not fold it in here.
+- `26Q3-HARN-03` owns the T2/T4 gates.
+- No changes to `Foundation.lean`'s on-disk format or header.
+
+---
+
+#### Verification Script
+
+See `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh`.
+
+Behaviour goes in pytest, not in the bash script — see the standing lesson that
+verify scripts hold no assertions. The script must **fail at the merge base**;
+a script that passes without the change gates nothing.
+
+---
+
+#### Outcome Demo — RUN 2026-08-11, and it FALSIFIED THE CARD'S HYPOTHESIS
+
+The demo below was run on `shakedown_3x3_e` at commit `e3230a2` (this branch,
+all ten review fixes in). **It did not pass, and the reason is not the code.**
+
+> The original demo command was also broken: it grepped
+> `experiments/<run>/artifacts/*.lean`, but a run writes a single
+> `artifacts.json` with `lean_code` inline — there is no `artifacts/`
+> directory. It would have returned nothing on a *successful* run.
+
+**Result.** 7 artifacts, 1 verified (gen 0, `Category`). Zero verified at
+gen ≥1, so reuse could not be exercised in either direction. All **6 failures
+were gen1–gen2 with `open LMS.Foundation` present**, and **4 of 6** failed with
+the exact error this card was written to remove:
+
+    error: type expected, got (Category : Type v → Type (max v (u + 1)))
+
+**The renderer was doing its job.** Rendering the run's own foundation gives
+the binder and every field, intact:
+
+    structure Category (obj : Type u) where
+      Hom : obj → obj → Type v
+      id : (x : obj) → Hom x x
+      comp : {x y z : obj} → Hom x y → Hom y z → Hom x z
+      assoc : ∀ {x y z w : obj} {f : Hom x y} {g : Hom y z} {h : Hom z w},
+        comp (comp f g) h = comp f (comp g h)
+      id_l / id_r …
+
+`open LMS.Foundation` appears *only* in that context block, so all six agents
+provably read the text carrying `(obj : Type u)` — and four wrote `Category`
+unapplied anyway.
+
+**What they actually get wrong is arity/kind, from Mathlib priors.** Observed
+in the same run: `structure Functor (CatC : Category v₁ u₁) …` (applied to
+universes rather than an object type) and `[CatC : Category.{v₁, u}]` (square
+brackets — Mathlib's `Category` *is* a class used as `[Category C]`; this
+foundation's is a structure applied to an object type).
+
+**Conclusion.** Information availability was never the binding constraint. A
+declaration header states the shape but shows no **use site**. The next lever
+is a rendered usage line (`-- use as: (C : Category YourObj)`) or an explicit
+goal-prompt instruction — the latter is known to land, since all six agents
+obeyed HARN-10's `open` instruction. Carded separately; it is not this task.
+
+#### Outcome Demo (amended) — what this renderer can be held to
+
+**Where**: any checkout with the corpus.
+**Run**:
+```bash
+uv run python -c "import json;from pathlib import Path;from lms.foundation import FoundationFile;from lms.artifacts import Artifact,ArtifactType;from lms.lean.interface import VerificationStatus;a=json.load(open('experiments/shakedown_3x3_e/artifacts.json'))['artifacts'];v=[x for x in a if x.get('verified')];f=FoundationFile(Path('/tmp/x.lean'));[f.add_artifact(Artifact(id=x['id'],type=ArtifactType.DEFINITION,natural_language=x.get('natural_language',''),lean_code=x['lean_code'],status=VerificationStatus.VERIFIED_LEAN,created_by=x.get('created_by','a'),generation=x.get('generation',0))) for x in v];print(f.get_context_for_agent())"
+```
+**Expect**: every entry renders its declaration line **with binders intact**,
+followed by its typed fields or its statement — no truncation, no dangling
+`:=`, no unbalanced brackets, no Lean commands as fields. Confirmed
+2026-08-11 on the `shakedown_3x3_e` foundation, and at corpus scale by the
+four defect classes measured to 0 over 4,474 entries above.
+
+This is a bar the renderer alone can meet or fail. Whether agents *act* on
+what they are shown is a different task's outcome.
+
+---
+
+#### Definition of Done
+
+- [x] All acceptance criteria checked off
+- [x] `scripts/verify/26Q3-01/verify_26Q3-HARN-11.sh` exits 0 (and exits 1 at merge base `a93c262`)
+- [x] `uv run ruff format`, `uv run ruff check` clean on touched files; `mypy` 12 → 11 errors (all remaining pre-existing)
+- [x] PR opened — [#28](https://github.com/setsosie/lms/pull/28), 571 production
+      lines against the amended target of 600 (see the size-target note at the
+      top; total churn is 1590 including 612 test lines and this card)
+- [x] Tests included with implementation
+- [x] Outcome Demo run by a human validator — run on the box 2026-08-11 at
+      `e3230a2`. The **original** demo did not pass and **falsified this card's
+      hypothesis**; the **amended** demo passes. Both are recorded in full
+      above rather than quietly swapped. The renderer is correct; agents not
+      acting on what they are shown is a separate, now-carded problem.
