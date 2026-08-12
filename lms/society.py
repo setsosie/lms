@@ -86,6 +86,13 @@ class Society:
     18th century mathematicians.
     """
 
+    #: Entries rendered into a committee prompt's foundation summary. The
+    #: agent-facing context is unbounded on purpose -- an agent needs the whole
+    #: API it is being asked to build on -- but a committee prompt carries this
+    #: alongside the goal, the roster and the round history, so it needs a
+    #: ceiling. Matches the `entries[:10]` the previous renderer used.
+    COMMITTEE_SUMMARY_MAX_ENTRIES = 10
+
     def __init__(
         self,
         n_agents: int,
@@ -953,17 +960,34 @@ class Society:
         return result
 
     def _get_foundation_summary(self) -> str:
-        """Get a summary of what's in Foundation.lean."""
+        """Get a summary of what's in Foundation.lean, for committee prompts.
+
+        This used to be a second, weaker renderer: `- {tag}: {name}` for the
+        first ten entries. It never ran -- `FoundationFile.entries` is a list,
+        not a dict, and `FoundationEntry` has no `tag`, so both lines raised
+        `AttributeError` on any non-empty foundation. Committee mode is
+        unreachable today (26Q3-HARN-12), which is the only reason nobody saw
+        it.
+
+        Rather than repair the weaker renderer, defer to the one agents get.
+        A work committee was being told strictly less than the agent that
+        already failed on API shape; two renderers that must stay in sync is
+        how that happened.
+
+        Bounded, unlike the agent-facing call. This string is interpolated
+        into the chair and planning-panel prompts alongside much else, and the
+        old `entries[:10]` cap went away with nothing replacing it. At the
+        measured ~118 chars/entry, a multi-thousand-statement foundation would
+        push the prompt past the served `max_model_len` -- and the truncation
+        would silently remove the section the prompt tells the committee to
+        rely on. The count of what was left out is rendered, not hidden.
+        """
         if not self.foundation or len(self.foundation) == 0:
             return "Foundation.lean is empty. You must define everything from scratch."
 
-        entries = list(self.foundation.entries.values())
-        summary_lines = ["Foundation.lean contains:"]
-        for entry in entries[:10]:  # Limit to first 10
-            summary_lines.append(f"- {entry.tag}: {entry.name}")
-        if len(entries) > 10:
-            summary_lines.append(f"  ... and {len(entries) - 10} more definitions")
-        return "\n".join(summary_lines)
+        return self.foundation.get_context_for_agent(
+            max_entries=self.COMMITTEE_SUMMARY_MAX_ENTRIES
+        )
 
     def _get_task_content(self, task_tag: str) -> str:
         """Get the full content for a task from the goal."""

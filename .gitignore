@@ -54,6 +54,14 @@ experiments/
 # MCP config (may contain local paths)
 .mcp.json
 
+# Slurm job logs. The directory is tracked (logs/.gitkeep), the logs are not.
+# The bare `lms-run-*` patterns catch logs from before the job wrote into
+# logs/, which are still sitting in existing checkouts on the cluster.
+logs/*.out
+logs/*.err
+lms-run-*.out
+lms-run-*.err
+
 # OS
 .DS_Store
 Thumbs.db
