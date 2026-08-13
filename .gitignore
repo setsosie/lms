@@ -67,3 +67,6 @@ lms-run-*.err
 Thumbs.db
 .claude/settings.local.json
 .ruff_cache/
+
+# Local-only planning docs — see claude-skills docs/SPRINT-SCHEMA.md
+docs/planning/retros/
