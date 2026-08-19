@@ -13,8 +13,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from lms.accounting import AttemptRecord, statement_key
+
 if TYPE_CHECKING:
-    from lms.providers.base import Message
+    from lms.accounting import CostLedger
 
 
 class Role(Enum):
@@ -229,6 +231,8 @@ class WorkingGroup:
         config: WorkingGroupConfig,
         provider,
         foundation_summary: str = "",
+        ledger: CostLedger | None = None,
+        generation: int = 0,
     ):
         """Initialize a working group.
 
@@ -236,10 +240,15 @@ class WorkingGroup:
             config: Configuration for this group
             provider: LLM provider for generating responses
             foundation_summary: Summary of what's in Foundation.lean
+            ledger: Cost ledger to record the session's spend into
+            generation: Generation number stamped on ledger records
         """
         self.config = config
         self.provider = provider
         self.foundation_summary = foundation_summary
+        self.ledger = ledger
+        self.generation = generation
+        self.tokens_used = 0  # Session total, for the society's aggregates
         self.state = WorkingGroupState(config=config)
 
         # Create member IDs
@@ -304,14 +313,7 @@ You are the CHAIR. Set the agenda for this discussion:
 
 Do NOT write code. Facilitate the discussion."""
 
-        response = await self.provider.generate(
-            [
-                {"role": "system", "content": CHAIR_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
-        )
-
-        content = self._extract_content(response)
+        content = await self._generate(chair_id, CHAIR_SYSTEM_PROMPT, prompt)
         self.state.add_message(chair_id, Role.CHAIR, content)
 
     async def _discussion_round(self) -> None:
@@ -337,14 +339,7 @@ You are a RESEARCHER. Based on the discussion so far:
 If you agree with the current blackboard draft, say "I agree with the current proposal."
 If you have changes, provide the updated code in ```lean blocks."""
 
-            response = await self.provider.generate(
-                [
-                    {"role": "system", "content": RESEARCHER_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ]
-            )
-
-            content = self._extract_content(response)
+            content = await self._generate(member_id, RESEARCHER_SYSTEM_PROMPT, prompt)
             self.state.add_message(member_id, Role.RESEARCHER, content)
 
             # Update blackboard if code was proposed
@@ -373,14 +368,7 @@ Summarize this round:
 If ready, say "CONSENSUS REACHED" and summarize the agreed approach.
 If not, pose the next question to resolve."""
 
-        response = await self.provider.generate(
-            [
-                {"role": "system", "content": CHAIR_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
-        )
-
-        content = self._extract_content(response)
+        content = await self._generate(chair_id, CHAIR_SYSTEM_PROMPT, prompt)
         self.state.add_message(chair_id, Role.CHAIR, content)
 
     async def _scribe_finalize(self) -> None:
@@ -404,14 +392,7 @@ The artifact MUST be complete and ready for LEAN verification.
 
 Use the <artifact> format with type, name, stacks_tag, description, lean, and notes fields."""
 
-        response = await self.provider.generate(
-            [
-                {"role": "system", "content": SCRIBE_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
-        )
-
-        content = self._extract_content(response)
+        content = await self._generate(scribe_id, SCRIBE_SYSTEM_PROMPT, prompt)
         self.state.add_message(scribe_id, Role.SCRIBE, content)
 
         # Parse the artifact
@@ -423,6 +404,38 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
             if member_role == role:
                 return member_id
         return None
+
+    async def _generate(self, member_id: str, system_prompt: str, prompt: str) -> str:
+        """One group call, with its spend attributed to the group's task.
+
+        A group exists to produce exactly one statement (`config.task_tag`),
+        so its whole session — chair turns and scribe compilation included —
+        is that statement's cost.
+        """
+        start = time.monotonic()
+        response = await self.provider.generate(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        elapsed = time.monotonic() - start
+        usage = getattr(response, "usage", None)
+        if usage:
+            self.tokens_used += usage.total_tokens
+        if self.ledger is not None:
+            self.ledger.record(
+                AttemptRecord(
+                    statement_key=statement_key(stacks_tag=self.config.task_tag),
+                    agent_id=member_id,
+                    generation=self.generation,
+                    prompt_tokens=usage.input_tokens if usage else 0,
+                    completion_tokens=usage.output_tokens if usage else 0,
+                    wall_clock_s=elapsed,
+                    outcome="group_session",
+                )
+            )
+        return self._extract_content(response)
 
     def _extract_content(self, response) -> str:
         """Extract content string from provider response.
@@ -490,8 +503,12 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
             name_match = re.search(r"name:\s*([^\n]+)", content)
             tag_match = re.search(r"stacks_tag:\s*([^\n]+)", content)
             desc_match = re.search(r"description:\s*([^\n]+)", content)
-            lean_match = re.search(r"lean:\s*\|?\n(.*?)(?=\n\w+:|$)", content, re.DOTALL)
-            notes_match = re.search(r"notes:\s*\|?\n(.*?)(?=\n\w+:|$)", content, re.DOTALL)
+            lean_match = re.search(
+                r"lean:\s*\|?\n(.*?)(?=\n\w+:|$)", content, re.DOTALL
+            )
+            notes_match = re.search(
+                r"notes:\s*\|?\n(.*?)(?=\n\w+:|$)", content, re.DOTALL
+            )
 
             if type_match:
                 artifact["type"] = type_match.group(1).strip()
@@ -572,7 +589,8 @@ def create_working_group(
         task_tag=task_tag,
         task_name=task_name,
         task_content=task_content,
-        guidance=guidance or "Follow Foundation.lean patterns for structure definitions.",
+        guidance=guidance
+        or "Follow Foundation.lean patterns for structure definitions.",
         max_turns=max_turns,
     )
     return WorkingGroup(

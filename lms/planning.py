@@ -7,11 +7,13 @@ decides how to allocate work to Working Groups each generation.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from lms.accounting import CostLedger
     from lms.dependency import DependencyGraph, DependencyNode
     from lms.textbook import Textbook
 
@@ -191,6 +193,7 @@ class PlanningPanel:
         textbook: Textbook | None = None,
         foundation_summary: str = "",
         n_groups: int = 3,
+        ledger: CostLedger | None = None,
     ):
         """Initialize the planning panel.
 
@@ -200,12 +203,15 @@ class PlanningPanel:
             textbook: Optional textbook for learning from past failures
             foundation_summary: Summary of what's in Foundation.lean
             n_groups: Number of working groups to assign tasks to
+            ledger: Cost ledger to record panel spend into (as overhead)
         """
         self.provider = provider
         self.graph = graph
         self.textbook = textbook
         self.foundation_summary = foundation_summary
         self.n_groups = n_groups
+        self.ledger = ledger
+        self.tokens_used = 0  # Session total, for the society's aggregates
 
     async def run_session(self, generation: int) -> list[WorkingGroupAssignment]:
         """Run a planning panel session and return assignments.
@@ -281,19 +287,43 @@ class PlanningPanel:
             return response.content
         return str(response)
 
-    async def _get_chair_proposal(
-        self, session: PlanningSession
-    ) -> PlanningProposal:
-        """Get the Chair's initial proposal."""
-        prompt = self._build_chair_prompt(session)
+    async def _generate(
+        self, member_id: str, system_prompt: str, prompt: str, generation: int
+    ) -> str:
+        """One panel call, with its spend recorded as overhead.
+
+        Planning serves the whole generation, not any single statement, so
+        its spend goes to the explicit overhead bucket rather than being
+        smeared across whatever tasks happened to be assigned.
+        """
+        start = time.monotonic()
         response = await self.provider.generate(
             [
-                {"role": "system", "content": PLANNING_CHAIR_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ]
         )
+        elapsed = time.monotonic() - start
+        usage = getattr(response, "usage", None)
+        if usage:
+            self.tokens_used += usage.total_tokens
+        if self.ledger is not None:
+            self.ledger.record_overhead(
+                agent_id=member_id,
+                generation=generation,
+                prompt_tokens=usage.input_tokens if usage else 0,
+                completion_tokens=usage.output_tokens if usage else 0,
+                wall_clock_s=elapsed,
+                outcome="planning",
+            )
+        return self._extract_content(response)
 
-        content = self._extract_content(response)
+    async def _get_chair_proposal(self, session: PlanningSession) -> PlanningProposal:
+        """Get the Chair's initial proposal."""
+        prompt = self._build_chair_prompt(session)
+        content = await self._generate(
+            session.chair_id, PLANNING_CHAIR_SYSTEM_PROMPT, prompt, session.generation
+        )
         return self._parse_proposal(content, session.available_tasks)
 
     async def _get_member_vote(
@@ -301,29 +331,17 @@ class PlanningPanel:
     ) -> PanelVote:
         """Get a member's vote on the proposal."""
         prompt = self._build_vote_prompt(session, proposal)
-        response = await self.provider.generate(
-            [
-                {"role": "system", "content": PLANNING_MEMBER_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
+        content = await self._generate(
+            member_id, PLANNING_MEMBER_SYSTEM_PROMPT, prompt, session.generation
         )
-
-        content = self._extract_content(response)
         return self._parse_vote(content, member_id)
 
-    async def _get_revised_proposal(
-        self, session: PlanningSession
-    ) -> PlanningProposal:
+    async def _get_revised_proposal(self, session: PlanningSession) -> PlanningProposal:
         """Get Chair's revised proposal after feedback."""
         prompt = self._build_revision_prompt(session)
-        response = await self.provider.generate(
-            [
-                {"role": "system", "content": PLANNING_CHAIR_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ]
+        content = await self._generate(
+            session.chair_id, PLANNING_CHAIR_SYSTEM_PROMPT, prompt, session.generation
         )
-
-        content = self._extract_content(response)
         return self._parse_proposal(content, session.available_tasks)
 
     def _build_chair_prompt(self, session: PlanningSession) -> str:

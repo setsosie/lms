@@ -19,6 +19,9 @@ demographic claim is also contested (Vaesen et al. 2016, PNAS).
 
 from dataclasses import dataclass
 
+# CVFN lives with the cost ledger in lms.accounting (which must stay free of
+# lms imports); re-exported here so reporting code has one metrics module.
+from lms.accounting import calculate_cvfn, cvfn_report  # noqa: F401
 from lms.artifacts import ArtifactLibrary
 from lms.society import GenerationResult
 
