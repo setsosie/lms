@@ -17,12 +17,14 @@ here -- these agents never accumulated anything to lose. The underlying
 demographic claim is also contested (Vaesen et al. 2016, PNAS).
 """
 
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 # CVFN lives with the cost ledger in lms.accounting (which must stay free of
 # lms imports); re-exported here so reporting code has one metrics module.
 from lms.accounting import calculate_cvfn, cvfn_report  # noqa: F401
 from lms.artifacts import ArtifactLibrary
+from lms.gates import GateOutcome
 from lms.society import GenerationResult
 
 
@@ -62,6 +64,36 @@ def calculate_fresh_creation_rate(library: ArtifactLibrary) -> float:
 
     fresh = library.fresh_creation_count()
     return fresh / len(library)
+
+
+def gate_failure_histogram(library: ArtifactLibrary) -> dict[str, int]:
+    """Count FAILED gate sub-checks per gate name across the library.
+
+    The *shape* of this distribution is a primary calibration output
+    (`calibration-program.md` §2): which gate kills artifacts says more about
+    the collective than how many died.
+    """
+    counts: Counter[str] = Counter()
+    for artifact in library.all():
+        for result in artifact.gate_results:
+            if result.outcome is GateOutcome.FAILED:
+                counts[result.gate] += 1
+    return dict(counts)
+
+
+def gate_inconclusive_histogram(library: ArtifactLibrary) -> dict[str, int]:
+    """Count INCONCLUSIVE gate sub-checks per gate name across the library.
+
+    These are the artifacts routed to D4 human review — the machine's
+    explicit "I don't know", kept separate from failures so neither reads as
+    the other.
+    """
+    counts: Counter[str] = Counter()
+    for artifact in library.all():
+        for result in artifact.gate_results:
+            if result.outcome is GateOutcome.INCONCLUSIVE:
+                counts[result.gate] += 1
+    return dict(counts)
 
 
 def calculate_verification_rate(results: list[GenerationResult]) -> float:
@@ -121,6 +153,9 @@ class LibraryAnalysis:
         growth_rate: Average artifacts added per generation
         potential_ratchet_failure: True if the library is large enough to
             reuse and agents are not reusing it
+        gate_failure_histogram: FAILED gate sub-checks by gate name
+        gate_inconclusive_histogram: INCONCLUSIVE sub-checks by gate name
+            (routed to D4 review)
     """
 
     total_artifacts: int
@@ -130,6 +165,8 @@ class LibraryAnalysis:
     verification_rate: float
     growth_rate: float
     potential_ratchet_failure: bool
+    gate_failure_histogram: dict[str, int] = field(default_factory=dict)
+    gate_inconclusive_histogram: dict[str, int] = field(default_factory=dict)
 
 
 # Below these, "nobody reused anything" is a statement about the library being
@@ -181,6 +218,8 @@ def analyze_library(
         verification_rate=verification_rate,
         growth_rate=growth_rate,
         potential_ratchet_failure=potential_ratchet_failure,
+        gate_failure_histogram=gate_failure_histogram(library),
+        gate_inconclusive_histogram=gate_inconclusive_histogram(library),
     )
 
 
@@ -199,6 +238,13 @@ def print_analysis(analysis: LibraryAnalysis) -> None:
     print(f"Fresh Creation Rate: {analysis.fresh_creation_rate:.1%}")
     print(f"Verification Rate: {analysis.verification_rate:.1%}")
     print(f"Growth Rate: {analysis.growth_rate:+.1f} artifacts/generation")
+
+    if analysis.gate_failure_histogram or analysis.gate_inconclusive_histogram:
+        print("\nGate results (faithfulness protocol §4):")
+        for gate, count in sorted(analysis.gate_failure_histogram.items()):
+            print(f"  FAILED       {gate}: {count}")
+        for gate, count in sorted(analysis.gate_inconclusive_histogram.items()):
+            print(f"  INCONCLUSIVE {gate}: {count} (routed to D4 review)")
 
     if analysis.potential_ratchet_failure:
         print("\n[!] WARNING: Ratchet failure detected!")
