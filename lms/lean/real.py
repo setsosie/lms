@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from lms.foundation import FOUNDATION_NAMESPACE, split_imports
 from lms.lean.interface import LeanVerifier, VerificationResult, VerifierKind
 from lms.lean.project import LeanProject
 
@@ -162,8 +163,39 @@ class RealLeanVerifier(LeanVerifier):
                 return str(rev) if rev else None
         return None
 
+    @staticmethod
+    def _wrap_in_storage_namespace(code: str) -> str:
+        """Wrap `code` in the namespace the foundation stores entries in.
+
+        The candidate is elaborated as `FOUNDATION_NAMESPACE.<name>`, exactly
+        where an accepted artifact lands (`FoundationFile.FOUNDATION_HEADER`).
+        Verifying at top level instead rejected any declaration whose name Lean
+        core already binds -- `Functor`, `Option`, `Prod` -- for a collision
+        that does not exist at the destination (26Q3-HARN-13).
+
+        Imports are hoisted above the wrapper: Lean rejects an `import` inside
+        a `namespace`. Code carrying its own `namespace Foo ... end Foo` nests
+        inside the wrapper, which is legal.
+        """
+        imports, body = split_imports(code)
+        pieces: list[str] = []
+        if imports:
+            pieces.extend(imports)
+            pieces.append("")
+        pieces.append(f"namespace {FOUNDATION_NAMESPACE}")
+        pieces.append("")
+        pieces.extend(body)
+        pieces.append("")
+        pieces.append(f"end {FOUNDATION_NAMESPACE}")
+        pieces.append("")
+        return "\n".join(pieces)
+
     async def verify(self, code: str) -> VerificationResult:
         """Verify LEAN code using the real compiler.
+
+        The code is elaborated inside the namespace it will be stored in --
+        see `_wrap_in_storage_namespace`. Results report the original,
+        unwrapped code.
 
         Args:
             code: LEAN 4 code to verify
@@ -187,11 +219,14 @@ class RealLeanVerifier(LeanVerifier):
                 error="Code contains 'sorry' - incomplete proof not allowed",
             )
 
+        # What Lean actually sees: the candidate inside its storage namespace.
+        wrapped = self._wrap_in_storage_namespace(code)
+
         # Auto-rebuild if new imports detected (prevents .olean errors)
         if self.project:
-            await self.project.ensure_built(code)
-            temp_path = self.project.get_temp_file(code)
-            temp_path.write_text(code)
+            await self.project.ensure_built(wrapped)
+            temp_path = self.project.get_temp_file(wrapped)
+            temp_path.write_text(wrapped)
         else:
             # Fallback to system temp
             import tempfile
@@ -201,7 +236,7 @@ class RealLeanVerifier(LeanVerifier):
                 suffix=".lean",
                 delete=False,
             ) as f:
-                f.write(code)
+                f.write(wrapped)
                 temp_path = Path(f.name)
 
         # `lake env lean` exports the package's LEAN_PATH so imports resolve.
