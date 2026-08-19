@@ -20,6 +20,7 @@ from lms.artifacts import (
 )
 from lms.dependency import DependencyGraph, TaskStatus
 from lms.foundation import FoundationFile
+from lms.gates import default_gate_runner
 from lms.lean.interface import (
     LeanVerifier,
     VerificationResult,
@@ -136,6 +137,9 @@ class Society:
         )
         self.max_attempts: int = 5  # Max attempts per agent in iterative mode
         self.trace_store = TraceStore()  # Full conversation logs and reasoning traces
+        # T4/T2 machine gates (faithfulness protocol §4), run after
+        # verification on every successfully verified artifact.
+        self.gate_runner = default_gate_runner(verifier)
 
         # Working Group settings
         self.use_working_groups: bool = False  # Enable working group mode
@@ -478,6 +482,7 @@ class Society:
                     ) + f"\n[Modified by {pending.reviewed_by}]"
 
                 artifact.status = verification.status
+                await self._apply_gates(artifact)
                 if verification.success:
                     artifacts_verified += 1
                     creator_id = artifact.created_by
@@ -558,6 +563,23 @@ class Society:
         )
         self.results.append(result)
         return result
+
+    async def _apply_gates(self, artifact: Artifact) -> None:
+        """Attach T4/T2 gate verdicts to a successfully verified artifact.
+
+        Gates run post-compile by design (`26Q3-HARN-03`): they judge what the
+        verifier accepted, they do not re-verify. Verification status is left
+        untouched — "Lean accepted it" and "it passed the gates" are separate
+        facts, and collapsing them is how a trivial `example` came to count.
+        """
+        if not artifact.lean_code:
+            return
+        if artifact.status not in (
+            VerificationStatus.VERIFIED_LEAN,
+            VerificationStatus.VERIFIED_HEURISTIC,
+        ):
+            return
+        artifact.gate_results = await self.gate_runner.run(artifact.lean_code)
 
     def _rejected(self, code: str, error: str) -> VerificationResult:
         """A failure decided before the verifier ran (e.g. import restrictions).
@@ -655,6 +677,7 @@ class Society:
             # Process final artifact
             if response.final_artifact:
                 artifact = response.final_artifact
+                await self._apply_gates(artifact)
 
                 if artifact.references:
                     artifacts_referenced += 1
@@ -888,6 +911,7 @@ class Society:
 
                 verify_result = await self.verifier.verify(lean_code)
                 artifact.status = verify_result.status
+                await self._apply_gates(artifact)
 
                 if verify_result.success:
                     artifacts_verified += 1

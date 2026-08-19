@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from lms.gates import GateResult
 from lms.lean.interface import VerificationStatus
 
 __all__ = [
@@ -59,6 +60,9 @@ class Artifact:
     tokens_used: int = 0
     # Stacks Project tag this artifact addresses (for goal tracking)
     stacks_tag: str | None = None
+    # Machine-gate verdicts (faithfulness protocol §4), attached after
+    # verification. Empty = gates never ran, which is not the same as passing.
+    gate_results: list[GateResult] = field(default_factory=list)
 
     @property
     def verified(self) -> bool:
@@ -70,6 +74,15 @@ class Artifact:
         verifier that sets `status` to `VERIFIED_LEAN`.
         """
         return self.status is VerificationStatus.VERIFIED_LEAN
+
+    @property
+    def gates_passed(self) -> bool:
+        """True only when gates ran and every sub-check strictly passed.
+
+        INCONCLUSIVE results (routed to D4) and an empty `gate_results` both
+        read False — an artifact cannot pass gates it never faced.
+        """
+        return bool(self.gate_results) and all(r.passed for r in self.gate_results)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert artifact to dictionary for serialization."""
@@ -91,6 +104,8 @@ class Artifact:
             "verification_error": self.verification_error,
             "tokens_used": self.tokens_used,
             "stacks_tag": self.stacks_tag,
+            "gate_results": [r.to_dict() for r in self.gate_results],
+            "gates_passed": self.gates_passed,
         }
 
     @classmethod
@@ -117,6 +132,7 @@ class Artifact:
             verification_error=d.get("verification_error"),
             tokens_used=d.get("tokens_used", 0),
             stacks_tag=d.get("stacks_tag"),
+            gate_results=[GateResult.from_dict(r) for r in d.get("gate_results", [])],
         )
 
     @staticmethod
