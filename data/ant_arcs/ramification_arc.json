@@ -1,0 +1,175 @@
+{
+  "arc": "ramification",
+  "source": "Neukirch, Algebraic Number Theory (Grundlehren 322), Ch. I §8–§10 plus the different/discriminant block of Ch. III §2, per the proposed revision in docs/planning/calibration-program.md §4 and the candidate row in specs/ant_shakedown.md §3 ('extensions of Dedekind domains, Hilbert ramification, different/discriminant'). NOTE: the different and discriminant live in Ch. III §2 of the book, not Ch. I — the arc label groups them with Ch. I ramification because that is how the program documents phrase the candidate. Statement selection and proposition numbers drafted from memory 2026-08-19; ALL book_ref numbers require D4 confirmation (see docs/review/ant_arc_statements_d4.md).",
+  "mathlib_rev": "fe3134f0c3508d2fd6394307be226ffa9b8cb4ba",
+  "statements": [
+    {
+      "id": "ram-01",
+      "book_ref": "Neukirch ANT Ch I §8 (8.1)",
+      "name": "integral_closure_in_extension_is_dedekind",
+      "informal": "Let A be a Dedekind domain with fraction field K and L/K a finite separable extension. The integral closure B of A in L is again a Dedekind domain (and a finitely generated A-module).",
+      "lean_statement": "theorem ant_r01_integralClosure_dedekind {A K L : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Algebra A K] [IsFractionRing A K] [Field L] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [Algebra A L] [IsScalarTower A K L] : IsDedekindDomain (integralClosure A L) := sorry",
+      "notes": "Expected N0 (Mathlib: integralClosure.isDedekindDomain). Calibration anchor for this arc."
+    },
+    {
+      "id": "ram-02",
+      "book_ref": "Neukirch ANT Ch I §8 (8.2)",
+      "name": "fundamental_identity_sum_ef",
+      "informal": "Fundamental identity: for a nonzero prime p of A with pB = ∏ Pᵢ^{eᵢ} and fᵢ = [B/Pᵢ : A/p], one has Σᵢ eᵢfᵢ = n = [L : K].",
+      "lean_statement": "theorem ant_r02_sum_ef {R S K L : Type*} [CommRing R] [IsDedekindDomain R] [CommRing S] [IsDedekindDomain S] [Algebra R S] [Module.Finite R S] [Field K] [Field L] [Algebra R K] [IsFractionRing R K] [Algebra S L] [IsFractionRing S L] [Algebra K L] [Algebra R L] [IsScalarTower R S L] [IsScalarTower R K L] [FiniteDimensional K L] (p : Ideal R) [p.IsMaximal] (hp : p ≠ ⊥) : ∑ P ∈ (UniqueFactorizationMonoid.factors (Ideal.map (algebraMap R S) p)).toFinset, Ideal.ramificationIdx (algebraMap R S) p P * Ideal.inertiaDeg p P = Module.finrank K L := sorry",
+      "notes": "Expected N0 (Mathlib: Ideal.sum_ramification_inertia). SCHEMATIC-risk: inertiaDeg's argument shape changed across Mathlib revs; the summation index set may need Ideal.factors instead of UFM.factors."
+    },
+    {
+      "id": "ram-03",
+      "book_ref": "Neukirch ANT Ch I §8 (8.3)",
+      "name": "dedekind_kummer_factorization",
+      "informal": "Dedekind–Kummer: if B = A[θ] with θ having minimal polynomial g, and ḡ = ∏ ḡᵢ^{eᵢ} is the factorization of g mod p into irreducibles, then pB = ∏ Pᵢ^{eᵢ} with Pᵢ = (p, gᵢ(θ)) and f(Pᵢ|p) = deg gᵢ. (Neukirch states this for p prime to the conductor of A[θ] in B.)",
+      "lean_statement": "theorem ant_r03_dedekind_kummer {R S : Type*} [CommRing R] [IsDedekindDomain R] [CommRing S] [IsDedekindDomain S] [Algebra R S] (θ : S) (hgen : Algebra.adjoin R {θ} = ⊤) (p : Ideal R) [p.IsMaximal] (hp : p ≠ ⊥) : Ideal.map (algebraMap R S) p = ((minpoly R θ).map (Ideal.Quotient.mk p)).factors.toFinset.prod (fun gbar => Ideal.span {Ideal.Quotient.mk ⊥ θ} ⊔ Ideal.map (algebraMap R S) p) := sorry",
+      "notes": "SCHEMATIC: the right-hand side is a placeholder — the honest statement needs the (p, gᵢ(θ)) construction and per-factor multiplicities, which Mathlib expresses via the quotient equivalence in its Dedekind–Kummer file (Mathlib.NumberTheory.KummerDedekind). Substance expected N0; the exponent-matching refinement may be N1-adjacent. Name/semantic stages carry this one until the signature is repaired."
+    },
+    {
+      "id": "ram-04",
+      "book_ref": "Neukirch ANT Ch I §8",
+      "name": "only_finitely_many_ramified_primes",
+      "informal": "Only finitely many rational primes p ramify in a number field K (those dividing the discriminant d_K).",
+      "lean_statement": "theorem ant_r04_finitely_many_ramified (K : Type*) [Field K] [NumberField K] : {p : ℕ | p.Prime ∧ ∃ P : Ideal (NumberField.RingOfIntegers K), P.IsMaximal ∧ 1 < Ideal.ramificationIdx (algebraMap ℤ (NumberField.RingOfIntegers K)) (Ideal.span {(p : ℤ)}) P}.Finite := sorry",
+      "notes": "Elaboration plausible; the missing lies-over constraint on P is deliberate simplification (ramificationIdx is 0/1 for unrelated primes) but should be D4-checked for faithfulness. Mathlib coverage uncertain in exactly this global form — candidate N1 glue over N0 substance."
+    },
+    {
+      "id": "ram-05",
+      "book_ref": "Neukirch ANT Ch I §9 (9.1)",
+      "name": "galois_action_transitive_on_primes",
+      "informal": "If L/K is Galois, then Gal(L/K) acts transitively on the set of primes P of L lying over a fixed prime p of K.",
+      "lean_statement": "theorem ant_r05_galois_transitive (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (P Q : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] [Q.IsMaximal] (hP : P.LiesOver p) (hQ : Q.LiesOver p) : ∃ σ : (NumberField.RingOfIntegers L) ≃ₐ[NumberField.RingOfIntegers K] (NumberField.RingOfIntegers L), Ideal.comap σ P = Q := sorry",
+      "notes": "Expected N0 in substance (Mathlib has transitivity of the Galois action on primes over p; the ≃ₐ-on-integers spelling via galRestrict may need repair). Ideal.LiesOver is a recent Mathlib class — check the pinned rev has it."
+    },
+    {
+      "id": "ram-06",
+      "book_ref": "Neukirch ANT Ch I §9",
+      "name": "galois_ef_constant_n_eq_efg",
+      "informal": "In a Galois extension L/K, all primes P over p share the same ramification index e and residue degree f, so that n = e·f·g where g is the number of primes over p.",
+      "lean_statement": "theorem ant_r06_n_eq_efg (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (hp : p ≠ ⊥) (P : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] (hP : P.LiesOver p) : Ideal.ramificationIdx (algebraMap (NumberField.RingOfIntegers K) (NumberField.RingOfIntegers L)) p P * Ideal.inertiaDeg p P * Nat.card {Q : Ideal (NumberField.RingOfIntegers L) // Q.IsMaximal ∧ Q.LiesOver p} = Module.finrank K L := sorry",
+      "notes": "SCHEMATIC-risk on the subtype-card spelling and inertiaDeg arguments; substance expected N0 (corollary of ram-02 + ram-05 in Mathlib's Galois ramification files)."
+    },
+    {
+      "id": "ram-07",
+      "book_ref": "Neukirch ANT Ch I §9",
+      "name": "decomposition_group_order",
+      "informal": "The decomposition group G_P = {σ ∈ Gal(L/K) : σP = P} has order e·f, and its index is g, the number of primes over p.",
+      "lean_statement": "theorem ant_r07_decomposition_group_card (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (hp : p ≠ ⊥) (P : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] (hP : P.LiesOver p) : Nat.card (MulAction.stabilizer (L ≃ₐ[K] L) P) = Ideal.ramificationIdx (algebraMap (NumberField.RingOfIntegers K) (NumberField.RingOfIntegers L)) p P * Ideal.inertiaDeg p P := sorry",
+      "notes": "SCHEMATIC: the MulAction of L ≃ₐ[K] L on ideals of O_L goes through galRestrict; stabilizer spelling is a placeholder. Mathlib coverage of decomposition groups exists (Ideal.decompositionGroup or similar) — check at rev."
+    },
+    {
+      "id": "ram-08",
+      "book_ref": "Neukirch ANT Ch I §9",
+      "name": "decomposition_field_properties",
+      "informal": "Let Z_P = L^{G_P} be the decomposition field. The prime P_Z = P ∩ Z_P below P satisfies e(P_Z | p) = f(P_Z | p) = 1, and P is the unique prime of L over P_Z.",
+      "lean_statement": "theorem ant_r08_decomposition_field (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (P : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] (hP : P.LiesOver p) : e_and_f_of_the_prime_below_P_in_the_fixed_field_of_its_stabilizer_are_one := sorry",
+      "notes": "SCHEMATIC: conclusion is a placeholder token — stating this needs the intermediate-field/fixed-field API composed with ramificationIdx, which is real formalization work. Strong N1 candidate as a statement even if ingredients are N0."
+    },
+    {
+      "id": "ram-09",
+      "book_ref": "Neukirch ANT Ch I §9",
+      "name": "residue_extension_normal_and_surjection",
+      "informal": "The residue field extension κ(P)/κ(p) is normal, and the natural map G_P → Gal(κ(P)/κ(p)) (reduction mod P) is surjective.",
+      "lean_statement": "theorem ant_r09_residue_surjection (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (P : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] (hP : P.LiesOver p) : Function.Surjective (Ideal.Quotient.stabilizerHom P p (L ≃ₐ[K] L)) := sorry",
+      "notes": "SCHEMATIC: stabilizerHom spelling is a best guess at Mathlib's name for the reduction map (Mathlib has this surjectivity for the decomposition-group action — Frobenius machinery). Expected N0 in substance."
+    },
+    {
+      "id": "ram-10",
+      "book_ref": "Neukirch ANT Ch I §9",
+      "name": "inertia_group_order_and_quotient",
+      "informal": "The inertia group I_P = ker(G_P → Gal(κ(P)/κ(p))) has order e, and G_P/I_P ≅ Gal(κ(P)/κ(p)).",
+      "lean_statement": "theorem ant_r10_inertia_order (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (hp : p ≠ ⊥) (P : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] (hP : P.LiesOver p) : Nat.card (Ideal.inertiaGroup? P (L ≃ₐ[K] L)) = Ideal.ramificationIdx (algebraMap (NumberField.RingOfIntegers K) (NumberField.RingOfIntegers L)) p P := sorry",
+      "notes": "SCHEMATIC (inertiaGroup? placeholder). Mathlib has inertia subgroups in its ramification theory — verify name and whether the order formula is stated globally or only locally. Possible N1 in the global Dedekind form."
+    },
+    {
+      "id": "ram-11",
+      "book_ref": "Neukirch ANT Ch I §9",
+      "name": "unramified_iff_inertia_trivial",
+      "informal": "P is unramified over p if and only if the inertia group I_P is trivial.",
+      "lean_statement": "theorem ant_r11_unramified_iff_inertia_trivial (K L : Type*) [Field K] [NumberField K] [Field L] [NumberField L] [Algebra K L] [IsGalois K L] (p : Ideal (NumberField.RingOfIntegers K)) [p.IsMaximal] (hp : p ≠ ⊥) (P : Ideal (NumberField.RingOfIntegers L)) [P.IsMaximal] (hP : P.LiesOver p) : Ideal.ramificationIdx (algebraMap (NumberField.RingOfIntegers K) (NumberField.RingOfIntegers L)) p P = 1 ↔ ∀ σ ∈ MulAction.stabilizer (L ≃ₐ[K] L) P, ∀ x : NumberField.RingOfIntegers L, σ x - x ∈ P := sorry",
+      "notes": "SCHEMATIC-leaning: right side inlines the inertia condition elementwise to avoid the placeholder name; σ acting on O_L again needs galRestrict. D4 should check the elementwise inertia condition is the intended one (σ ≡ id mod P)."
+    },
+    {
+      "id": "ram-12",
+      "book_ref": "Neukirch ANT Ch I §10",
+      "name": "cyclotomic_ring_of_integers",
+      "informal": "The ring of integers of the cyclotomic field ℚ(ζₙ) is ℤ[ζₙ].",
+      "lean_statement": "theorem ant_r12_cyclotomic_integers (n : ℕ+) : Algebra.adjoin ℤ {(IsCyclotomicExtension.zeta n ℚ (CyclotomicField n ℚ) : CyclotomicField n ℚ)} = (NumberField.RingOfIntegers (CyclotomicField n ℚ)).toSubalgebra? := sorry",
+      "notes": "SCHEMATIC on the right-hand-side coercion (RingOfIntegers is a type, not a subalgebra, in current Mathlib — the faithful spelling goes through IsIntegralClosure). Substance N0 (Mathlib: IsCyclotomicExtension.Rat ring-of-integers results)."
+    },
+    {
+      "id": "ram-13",
+      "book_ref": "Neukirch ANT Ch I §10",
+      "name": "cyclotomic_degree_totient",
+      "informal": "[ℚ(ζₙ) : ℚ] = φ(n) — equivalently, the n-th cyclotomic polynomial is irreducible over ℚ.",
+      "lean_statement": "theorem ant_r13_cyclotomic_degree (n : ℕ+) : Module.finrank ℚ (CyclotomicField n ℚ) = Nat.totient n := sorry",
+      "notes": "Expected N0 (Mathlib: IsCyclotomicExtension.finrank + cyclotomic irreducibility over ℚ). Likely elaborates as written."
+    },
+    {
+      "id": "ram-14",
+      "book_ref": "Neukirch ANT Ch I §10",
+      "name": "cyclotomic_ramified_iff_divides",
+      "informal": "A rational prime p ramifies in ℚ(ζₙ) if and only if p divides n (under the convention n ≢ 2 mod 4; for p = 2 the caveat n ≠ 2 applies).",
+      "lean_statement": "theorem ant_r14_cyclotomic_ramified_iff (n : ℕ+) (hn : ¬ (n : ℕ) % 4 = 2) (p : ℕ) (hp : p.Prime) : (∃ P : Ideal (NumberField.RingOfIntegers (CyclotomicField n ℚ)), P.IsMaximal ∧ 1 < Ideal.ramificationIdx (algebraMap ℤ (NumberField.RingOfIntegers (CyclotomicField n ℚ))) (Ideal.span {(p : ℤ)}) P) ↔ p ∣ n := sorry",
+      "notes": "Mathlib has ramification facts for cyclotomic fields (esp. prime-power case); global iff at this generality may be N1 glue. D4: check the edge-case convention matches the book's."
+    },
+    {
+      "id": "ram-15",
+      "book_ref": "Neukirch ANT Ch I §10",
+      "name": "cyclotomic_splitting_by_order",
+      "informal": "For p ∤ n, the prime p decomposes in ℚ(ζₙ) into φ(n)/f distinct primes of residue degree f, where f is the multiplicative order of p mod n (Frobenius = ζ ↦ ζᵖ).",
+      "lean_statement": "theorem ant_r15_cyclotomic_splitting (n : ℕ+) (p : ℕ) (hp : p.Prime) (hpn : ¬ p ∣ n) (P : Ideal (NumberField.RingOfIntegers (CyclotomicField n ℚ))) [P.IsMaximal] (hP : P.LiesOver (Ideal.span {(p : ℤ)})) : Ideal.inertiaDeg (Ideal.span {(p : ℤ)}) P = orderOf (ZMod.unitOfCoprime p (Nat.Coprime.symm (Nat.coprime_of_lt_prime? p n)) : (ZMod n)ˣ) := sorry",
+      "notes": "SCHEMATIC on the coprimality plumbing (unitOfCoprime hypothesis is a placeholder). Strong N1 candidate: the full splitting law in this form is classic but its global-Mathlib status is uncertain — exactly what the density measurement should find out."
+    },
+    {
+      "id": "ram-16",
+      "book_ref": "Neukirch ANT Ch III §2",
+      "name": "different_ideal_well_defined",
+      "informal": "The inverse different 𝔠 = {x ∈ L : Tr_{L/K}(x·B) ⊆ A} is a fractional ideal of B containing B, and hence the different 𝔡_{B/A} = 𝔠⁻¹ is a nonzero integral ideal of B.",
+      "lean_statement": "theorem ant_r16_different_ne_bot {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [Algebra B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] : differentIdeal A B ≠ ⊥ := sorry",
+      "notes": "Expected N0 (Mathlib has differentIdeal with nonvanishing). Instance-stack spelling may need repair; the statement is the definitional well-definedness Neukirch proves en route."
+    },
+    {
+      "id": "ram-17",
+      "book_ref": "Neukirch ANT Ch III §2 (2.6)",
+      "name": "different_detects_ramification",
+      "informal": "Dedekind's theorem on the different: a prime P of L is ramified over K if and only if P divides the different 𝔡_{B/A}.",
+      "lean_statement": "theorem ant_r17_different_dvd_iff_ramified {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] (P : Ideal B) [P.IsMaximal] (hP : P ≠ ⊥) : P ∣ differentIdeal A B ↔ 1 < Ideal.ramificationIdx (algebraMap A B) (Ideal.comap (algebraMap A B) P) P := sorry",
+      "notes": "Mathlib has partial coverage (pow_sub_one_dvd_differentIdeal and the tame/wild bounds); whether the clean global iff is stated is uncertain — good N1 discriminator. D4: Neukirch III.2.6 numbering to confirm."
+    },
+    {
+      "id": "ram-18",
+      "book_ref": "Neukirch ANT Ch III §2 (2.6)",
+      "name": "different_valuation_tame_wild",
+      "informal": "For P over p with ramification index e: v_P(𝔡) = e − 1 if P is tamely ramified (p ∤ e), and e ≤ v_P(𝔡) ≤ e − 1 + v_P(e) if P is wildly ramified.",
+      "lean_statement": "theorem ant_r18_different_valuation_tame {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] (P : Ideal B) [P.IsMaximal] (hP : P ≠ ⊥) (e : ℕ) (he : e = Ideal.ramificationIdx (algebraMap A B) (Ideal.comap (algebraMap A B) P) P) (htame : ¬ (P.comap? (algebraMap A B)).residueChar ∣ e) : (differentIdeal A B).factorMultiplicity? P = e - 1 := sorry",
+      "notes": "SCHEMATIC (residueChar / factorMultiplicity placeholders; multiplicity is Mathlib's multiplicity or normalizedFactors count). Mathlib has the tame equality in some form — verify. The wild inequality half is a separate statement if the arc is selected."
+    },
+    {
+      "id": "ram-19",
+      "book_ref": "Neukirch ANT Ch III §2",
+      "name": "discriminant_is_norm_of_different",
+      "informal": "The discriminant ideal is the norm of the different: 𝔡isc_{B/A} = N_{L/K}(𝔡_{B/A}).",
+      "lean_statement": "theorem ant_r19_discr_eq_norm_different {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] : Ideal.discriminantIdeal? A B = Ideal.relNorm A (differentIdeal A B) := sorry",
+      "notes": "SCHEMATIC (discriminantIdeal placeholder; Mathlib's discriminant of an extension of Dedekind domains vs Algebra.discr of a basis needs bridging). Serious N1 candidate — this bridge was historically missing from Mathlib; verify at rev."
+    },
+    {
+      "id": "ram-20",
+      "book_ref": "Neukirch ANT Ch III §2",
+      "name": "different_of_monogenic_extension",
+      "informal": "If B = A[θ] and f is the minimal polynomial of θ, then the different is principal: 𝔡_{B/A} = (f'(θ)).",
+      "lean_statement": "theorem ant_r20_different_monogenic {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] (θ : B) (hθ : Algebra.adjoin A {θ} = ⊤) : differentIdeal A B = Ideal.span {Polynomial.aeval θ (Polynomial.derivative (minpoly A θ))} := sorry",
+      "notes": "Plausibly elaborates modulo instance stack. Mathlib gained differentIdeal-of-adjoin results recently (conductor machinery) — coverage at the pinned rev is uncertain; good discriminator either way."
+    },
+    {
+      "id": "ram-21",
+      "book_ref": "Neukirch ANT Ch III §2 (2.12)",
+      "name": "ramified_iff_divides_discriminant",
+      "informal": "A prime p of K is ramified in L if and only if p divides the discriminant 𝔡isc_{B/A}. In particular, for K = ℚ: p ramifies in a number field L iff p | d_L (cf. ram-04).",
+      "lean_statement": "theorem ant_r21_ramified_iff_dvd_discr (L : Type*) [Field L] [NumberField L] (p : ℕ) (hp : p.Prime) : (∃ P : Ideal (NumberField.RingOfIntegers L), P.IsMaximal ∧ 1 < Ideal.ramificationIdx (algebraMap ℤ (NumberField.RingOfIntegers L)) (Ideal.span {(p : ℤ)}) P) ↔ (p : ℤ) ∣ NumberField.discr L := sorry",
+      "notes": "Stated over ℚ for statability (the general Dedekind form composes ram-17 + ram-19). Likely elaborates. Mathlib coverage of the absolute case is uncertain — strong measurement candidate; if present it is a recent addition."
+    }
+  ]
+}

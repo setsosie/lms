@@ -7,6 +7,7 @@ import pytest
 
 from lms.artifacts import ArtifactLibrary
 from lms.config import ProviderConfig
+from lms.dependency import TaskStatus
 from lms.lean.mock import MockLeanVerifier
 from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
 from lms.society import Society, GenerationResult
@@ -707,30 +708,21 @@ class TestSocietyWorkingGroups:
         assert hasattr(society, "dependency_graph")
 
     @pytest.mark.asyncio
-    async def test_run_generation_with_groups_no_goal(self, tmp_path: Path):
-        """Working groups mode falls back to regular generation without goal."""
+    async def test_committee_mode_without_goal_raises(self, tmp_path: Path):
+        """Committee mode without a goal is a loud error, not a silent fallback.
+
+        This used to degrade to flat mode with no error and no log line, so a
+        misconfigured committee run produced plausible flat-mode output.
+        """
         config = ProviderConfig(api_key="test", model="test")
-        response = """
-<artifact>
-type: definition
-name: Test
-description: A test
-lean: def test := 42
-references: []
-</artifact>
-"""
-        provider = MockProvider(config, responses=[response])
+        provider = MockProvider(config)
         verifier = MockLeanVerifier()
 
         society = Society(n_agents=1, provider=provider, verifier=verifier)
         society.use_working_groups = True
 
-        # Without a goal, should fall back to regular generation
-        result = await society.run_generation_with_groups(0)
-
-        assert result.generation == 0
-        # Falls back to regular mode which creates artifacts
-        assert result.artifacts_created >= 0
+        with pytest.raises(ValueError, match="requires a goal"):
+            await society.run_generation(0)
 
     @pytest.mark.asyncio
     async def test_run_generation_with_groups_with_goal(self, tmp_path: Path):
@@ -887,3 +879,239 @@ lean: |
 
         content = society._get_task_content("UNKNOWN-TAG")
         assert "UNKNOWN-TAG" in content
+
+
+# =============================================================================
+# Committee mode: dispatch, review committee, reuse accounting (26Q3-HARN-12)
+# =============================================================================
+
+# One full working-group session against MockProvider's sequential responses:
+# chair opening, researcher proposal, chair consensus, scribe artifact.
+GROUP_SESSION_RESPONSES = [
+    "Let's define Category.",
+    """```lean
+structure Category where
+  Obj : Type
+```""",
+    "CONSENSUS REACHED",
+    """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: Category structure
+lean: |
+  structure Category where
+    Obj : Type
+</artifact>""",
+]
+
+
+class RecordingVerifier(StubLeanVerifier):
+    """StubLeanVerifier that records every code string it was asked to verify."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def verify(self, code: str) -> VerificationResult:
+        self.calls.append(code)
+        return await super().verify(code)
+
+
+def _committee_society(
+    tmp_path: Path, responses: list[str], verifier: LeanVerifier
+) -> Society:
+    """One agent, one working group, planning panel off, single-task goal."""
+    from lms.goals import Goal, StacksDefinition
+
+    config = ProviderConfig(api_key="test", model="test")
+    provider = MockProvider(config, responses=responses)
+    goal = Goal(
+        name="Test Goal",
+        description="Test",
+        source="Test",
+        definitions=[
+            StacksDefinition(tag="T1", section="1.1", name="Category", content="..."),
+        ],
+    )
+    society = Society(
+        n_agents=1,
+        provider=provider,
+        verifier=verifier,
+        goal=goal,
+        foundation_path=tmp_path / "LMS" / "Foundation.lean",
+    )
+    society.use_working_groups = True
+    society.n_working_groups = 1
+    society.use_planning_panel = False
+    return society
+
+
+class TestCommitteeMode:
+    """run_generation dispatch and the review committee stage."""
+
+    @pytest.mark.asyncio
+    async def test_run_generation_dispatches_to_committee_mode(self, tmp_path: Path):
+        """With use_working_groups set, run_generation takes the committee path."""
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config)
+        society = Society(n_agents=1, provider=provider)
+        society.use_working_groups = True
+
+        called: dict[str, int] = {}
+
+        async def fake_groups(generation: int) -> GenerationResult:
+            called["generation"] = generation
+            return GenerationResult(
+                generation=generation,
+                artifacts_created=0,
+                artifacts_verified=0,
+                artifacts_referenced=0,
+                fresh_creations=0,
+            )
+
+        with mock.patch.object(
+            society, "run_generation_with_groups", side_effect=fake_groups
+        ):
+            result = await society.run_generation(3)
+
+        assert called["generation"] == 3
+        assert result.generation == 3
+
+    @pytest.mark.asyncio
+    async def test_review_committee_rejects_before_verifier(self, tmp_path: Path):
+        """A REJECT from the review committee keeps code away from the verifier."""
+        verifier = RecordingVerifier()
+        responses = GROUP_SESSION_RESPONSES + [
+            """<review>
+decision: REJECT
+reasoning: Wrong universe polymorphism, Obj must be Type u
+</review>"""
+        ]
+        society = _committee_society(tmp_path, responses, verifier)
+
+        result = await society.run_generation(0)
+
+        assert verifier.calls == []
+        assert result.reviews_total == 1
+        assert result.reviews_rejected == 1
+        assert result.artifacts_verified == 0
+        rejected = [
+            a
+            for a in society.library.all()
+            if a.verification_error
+            and "Rejected by review committee" in a.verification_error
+        ]
+        assert len(rejected) == 1
+        # The task goes back to the pool for the next generation
+        assert society.dependency_graph is not None
+        assert society.dependency_graph.nodes["T1"].status == TaskStatus.AVAILABLE
+
+    @pytest.mark.asyncio
+    async def test_review_committee_approves_then_verifies(self, tmp_path: Path):
+        """An APPROVE lets the artifact through to the verifier and the graph."""
+        verifier = RecordingVerifier()
+        responses = GROUP_SESSION_RESPONSES + [
+            """<review>
+decision: APPROVE
+reasoning: Signature matches the task
+</review>"""
+        ]
+        society = _committee_society(tmp_path, responses, verifier)
+
+        result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 1
+        assert result.reviews_total == 1
+        assert result.reviews_approved == 1
+        assert result.artifacts_verified == 1
+        assert society.dependency_graph is not None
+        assert society.dependency_graph.nodes["T1"].status == TaskStatus.DONE
+
+    @pytest.mark.asyncio
+    async def test_review_committee_modify_replaces_code(self, tmp_path: Path):
+        """A MODIFY verdict sends the reviewer's code to the verifier."""
+        verifier = RecordingVerifier()
+        responses = GROUP_SESSION_RESPONSES + [
+            """<review>
+decision: MODIFY
+reasoning: Needs universe polymorphism
+modified_code: structure Category where
+  Obj : Type u
+</review>"""
+        ]
+        society = _committee_society(tmp_path, responses, verifier)
+
+        result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 1
+        assert "Type u" in verifier.calls[0]
+        assert result.reviews_total == 1
+        assert result.reviews_modified == 1
+
+    @pytest.mark.asyncio
+    async def test_review_committee_skipped_when_disabled(self, tmp_path: Path):
+        """use_peer_review=False sends committee output straight to the verifier."""
+        verifier = RecordingVerifier()
+        society = _committee_society(tmp_path, list(GROUP_SESSION_RESPONSES), verifier)
+        society.use_peer_review = False
+
+        result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 1
+        assert result.reviews_total == 0
+        assert result.artifacts_verified == 1
+
+
+class TestIterativeReuse:
+    """Iterative mode must link references, or reuse rate is 0 by construction."""
+
+    @pytest.mark.asyncio
+    async def test_iterative_mode_links_references(self, tmp_path: Path):
+        from lms.agent import IterativeResponse
+        from lms.artifacts import Artifact, ArtifactType
+
+        config = ProviderConfig(api_key="test", model="test")
+        provider = MockProvider(config)
+        society = Society(
+            n_agents=1,
+            provider=provider,
+            verifier=MockLeanVerifier(),
+            foundation_path=tmp_path / "LMS" / "Foundation.lean",
+        )
+        society.iterative_mode = True
+
+        base = Artifact(
+            id="base-1",
+            type=ArtifactType.DEFINITION,
+            natural_language="Base definition",
+            created_by="agent-0-mock",
+            generation=0,
+            lean_code="def base := 1",
+        )
+        society.library.add(base)
+
+        derived = Artifact(
+            id="derived-1",
+            type=ArtifactType.DEFINITION,
+            natural_language="Builds on base",
+            created_by="agent-0-mock",
+            generation=1,
+            lean_code="def derived := base + 1",
+            references=["base-1"],
+        )
+        response = IterativeResponse(
+            attempts=[],
+            final_artifact=derived,
+            success=False,
+            writeup="",
+        )
+
+        with mock.patch.object(
+            society.agents[0],
+            "propose_iterative",
+            mock.AsyncMock(return_value=response),
+        ):
+            await society.run_generation(1)
+
+        assert society.library.get("base-1").referenced_by == ["derived-1"]
+        assert society.library.reused_artifact_count() == 1
