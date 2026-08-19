@@ -12,8 +12,6 @@ from lms.goals import (
     get_goal,
     list_goals,
     validate_imports,
-    ALLOWED_IMPORTS_FOUNDATION,
-    FORBIDDEN_IMPORTS,
 )
 
 
@@ -149,7 +147,9 @@ class TestGoal:
             description="...",
             source="...",
             definitions=[
-                StacksDefinition(tag="001P", section="1", name="Yoneda FF", content="..."),
+                StacksDefinition(
+                    tag="001P", section="1", name="Yoneda FF", content="..."
+                ),
             ],
         )
 
@@ -178,7 +178,9 @@ class TestGoal:
             description="Test",
             source="Test Source",
             definitions=[
-                StacksDefinition(tag="A", section="1", name="Def A", content="Content A"),
+                StacksDefinition(
+                    tag="A", section="1", name="Def A", content="Content A"
+                ),
             ],
         )
         context = goal.to_prompt_context()
@@ -364,3 +366,75 @@ import Mathlib.Data.Opposite  -- should define this yourself!
         assert "FORBIDDEN IMPORTS" in context
         assert "CategoryTheory" in context
         assert "ALLOWED IMPORTS" in context
+
+
+class TestGoalFileLoading:
+    """File-based goals: policy-field round-trip and `goals/` name resolution."""
+
+    def _goal(self) -> Goal:
+        return Goal(
+            name="Test Goal",
+            description="desc",
+            source="src",
+            definitions=[
+                StacksDefinition(tag="0001", section="1.1", name="d", content="c")
+            ],
+            allowed_imports=["Mathlib.Tactic.Common"],
+            forbidden_imports=["Mathlib.CategoryTheory"],
+            preamble="import Mathlib.Tactic.Common",
+        )
+
+    def test_policy_fields_round_trip(self, tmp_path):
+        path = tmp_path / "goal.json"
+        self._goal().save(path)
+        loaded = Goal.load(path)
+        assert loaded.allowed_imports == ["Mathlib.Tactic.Common"]
+        assert loaded.forbidden_imports == ["Mathlib.CategoryTheory"]
+        assert loaded.preamble == "import Mathlib.Tactic.Common"
+
+    def test_pre_policy_goal_json_still_loads(self, tmp_path):
+        """Goal files saved before the policy fields were serialized load as None."""
+        path = tmp_path / "goal.json"
+        goal = self._goal()
+        goal.allowed_imports = None
+        goal.forbidden_imports = None
+        goal.preamble = None
+        goal.save(path)
+        data = json.loads(path.read_text())
+        assert "allowed_imports" not in data
+        loaded = Goal.load(path)
+        assert loaded.allowed_imports is None
+        assert loaded.preamble is None
+
+    def test_get_goal_falls_back_to_goals_dir(self, tmp_path, monkeypatch):
+        import lms.goals as goals_module
+
+        monkeypatch.setattr(goals_module, "GOALS_DIR", tmp_path)
+        self._goal().save(tmp_path / "stacks_kernel_track_b.json")
+        loaded = get_goal("stacks-kernel-track-b")
+        assert loaded.name == "Test Goal"
+        assert loaded.forbidden_imports == ["Mathlib.CategoryTheory"]
+
+    def test_registry_wins_over_goal_file(self, tmp_path, monkeypatch):
+        import lms.goals as goals_module
+
+        monkeypatch.setattr(goals_module, "GOALS_DIR", tmp_path)
+        shadow = self._goal()
+        shadow.save(tmp_path / "stacks_ch4_phase1.json")
+        assert get_goal("stacks-ch4-phase1").name != "Test Goal"
+
+    def test_unknown_goal_names_file_path_in_error(self, tmp_path, monkeypatch):
+        import lms.goals as goals_module
+
+        monkeypatch.setattr(goals_module, "GOALS_DIR", tmp_path)
+        with pytest.raises(ValueError, match="no-such-goal"):
+            get_goal("no-such-goal")
+
+    def test_list_goals_includes_goal_files(self, tmp_path, monkeypatch):
+        import lms.goals as goals_module
+
+        monkeypatch.setattr(goals_module, "GOALS_DIR", tmp_path)
+        self._goal().save(tmp_path / "stacks_kernel_track_b.json")
+        names = list_goals()
+        assert "stacks-kernel-track-b" in names
+        assert "stacks-ch4-phase1" in names

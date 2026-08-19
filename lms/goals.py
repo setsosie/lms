@@ -19,27 +19,23 @@ from pathlib import Path
 
 ALLOWED_IMPORTS_FOUNDATION = [
     # CORE LOGIC (for proofs and propositions)
-    "Mathlib.Logic.Basic",           # ∧, ∨, ¬, ↔, etc.
+    "Mathlib.Logic.Basic",  # ∧, ∨, ¬, ↔, etc.
     "Mathlib.Logic.Function.Basic",  # Function.Injective, Surjective, comp, id
-
     # EQUIVALENCES (for defining isomorphisms later)
-    "Mathlib.Logic.Equiv.Defs",      # ≃ type equivalences
-
+    "Mathlib.Logic.Equiv.Defs",  # ≃ type equivalences
     # BASIC DATA TYPES (for examples: Set, Grp, etc.)
-    "Mathlib.Data.Set.Basic",        # Set α, membership, subset
-    "Mathlib.Data.Set.Function",     # Set functions, image, preimage
-    "Mathlib.Data.Prod.Basic",       # α × β product types
-    "Mathlib.Data.Sum.Basic",        # α ⊕ β sum types
+    "Mathlib.Data.Set.Basic",  # Set α, membership, subset
+    "Mathlib.Data.Set.Function",  # Set functions, image, preimage
+    "Mathlib.Data.Prod.Basic",  # α × β product types
+    "Mathlib.Data.Sum.Basic",  # α ⊕ β sum types
     # NOTE: Mathlib.Data.Opposite is NOT allowed - define it yourself!
-
     # ALGEBRA (if you want concrete categories like Grp, Ring, Mon)
-    "Mathlib.Algebra.Group.Defs",    # Group, Monoid definitions
-    "Mathlib.Algebra.Ring.Defs",     # Ring, Semiring definitions
-    "Mathlib.Algebra.Group.Hom.Defs", # MonoidHom, GroupHom
-
+    "Mathlib.Algebra.Group.Defs",  # Group, Monoid definitions
+    "Mathlib.Algebra.Ring.Defs",  # Ring, Semiring definitions
+    "Mathlib.Algebra.Group.Hom.Defs",  # MonoidHom, GroupHom
     # USEFUL TACTICS
-    "Mathlib.Tactic.Common",         # simp, ring, aesop, etc.
-    "Mathlib.Tactic",                # All tactics
+    "Mathlib.Tactic.Common",  # simp, ring, aesop, etc.
+    "Mathlib.Tactic",  # All tactics
 ]
 
 # Imports that are FORBIDDEN (indicate "cheating")
@@ -48,7 +44,9 @@ FORBIDDEN_IMPORTS = [
 ]
 
 
-def validate_imports(code: str, allowed: list[str] | None = None, forbidden: list[str] | None = None) -> tuple[bool, str | None]:
+def validate_imports(
+    code: str, allowed: list[str] | None = None, forbidden: list[str] | None = None
+) -> tuple[bool, str | None]:
     """Validate that code only uses allowed imports.
 
     Args:
@@ -164,7 +162,7 @@ class Goal:
     def mark_formalized(self, tag: str, artifact_id: str) -> None:
         """Mark a definition as formalized by an artifact."""
         # Normalize tag by stripping quotes (agents may output "0019" vs 0019)
-        normalized_tag = tag.strip('"\'')
+        normalized_tag = tag.strip("\"'")
         for defn in self.definitions:
             if defn.tag == normalized_tag:
                 defn.formalized = True
@@ -172,7 +170,12 @@ class Goal:
                 return
 
     def save(self, path: Path) -> None:
-        """Save goal state to JSON."""
+        """Save goal state to JSON.
+
+        The import-policy fields are part of the goal, so they round-trip:
+        a resumed run that reconstructs its goal from `goal.json` must keep
+        the same restrictions the original run was configured with.
+        """
         data = {
             "name": self.name,
             "description": self.description,
@@ -189,19 +192,30 @@ class Goal:
                 for d in self.definitions
             ],
         }
+        if self.allowed_imports is not None:
+            data["allowed_imports"] = self.allowed_imports
+        if self.forbidden_imports is not None:
+            data["forbidden_imports"] = self.forbidden_imports
+        if self.preamble is not None:
+            data["preamble"] = self.preamble
         path.write_text(json.dumps(data, indent=2))
 
     @classmethod
     def load(cls, path: Path) -> "Goal":
-        """Load goal state from JSON."""
+        """Load goal state from JSON.
+
+        The three policy fields are optional (`data.get`) so goal files saved
+        before they were serialized stay loadable.
+        """
         data = json.loads(path.read_text())
         return cls(
             name=data["name"],
             description=data["description"],
             source=data["source"],
-            definitions=[
-                StacksDefinition(**d) for d in data["definitions"]
-            ],
+            definitions=[StacksDefinition(**d) for d in data["definitions"]],
+            allowed_imports=data.get("allowed_imports"),
+            forbidden_imports=data.get("forbidden_imports"),
+            preamble=data.get("preamble"),
         )
 
 
@@ -296,7 +310,6 @@ p : x ×_z y → x and q : x ×_z y → y such that f ∘ p = g ∘ q, satisfyin
 Universal property: For any w with a : w → x, b : w → y where f ∘ a = g ∘ b,
 there exists UNIQUE h : w → x ×_z y making everything commute.""",
         ),
-
         # === MILESTONE TARGETS (theorems to prove - can they reach these?) ===
         StacksDefinition(
             tag="0019",
@@ -403,7 +416,6 @@ For objects in a category, prove:
 
 Establish what you need about morphisms and isomorphisms.""",
         ),
-
         # === TIER 2: YONEDA AND REPRESENTABILITY ===
         # The crown jewels of basic category theory
         StacksDefinition(
@@ -435,7 +447,6 @@ natural transformation between representable functors comes from a morphism.
 
 This is a corollary of the Yoneda Lemma - but you must prove it.""",
         ),
-
         # === TIER 3: UNIVERSAL CONSTRUCTIONS ===
         # Products, limits, and their properties
         StacksDefinition(
@@ -478,7 +489,6 @@ morphisms between products.
 This is a fundamental theorem about the structure of limits.
 Prove both directions and give the construction.""",
         ),
-
         # === TIER 4: ADJUNCTIONS ===
         # The deepest structural theorems
         StacksDefinition(
@@ -513,7 +523,6 @@ Dually: Left adjoints preserve colimits.
 This is one of the most useful theorems in category theory.
 You'll need adjunctions and limits established first.""",
         ),
-
         # === TIER 5: ADVANCED MILESTONES ===
         StacksDefinition(
             tag="M007",
@@ -672,7 +681,6 @@ This says the naturality square commutes:
 Create a Lean 4 structure depending on your Functor definition.
 Do NOT use Mathlib.CategoryTheory.NatTrans!""",
         ),
-
         # === TIER 2: BASIC CONSTRUCTIONS ===
         StacksDefinition(
             tag="DEF-OPPOSITE",
@@ -700,7 +708,6 @@ For a fixed object x in C:
 
 Prove this is a functor from C^op to Type.""",
         ),
-
         # === TIER 3: THE MAIN EVENT ===
         StacksDefinition(
             tag="LEM-YONEDA",
@@ -742,7 +749,6 @@ THEOREM: The Yoneda embedding is fully faithful, meaning:
 This is a corollary of the Yoneda Lemma (take F = h_y).
 Prove it using your earlier definitions and lemmas.""",
         ),
-
         # === TIER 4: CONCRETE EXAMPLE ===
         StacksDefinition(
             tag="EX-SET-CAT",
@@ -797,7 +803,6 @@ ALLOWED_IMPORTS_STACKS = [
     "Mathlib.Logic.Basic",
     "Mathlib.Logic.Function.Basic",
     "Mathlib.Logic.Equiv.Defs",
-
     # Basic data types
     "Mathlib.Data.Set.Basic",
     "Mathlib.Data.Set.Function",
@@ -805,29 +810,26 @@ ALLOWED_IMPORTS_STACKS = [
     "Mathlib.Data.Prod.Basic",
     "Mathlib.Data.Sum.Basic",
     "Mathlib.Data.Sigma.Basic",
-
     # Order theory (for lattices, needed for topology)
     "Mathlib.Order.Basic",
     "Mathlib.Order.Lattice",
     "Mathlib.Order.CompleteLattice",
     "Mathlib.Order.GaloisConnection",
-
     # Algebra (for algebraic examples)
     "Mathlib.Algebra.Group.Defs",
     "Mathlib.Algebra.Ring.Defs",
     "Mathlib.Algebra.Group.Hom.Defs",
     "Mathlib.Algebra.Module.Basic",
-
     # Tactics
     "Mathlib.Tactic.Common",
     "Mathlib.Tactic",
 ]
 
 FORBIDDEN_IMPORTS_STACKS = [
-    "Mathlib.CategoryTheory",      # Build categories yourself
-    "Mathlib.Topology.Basic",      # Build topology yourself
-    "Mathlib.Topology.Sheaves",    # Build sheaves yourself
-    "Mathlib.Geometry.RingedSpace", # Build ringed spaces yourself
+    "Mathlib.CategoryTheory",  # Build categories yourself
+    "Mathlib.Topology.Basic",  # Build topology yourself
+    "Mathlib.Topology.Sheaves",  # Build sheaves yourself
+    "Mathlib.Geometry.RingedSpace",  # Build ringed spaces yourself
 ]
 
 STACKS_FULL_PATH = Goal(
@@ -962,7 +964,6 @@ Equivalently, there exist natural transformations:
 
 satisfying the triangle identities.""",
         ),
-
         # =====================================================================
         # CHAPTER 5: TOPOLOGY (TIER 2 - needs Ch 4)
         # =====================================================================
@@ -1025,7 +1026,6 @@ A refinement of a cover {U_i} is a cover {V_j} such that each V_j is contained i
 
 Open covers are central to the definition of sheaves.""",
         ),
-
         # =====================================================================
         # CHAPTER 6: SHEAVES ON SPACES (TIER 3 - needs Ch 4, 5)
         # =====================================================================
@@ -1105,7 +1105,6 @@ The category Sh(X) of sheaves on X is a full subcategory of PSh(X).
 
 Sh(X) has limits, colimits, and is an abelian category (for abelian sheaves).""",
         ),
-
         # =====================================================================
         # CHAPTER 7: SITES AND SHEAVES (TIER 4 - needs Ch 4, 6)
         # =====================================================================
@@ -1186,7 +1185,6 @@ Key properties of a topos E:
 
 Topoi are "generalized spaces" - they behave like categories of sheaves.""",
         ),
-
         # =====================================================================
         # CHAPTER 8: STACKS (TIER 5 - THE GOAL!)
         # =====================================================================
@@ -1301,11 +1299,13 @@ THIS IS THE MAIN GOAL: Understand what an algebraic stack is!""",
     ],
 )
 
+
 # Create a variant with Ch4 core definitions pre-marked as complete
 # (Category, Functor, NatTrans, Opposite, Yoneda are in Foundation.lean)
 def _create_ch4_complete_goal() -> Goal:
     """Create stacks-full-path with Ch4 core definitions pre-marked as formalized."""
     import copy
+
     goal = copy.deepcopy(STACKS_FULL_PATH)
     goal.name = "Stacks Project: Path to Stacks (Ch4 Core Complete)"
     goal.description = """Continue building toward Stacks from where Chapter 4 left off.
@@ -1325,7 +1325,13 @@ Then proceed through:
 - Chapter 8: Stacks"""
 
     # Mark the 5 core Ch4 definitions as formalized
-    ch4_done_tags = {"CH4-CAT", "CH4-FUNCTOR", "CH4-NATTRANS", "CH4-OPPOSITE", "CH4-YONEDA"}
+    ch4_done_tags = {
+        "CH4-CAT",
+        "CH4-FUNCTOR",
+        "CH4-NATTRANS",
+        "CH4-OPPOSITE",
+        "CH4-YONEDA",
+    }
     for defn in goal.definitions:
         if defn.tag in ch4_done_tags:
             defn.formalized = True
@@ -1347,14 +1353,41 @@ GOALS_REGISTRY = {
 }
 
 
+#: Directory of file-based goal specs (repo root `goals/`), resolvable by name
+#: through `get_goal` alongside the in-code registry.
+GOALS_DIR = Path(__file__).resolve().parent.parent / "goals"
+
+
+def _goal_file(name: str) -> Path:
+    """Path a goal name resolves to under `goals/` (dashes become underscores)."""
+    return GOALS_DIR / f"{name.replace('-', '_')}.json"
+
+
 def get_goal(name: str) -> Goal:
-    """Get a goal by name from the registry."""
-    if name not in GOALS_REGISTRY:
-        available = ", ".join(GOALS_REGISTRY.keys())
-        raise ValueError(f"Unknown goal '{name}'. Available: {available}")
-    return GOALS_REGISTRY[name]
+    """Get a goal by name — from the registry, else from `goals/<name>.json`.
+
+    The registry keeps the historical in-code goals; new goals (e.g. the
+    shared-kernel Stacks tracks) ship as JSON files under `goals/` and need no
+    code change to become runnable.
+    """
+    if name in GOALS_REGISTRY:
+        return GOALS_REGISTRY[name]
+    goal_file = _goal_file(name)
+    if goal_file.is_file():
+        return Goal.load(goal_file)
+    available = ", ".join(list_goals())
+    raise ValueError(
+        f"Unknown goal '{name}' (no registry entry, no {goal_file}). "
+        f"Available: {available}"
+    )
 
 
 def list_goals() -> list[str]:
-    """List available goal names."""
-    return list(GOALS_REGISTRY.keys())
+    """List available goal names: registry entries plus `goals/*.json` files."""
+    names = list(GOALS_REGISTRY.keys())
+    if GOALS_DIR.is_dir():
+        for path in sorted(GOALS_DIR.glob("*.json")):
+            name = path.stem.replace("_", "-")
+            if name not in names:
+                names.append(name)
+    return names
