@@ -1,0 +1,330 @@
+{
+  "name": "Shared Kernel Track B: Fibred Categories and Descent",
+  "description": "Formalize the fibred-category layer of the shared kernel: categories over a category, (strongly) cartesian morphisms, fibred categories and their 2-category, inertia, categories fibred in groupoids/sets/setoids, split fibred categories vs presheaves of categories, representable CFGs, the 2-Yoneda lemma, and descent data in fibred categories. This bridges the compiled WC-3 2-category corpus to the sites/stacks layer. Build ON Mathlib (extend CategoryTheory.FiberedCategory.*); novelty is measured by the N0/N1 classifier, not assumed.",
+  "source": "The Stacks Project, Chapter 4 \u00a732-41 and Chapter 8 \u00a73 (https://stacks.math.columbia.edu)",
+  "definitions": [
+    {
+      "tag": "003Y",
+      "section": "4.32",
+      "name": "Definition: definition categories over C (Categories over categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nThe {\\it $2$-category of categories over $\\mathcal{C}$}\nis the $2$-category defined as follows:\n\\begin{enumerate}\n\\item Its objects will be functors $p : \\mathcal{S} \\to \\mathcal{C}$.\n\\item Its $1$-morphisms $(\\mathcal{S}, p) \\to (\\mathcal{S}', p')$\nwill be functors $G : \\mathcal{S} \\to \\mathcal{S}'$ such that\n$p' \\circ G = p$.\n\\item Its $2$-morphisms $t : G \\to H$ for\n$G, H : (\\mathcal{S}, p) \\to (\\mathcal{S}', p')$\nwill be morphisms of functors\nsuch that $p'(t_x) = \\text{id}_{p(x)}$\nfor all $x \\in \\Ob(\\mathcal{S})$.\n\\end{enumerate}\nIn this situation we will denote\n$$\n\\Mor_{\\textit{Cat}/\\mathcal{C}}(\\mathcal{S}, \\mathcal{S}')\n$$\nthe category of $1$-morphisms between\n$(\\mathcal{S}, p)$ and $(\\mathcal{S}', p')$\n\n[Stacks Tag 003Y, categories.tex, https://stacks.math.columbia.edu/tag/003Y]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XH",
+      "section": "4.32",
+      "name": "Definition: definition fibre category (Categories over categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a category over $\\mathcal{C}$.\n\\begin{enumerate}\n\\item The {\\it fibre category} over an object $U\\in \\Ob(\\mathcal{C})$\nis the category $\\mathcal{S}_U$ with objects\n$$\n\\Ob(\\mathcal{S}_U) = \\{x\\in \\Ob(\\mathcal{S}) :\np(x) = U\\}\n$$\nand morphisms\n$$\n\\Mor_{\\mathcal{S}_U}(x, y) = \\{ \\phi \\in \\Mor_\\mathcal{S}(x, y) :\np(\\phi) = \\text{id}_U\\}.\n$$\n\\item A {\\it lift} of an object $U \\in \\Ob(\\mathcal{C})$\nis an object $x\\in \\Ob(\\mathcal{S})$ such that $p(x) = U$, i.e.,\n$x\\in \\Ob(\\mathcal{S}_U)$. We will also sometime say\nthat {\\it $x$ lies over $U$}.\n\\item Similarly, a {\\it lift} of a morphism $f : V \\to U$ in $\\mathcal{C}$\nis a morphism $\\phi : y \\to x$ in $\\mathcal{S}$ such that $p(\\phi) = f$.\nWe sometimes say that {\\it $\\phi$ lies over $f$}.\n\\end{enumerate}\n\n[Stacks Tag 02XH, categories.tex, https://stacks.math.columbia.edu/tag/02XH]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0040",
+      "section": "4.32",
+      "name": "Lemma: lemma 2 product categories over C (Categories over categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nThe $(2, 1)$-category of categories\nover $\\mathcal{C}$ has 2-fibre products.\nSuppose that\n$F : \\mathcal{X} \\to \\mathcal{S}$ and\n$G : \\mathcal{Y} \\to \\mathcal{S}$ are morphisms of categories over\n$\\mathcal{C}$.\nAn explicit 2-fibre product\n$\\mathcal{X} \\times_\\mathcal{S}\\mathcal{Y}$ is given by the following\ndescription\n\\begin{enumerate}\n\\item an object of $\\mathcal{X} \\times_\\mathcal{S} \\mathcal{Y}$ is a quadruple\n$(U, x, y, f)$, where $U \\in \\Ob(\\mathcal{C})$,\n$x\\in \\Ob(\\mathcal{X}_U)$, $y\\in \\Ob(\\mathcal{Y}_U)$,\nand $f : F(x) \\to G(y)$ is an isomorphism in $\\mathcal{S}_U$,\n\\item a morphism $(U, x, y, f) \\to (U', x', y', f')$ is given by a pair\n$(a, b)$, where $a : x \\to x'$ is a morphism in $\\mathcal{X}$, and\n$b : y \\to y'$ is a\nmorphism in $\\mathcal{Y}$ such that\n\\begin{enumerate}\n\\item $a$ and $b$ induce the same morphism $U \\to U'$, and\n\\item the diagram\n$$\n\\xymatrix{\nF(x) \\ar[r]^f \\ar[d]^{F(a)} & G(y) \\ar[d]^{G(b)} \\\\\nF(x') \\ar[r]^{f'} & G(y')\n}\n$$\nis commutative.\n\\end{enumerate}\n\\end{enumerate}\nThe functors $p : \\mathcal{X} \\times_\\mathcal{S}\\mathcal{Y} \\to \\mathcal{X}$\nand $q : \\mathcal{X} \\times_\\mathcal{S}\\mathcal{Y} \\to \\mathcal{Y}$ are the\nforgetful functors in this case. The transformation $\\psi : F \\circ p \\to\nG \\circ q$ is given on the object $\\xi = (U, x, y, f)$ by\n$\\psi_\\xi = f : F(p(\\xi)) = F(x) \\to G(y) = G(q(\\xi))$.\n\n[Stacks Tag 0040, categories.tex, https://stacks.math.columbia.edu/tag/0040]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XI",
+      "section": "4.32",
+      "name": "Lemma: lemma fibre 2 fibre product categories over C (Categories over categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $f : \\mathcal{X} \\to \\mathcal{S}$ and\n$g : \\mathcal{Y} \\to \\mathcal{S}$ be morphisms of categories over\n$\\mathcal{C}$. For any object $U$ of $\\mathcal{C}$ we have\nthe following identity of\nfibre categories\n$$\n\\left(\\mathcal{X} \\times_\\mathcal{S}\\mathcal{Y}\\right)_U\n=\n\\mathcal{X}_U \\times_{\\mathcal{S}_U} \\mathcal{Y}_U\n$$\n\n[Stacks Tag 02XI, categories.tex, https://stacks.math.columbia.edu/tag/02XI]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XK",
+      "section": "4.33",
+      "name": "Definition: definition cartesian over C (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a category over $\\mathcal{C}$.\nA {\\it strongly cartesian morphism}, or more precisely a\n{\\it strongly $\\mathcal{C}$-cartesian morphism} is a\nmorphism $\\varphi : y \\to x$ of $\\mathcal{S}$ such that\nfor every $z \\in \\Ob(\\mathcal{S})$ the map\n$$\n\\Mor_\\mathcal{S}(z, y)\n\\longrightarrow\n\\Mor_\\mathcal{S}(z, x)\n\\times_{\\Mor_\\mathcal{C}(p(z), p(x))}\n\\Mor_\\mathcal{C}(p(z), p(y)),\n$$\ngiven by $\\psi \\longmapsto (\\varphi \\circ \\psi, p(\\psi))$\nis bijective.\n\n[Stacks Tag 02XK, categories.tex, https://stacks.math.columbia.edu/tag/02XK]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XL",
+      "section": "4.33",
+      "name": "Lemma: lemma composition cartesian (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a category over $\\mathcal{C}$.\n\\begin{enumerate}\n\\item The composition of two strongly cartesian morphisms\nis strongly cartesian.\n\\item Any isomorphism of $\\mathcal{S}$ is strongly cartesian.\n\\item Any strongly cartesian morphism $\\varphi$ such that $p(\\varphi)$\nis an isomorphism, is an isomorphism.\n\\end{enumerate}\n\n[Stacks Tag 02XL, categories.tex, https://stacks.math.columbia.edu/tag/02XL]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "06N4",
+      "section": "4.33",
+      "name": "Lemma: lemma strongly cartesian fibre product (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a category over $\\mathcal{C}$.\nLet $x \\to y$ and $z \\to y$ be morphisms of $\\mathcal{S}$.\nAssume\n\\begin{enumerate}\n\\item $x \\to y$ is strongly cartesian,\n\\item $p(x) \\times_{p(y)} p(z)$ exists, and\n\\item there exists a strongly cartesian morphism $a : w \\to z$ in\n$\\mathcal{S}$ with $p(w) = p(x) \\times_{p(y)} p(z)$ and\n$p(a) = \\text{pr}_2 : p(x) \\times_{p(y)} p(z) \\to p(z)$.\n\\end{enumerate}\nThen the fibre product $x \\times_y z$ exists and is isomorphic to $w$.\n\n[Stacks Tag 06N4, categories.tex, https://stacks.math.columbia.edu/tag/06N4]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XM",
+      "section": "4.33",
+      "name": "Definition: definition fibred category (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a category over $\\mathcal{C}$.\nWe say $\\mathcal{S}$ is a {\\it fibred category over $\\mathcal{C}$}\nif given any $x \\in \\Ob(\\mathcal{S})$ lying over\n$U \\in \\Ob(\\mathcal{C})$ and any morphism $f : V \\to U$ of\n$\\mathcal{C}$, there exists a strongly cartesian morphism $f^*x \\to x$\nlying over $f$.\n\n[Stacks Tag 02XM, categories.tex, https://stacks.math.columbia.edu/tag/02XM]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XN",
+      "section": "4.33",
+      "name": "Definition: definition pullback functor fibred category (Fibred categories)",
+      "content": "Assume $p : \\mathcal{S} \\to \\mathcal{C}$ is a fibred category.\n\\begin{enumerate}\n\\item A {\\it choice of pullbacks}\\footnote{This is probably nonstandard\nterminology. In some texts this is called a ``cleavage'' but it conjures up\nthe wrong image. Maybe a ``cleaving'' would be a better word.\nA related notion is that of a ``splitting'', but in many texts a ``splitting''\nmeans a choice of pullbacks such that $g^*f^* = (f \\circ g)^*$\nfor any composable pair of morphisms. Compare\nalso with Definition \\ref{definition-split-fibred-category}.}\nfor $p : \\mathcal{S} \\to \\mathcal{C}$\nis given by a choice of a strongly cartesian morphism\n$f^\\ast x \\to x$ lying over $f$ for any morphism\n$f: V \\to U$ of $\\mathcal{C}$ and any $x \\in \\Ob(\\mathcal{S}_U)$.\n\\item Given a choice of pullbacks,\nfor any morphism $f : V \\to U$ of $\\mathcal{C}$\nthe functor $f^* : \\mathcal{S}_U \\to \\mathcal{S}_V$ described\nabove is called a {\\it pullback functor} (associated to the choices\n$f^*x \\to x$ made above).\n\\end{enumerate}\n\n[Stacks Tag 02XN, categories.tex, https://stacks.math.columbia.edu/tag/02XN]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XO",
+      "section": "4.33",
+      "name": "Lemma: lemma fibred (Fibred categories)",
+      "content": "Assume $p : \\mathcal{S} \\to \\mathcal{C}$ is a fibred category.\nAssume given a choice of pullbacks for $p : \\mathcal{S} \\to \\mathcal{C}$.\n\\begin{enumerate}\n\\item For any pair of composable morphisms $f : V \\to U$,\n$g : W \\to V$ there is a unique isomorphism\n$$\n\\alpha_{g, f} :\n(f \\circ g)^\\ast\n\\longrightarrow\ng^\\ast \\circ f^\\ast\n$$\nas functors $\\mathcal{S}_U \\to \\mathcal{S}_W$\nsuch that for every $y\\in \\Ob(\\mathcal{S}_U)$ the following\ndiagram commutes\n$$\n\\xymatrix{\ng^\\ast f^\\ast y \\ar[r]\n&\nf^\\ast y \\ar[d] \\\\\n(f \\circ g)^\\ast y \\ar[r]\n\\ar[u]^{(\\alpha_{g, f})_y}\n&\ny\n}\n$$\n\\item If $f = \\text{id}_U$, then there is a canonical isomorphism\n$\\alpha_U : \\text{id} \\to (\\text{id}_U)^*$ as functors\n$\\mathcal{S}_U \\to \\mathcal{S}_U$.\n\\item The quadruple\n$(U \\mapsto \\mathcal{S}_U, f \\mapsto f^*, \\alpha_{g, f}, \\alpha_U)$\ndefines a pseudo functor from $\\mathcal{C}^{opp}$ to\nthe $(2, 1)$-category of categories, see\nDefinition \\ref{definition-functor-into-2-category}.\n\\end{enumerate}\n\n[Stacks Tag 02XO, categories.tex, https://stacks.math.columbia.edu/tag/02XO]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "042G",
+      "section": "4.33",
+      "name": "Lemma: lemma fibred equivalent (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $\\mathcal{S}_1$, $\\mathcal{S}_2$ be categories over $\\mathcal{C}$.\nSuppose that $\\mathcal{S}_1$ and $\\mathcal{S}_2$ are equivalent\nas categories over $\\mathcal{C}$.\nThen $\\mathcal{S}_1$ is fibred over $\\mathcal{C}$ if and only if\n$\\mathcal{S}_2$ is fibred over $\\mathcal{C}$.\n\n[Stacks Tag 042G, categories.tex, https://stacks.math.columbia.edu/tag/042G]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XP",
+      "section": "4.33",
+      "name": "Definition: definition fibred categories over C (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nThe {\\it $2$-category of fibred categories over $\\mathcal{C}$}\nis the sub $2$-category of the $2$-category of categories\nover $\\mathcal{C}$ (see Definition \\ref{definition-categories-over-C})\ndefined as follows:\n\\begin{enumerate}\n\\item Its objects will be fibred categories\n$p : \\mathcal{S} \\to \\mathcal{C}$.\n\\item Its $1$-morphisms $(\\mathcal{S}, p) \\to (\\mathcal{S}', p')$\nwill be functors $G : \\mathcal{S} \\to \\mathcal{S}'$ such that\n$p' \\circ G = p$ and such that $G$ maps strongly cartesian\nmorphisms to strongly cartesian morphisms.\n\\item Its $2$-morphisms $t : G \\to H$ for\n$G, H : (\\mathcal{S}, p) \\to (\\mathcal{S}', p')$\nwill be morphisms of functors\nsuch that $p'(t_x) = \\text{id}_{p(x)}$\nfor all $x \\in \\Ob(\\mathcal{S})$.\n\\end{enumerate}\nIn this situation we will denote\n$$\n\\Mor_{\\textit{Fib}/\\mathcal{C}}(\\mathcal{S}, \\mathcal{S}')\n$$\nthe category of $1$-morphisms between\n$(\\mathcal{S}, p)$ and $(\\mathcal{S}', p')$\n\n[Stacks Tag 02XP, categories.tex, https://stacks.math.columbia.edu/tag/02XP]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XQ",
+      "section": "4.33",
+      "name": "Lemma: lemma 2 product fibred categories over C (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nThe $(2, 1)$-category of fibred categories\nover $\\mathcal{C}$ has 2-fibre products, and\nthey are described as in\nLemma \\ref{lemma-2-product-categories-over-C}.\n\n[Stacks Tag 02XQ, categories.tex, https://stacks.math.columbia.edu/tag/02XQ]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XR",
+      "section": "4.33",
+      "name": "Lemma: lemma cute (Fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category. Let $U \\in \\Ob(\\mathcal{C})$.\nIf $p : \\mathcal{S} \\to \\mathcal{C}$ is a fibred category\nand $p$ factors through $p' : \\mathcal{S} \\to \\mathcal{C}/U$\nthen $p' : \\mathcal{S} \\to \\mathcal{C}/U$ is a fibred category.\n\n[Stacks Tag 02XR, categories.tex, https://stacks.math.columbia.edu/tag/02XR]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "034I",
+      "section": "4.34",
+      "name": "Definition: definition inertia fibred category (Inertia)",
+      "content": "Let $\\mathcal{C}$ be a category.\n\\begin{enumerate}\n\\item Let $F : \\mathcal{S} \\to \\mathcal{S}'$ be a $1$-morphism of\nfibred categories over $\\mathcal{C}$. The {\\it relative inertia\nof $\\mathcal{S}$ over $\\mathcal{S}'$} is the fibred category\n$\\mathcal{I}_{\\mathcal{S}/\\mathcal{S}'} \\to \\mathcal{C}$ of\nLemma \\ref{lemma-inertia-fibred-category}.\n\\item By the {\\it inertia fibred category $\\mathcal{I}_\\mathcal{S}$\nof $\\mathcal{S}$} we mean\n$\\mathcal{I}_\\mathcal{S} = \\mathcal{I}_{\\mathcal{S}/\\mathcal{C}}$.\n\\end{enumerate}\n\n[Stacks Tag 034I, categories.tex, https://stacks.math.columbia.edu/tag/034I]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "04Z6",
+      "section": "4.34",
+      "name": "Lemma: lemma relative inertia as fibre product (Inertia)",
+      "content": "Let $F : \\mathcal{S} \\to \\mathcal{S}'$ be a $1$-morphism of categories\nfibred over a category $\\mathcal{C}$. Then the diagram\n$$\n\\xymatrix{\n\\mathcal{I}_{\\mathcal{S}/\\mathcal{S}'}\n\\ar[d]_{F \\circ (\\ref{equation-inertia-structure-map})}\n\\ar[rr]_{(\\ref{equation-comparison})} & &\n\\mathcal{I}_\\mathcal{S} \\ar[d]^{(\\ref{equation-functorial})} \\\\\n\\mathcal{S}' \\ar[rr]^e & &\n\\mathcal{I}_{\\mathcal{S}'}\n}\n$$\nis a $2$-fibre product.\n\n[Stacks Tag 04Z6, categories.tex, https://stacks.math.columbia.edu/tag/04Z6]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "003T",
+      "section": "4.35",
+      "name": "Definition: definition fibred groupoids (Categories fibred in groupoids)",
+      "content": "Let $p : \\mathcal{S} \\to \\mathcal{C}$ be a functor.\nWe say that $\\mathcal{S}$ is {\\it fibred in groupoids} over $\\mathcal{C}$ if\nthe following two conditions hold:\n\\begin{enumerate}\n\\item For every morphism $f : V \\to U$ in $\\mathcal{C}$ and every\nlift $x$ of $U$ there is a lift $\\phi : y \\to x$ of $f$ with\ntarget $x$.\n\\item For every pair of morphisms $\\phi : y \\to x$ and $ \\psi : z \\to x$\nand any morphism $f : p(z) \\to p(y)$ such that $p(\\phi) \\circ f = p(\\psi)$\nthere exists a unique lift $\\chi : z \\to y$ of $f$ such that\n$\\phi \\circ \\chi = \\psi$.\n\\end{enumerate}\n\n[Stacks Tag 003T, categories.tex, https://stacks.math.columbia.edu/tag/003T]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "003V",
+      "section": "4.35",
+      "name": "Lemma: lemma fibred groupoids (Categories fibred in groupoids)",
+      "content": "Let $p : \\mathcal{S} \\to \\mathcal{C}$ be a functor.\nThe following are equivalent\n\\begin{enumerate}\n\\item $p : \\mathcal{S} \\to \\mathcal{C}$ is a category\nfibred in groupoids, and\n\\item all fibre categories are groupoids and\n$\\mathcal{S}$ is a fibred category over $\\mathcal{C}$.\n\\end{enumerate}\nMoreover, in this case every morphism of $\\mathcal{S}$ is\nstrongly cartesian. In addition, given $f^\\ast x \\to x$\nlying over $f$ for all $f: V \\to U = p(x)$ the data\n$(U \\mapsto \\mathcal{S}_U, f \\mapsto f^*, \\alpha_{f, g}, \\alpha_U)$\nconstructed in Lemma \\ref{lemma-fibred}\ndefines a pseudo functor from $\\mathcal{C}^{opp}$ in to\nthe $(2, 1)$-category of groupoids.\n\n[Stacks Tag 003V, categories.tex, https://stacks.math.columbia.edu/tag/003V]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "03WQ",
+      "section": "4.35",
+      "name": "Lemma: lemma fibred gives fibred groupoids (Categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a fibred category.\nLet $\\mathcal{S}'$ be the subcategory of $\\mathcal{S}$ defined\nas follows\n\\begin{enumerate}\n\\item $\\Ob(\\mathcal{S}') = \\Ob(\\mathcal{S})$, and\n\\item for $x, y \\in \\Ob(\\mathcal{S}')$ the set of morphisms between $x$\nand $y$ in $\\mathcal{S}'$ is the set of strongly cartesian morphisms between\n$x$ and $y$ in $\\mathcal{S}$.\n\\end{enumerate}\nLet $p' : \\mathcal{S}' \\to \\mathcal{C}$ be the restriction of $p$\nto $\\mathcal{S}'$. Then $p' : \\mathcal{S}' \\to \\mathcal{C}$ is fibred\nin groupoids.\n\n[Stacks Tag 03WQ, categories.tex, https://stacks.math.columbia.edu/tag/03WQ]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XS",
+      "section": "4.35",
+      "name": "Definition: definition categories fibred in groupoids over C (Categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category.\nThe {\\it $2$-category of categories fibred in groupoids over $\\mathcal{C}$}\nis the sub $2$-category of the $2$-category of fibred categories\nover $\\mathcal{C}$ (see Definition \\ref{definition-fibred-categories-over-C})\ndefined as follows:\n\\begin{enumerate}\n\\item Its objects will be categories\n$p : \\mathcal{S} \\to \\mathcal{C}$ fibred in groupoids.\n\\item Its $1$-morphisms $(\\mathcal{S}, p) \\to (\\mathcal{S}', p')$\nwill be functors $G : \\mathcal{S} \\to \\mathcal{S}'$ such that\n$p' \\circ G = p$ (since every morphism is strongly cartesian\n$G$ automatically preserves them).\n\\item Its $2$-morphisms $t : G \\to H$ for\n$G, H : (\\mathcal{S}, p) \\to (\\mathcal{S}', p')$\nwill be morphisms of functors\nsuch that $p'(t_x) = \\text{id}_{p(x)}$\nfor all $x \\in \\Ob(\\mathcal{S})$.\n\\end{enumerate}\n\n[Stacks Tag 02XS, categories.tex, https://stacks.math.columbia.edu/tag/02XS]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0041",
+      "section": "4.35",
+      "name": "Lemma: lemma 2 product fibred categories (Categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category.\nThe $2$-category of categories fibred in groupoids\nover $\\mathcal{C}$ has 2-fibre products, and they are described as in\nLemma \\ref{lemma-2-product-categories-over-C}.\n\n[Stacks Tag 0041, categories.tex, https://stacks.math.columbia.edu/tag/0041]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "003Z",
+      "section": "4.35",
+      "name": "Lemma: lemma equivalence fibred categories (Categories fibred in groupoids)",
+      "content": "Let $p : \\mathcal{S}\\to \\mathcal{C}$ and\n$p' : \\mathcal{S'}\\to \\mathcal{C}$ be categories fibred in groupoids, and\nsuppose that $G : \\mathcal{S}\\to \\mathcal {S}'$ is a functor over\n$\\mathcal{C}$.\n\\begin{enumerate}\n\\item Then $G$ is faithful (resp.\\ fully faithful, resp.\\ an equivalence)\nif and only if for each $U\\in\\Ob(\\mathcal{C})$ the induced functor\n$G_U : \\mathcal{S}_U\\to \\mathcal{S}'_U$ is faithful\n(resp.\\ fully faithful, resp.\\ an equivalence).\n\\item If $G$ is an equivalence, then $G$ is an equivalence in the\n$2$-category of categories fibred in groupoids over $\\mathcal{C}$.\n\\end{enumerate}\n\n[Stacks Tag 003Z, categories.tex, https://stacks.math.columbia.edu/tag/003Z]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "04Z7",
+      "section": "4.35",
+      "name": "Lemma: lemma fully faithful diagonal equivalence (Categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category. Let $p : \\mathcal{S}\\to \\mathcal{C}$ and\n$p' : \\mathcal{S'}\\to \\mathcal{C}$ be categories fibred in groupoids.\nLet $G : \\mathcal{S}\\to \\mathcal {S}'$ be a functor over $\\mathcal{C}$.\nThen $G$ is fully faithful if and only if the diagonal\n$$\n\\Delta_G :\n\\mathcal{S}\n\\longrightarrow\n\\mathcal{S} \\times_{G, \\mathcal{S}', G} \\mathcal{S}\n$$\nis an equivalence.\n\n[Stacks Tag 04Z7, categories.tex, https://stacks.math.columbia.edu/tag/04Z7]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XT",
+      "section": "4.35",
+      "name": "Lemma: lemma cute groupoids (Categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category. Let $U \\in \\Ob(\\mathcal{C})$.\nIf $p : \\mathcal{S} \\to \\mathcal{C}$ is a category fibred in groupoids\nand $p$ factors through $p' : \\mathcal{S} \\to \\mathcal{C}/U$\nthen $p' : \\mathcal{S} \\to \\mathcal{C}/U$ is fibred in groupoids.\n\n[Stacks Tag 02XT, categories.tex, https://stacks.math.columbia.edu/tag/02XT]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XW",
+      "section": "4.36",
+      "name": "Definition: definition split fibred category (Presheaves of categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nSuppose that $F : \\mathcal{C}^{opp} \\to \\textit{Cat}$ is a functor\nto the $2$-category of categories.\nWe will write $p_F : \\mathcal{S}_F \\to \\mathcal{C}$ for the\nfibred category constructed in\nExample \\ref{example-functor-categories}.\nA {\\it split fibred category} is a fibred category isomorphic (!)\nover $\\mathcal{C}$ to one of these categories {\\it $\\mathcal{S}_F$}.\n\n[Stacks Tag 02XW, categories.tex, https://stacks.math.columbia.edu/tag/02XW]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XX",
+      "section": "4.36",
+      "name": "MILESTONE: Lemma: lemma when split (Presheaves of categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $\\mathcal{S}$ be a fibred category over $\\mathcal{C}$.\nThen $\\mathcal{S}$ is split if and only if for some choice\nof pullbacks (see Definition \\ref{definition-pullback-functor-fibred-category})\nthe pullback functors\n$(f \\circ g)^*$ and $g^* \\circ f^*$ are equal.\n\n[Stacks Tag 02XX, categories.tex, https://stacks.math.columbia.edu/tag/02XX]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "04TL",
+      "section": "4.37",
+      "name": "Definition: definition split category fibred in groupoids (Presheaves of groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category.\nSuppose that $F : \\mathcal{C}^{opp} \\to \\textit{Groupoids}$ is a functor\nto the $2$-category of groupoids.\nWe will write $p_F : \\mathcal{S}_F \\to \\mathcal{C}$ for the\ncategory fibred in groupoids constructed in\nExample \\ref{example-functor-groupoids}.\nA {\\it split category fibred in groupoids} is a\ncategory fibred in groupoids isomorphic (!)\nover $\\mathcal{C}$ to one of these categories {\\it $\\mathcal{S}_F$}.\n\n[Stacks Tag 04TL, categories.tex, https://stacks.math.columbia.edu/tag/04TL]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02XY",
+      "section": "4.37",
+      "name": "Lemma: lemma fibred groupoids strict (Presheaves of groupoids)",
+      "content": "Let $ p : \\mathcal{S} \\to \\mathcal{C}$ be a category fibred in groupoids.\nThere exists a contravariant functor $F : \\mathcal{C} \\to \\textit{Groupoids}$\nsuch that $\\mathcal{S}$ is equivalent to $\\mathcal{S}_F$ over $\\mathcal{C}$.\nIn other words, every category fibred in groupoids is equivalent to a split one.\n\n[Stacks Tag 02XY, categories.tex, https://stacks.math.columbia.edu/tag/02XY]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0043",
+      "section": "4.38",
+      "name": "Definition: definition category fibred sets (Categories fibred in sets)",
+      "content": "Let $\\mathcal{C}$ be a category.\nA {\\it category fibred in sets}, or a {\\it category fibred\nin discrete categories} is a category fibred in groupoids all\nof whose fibre categories are discrete.\n\n[Stacks Tag 0043, categories.tex, https://stacks.math.columbia.edu/tag/0043]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02Y2",
+      "section": "4.38",
+      "name": "Lemma: lemma 2 category fibred sets (Categories fibred in sets)",
+      "content": "\\begin{slogan}\nCategories fibred in sets are precisely presheaves.\n\\end{slogan}\nLet $\\mathcal{C}$ be a category.\nThe only $2$-morphisms between categories fibred in sets are identities.\nIn other words, the $2$-category of categories fibred in sets is a category.\nMoreover, there is an equivalence of categories\n$$\n\\left\\{\n\\begin{matrix}\n\\text{the category of presheaves}\\\\\n\\text{of sets over }\\mathcal{C}\n\\end{matrix}\n\\right\\}\n\\leftrightarrow\n\\left\\{\n\\begin{matrix}\n\\text{the category of categories}\\\\\n\\text{fibred in sets over }\\mathcal{C}\n\\end{matrix}\n\\right\\}\n$$\nThe functor from left to right is the construction\n$F \\to \\mathcal{S}_F$ discussed in\nExample \\ref{example-presheaf}.\nThe functor from right to left assigns to $p : \\mathcal{S} \\to \\mathcal{C}$\nthe presheaf of objects $U \\mapsto \\Ob(\\mathcal{S}_U)$.\n\n[Stacks Tag 02Y2, categories.tex, https://stacks.math.columbia.edu/tag/02Y2]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "04SA",
+      "section": "4.39",
+      "name": "Definition: definition category fibred setoids (Categories fibred in setoids)",
+      "content": "Let $\\mathcal{C}$ be a category. A {\\it category fibred in setoids}\nis a category fibred in groupoids all of whose fibre categories are\nsetoids.\n\n[Stacks Tag 04SA, categories.tex, https://stacks.math.columbia.edu/tag/04SA]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "04SC",
+      "section": "4.39",
+      "name": "Lemma: lemma 2 category fibred setoids (Categories fibred in setoids)",
+      "content": "Let $\\mathcal{C}$ be a category. The construction of\nLemma \\ref{lemma-setoid-fibres}\npart (2) gives a functor\n$$\nF :\n\\left\\{\n\\begin{matrix}\n\\text{the 2-category of categories}\\\\\n\\text{fibred in setoids over }\\mathcal{C}\n\\end{matrix}\n\\right\\}\n\\longrightarrow\n\\left\\{\n\\begin{matrix}\n\\text{the category of categories}\\\\\n\\text{fibred in sets over }\\mathcal{C}\n\\end{matrix}\n\\right\\}\n$$\n(see\nDefinition \\ref{definition-functor-into-2-category}).\nThis functor is an equivalence in the following sense:\n\\begin{enumerate}\n\\item for any two 1-morphisms $f, g : \\mathcal{S}_1 \\to \\mathcal{S}_2$\nwith $F(f) = F(g)$ there exists a unique 2-isomorphism $f \\to g$,\n\\item for any morphism $h : F(\\mathcal{S}_1) \\to F(\\mathcal{S}_2)$\nthere exists a 1-morphism $f : \\mathcal{S}_1 \\to \\mathcal{S}_2$\nwith $F(f) = h$, and\n\\item any category fibred in sets $\\mathcal{S}$ is equal to $F(\\mathcal{S})$.\n\\end{enumerate}\nIn particular, defining $F_i \\in \\textit{PSh}(\\mathcal{C})$ by the\nrule $F_i(U) = \\Ob(\\mathcal{S}_{i, U})/\\cong$, we have\n$$\n\\Mor_{\\textit{Cat}/\\mathcal{C}}(\\mathcal{S}_1, \\mathcal{S}_2)\n\\Big/\n2\\text{-isomorphism}\n=\n\\Mor_{\\textit{PSh}(\\mathcal{C})}(F_1, F_2)\n$$\nMore precisely, given any map $\\phi : F_1 \\to F_2$ there exists a\n[... statement trimmed; see the tag online ...]\n\n[Stacks Tag 04SC, categories.tex, https://stacks.math.columbia.edu/tag/04SC]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0046",
+      "section": "4.40",
+      "name": "Definition: definition representable fibred category (Representable categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category.\nA category fibred in groupoids $p : \\mathcal{S} \\to \\mathcal{C}$ is\ncalled {\\it representable} if there exist an object\n$X$ of $\\mathcal{C}$ and an equivalence $j : \\mathcal{S} \\to \\mathcal{C}/X$\n(in the $2$-category of groupoids over $\\mathcal{C}$).\n\n[Stacks Tag 0046, categories.tex, https://stacks.math.columbia.edu/tag/0046]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02Y3",
+      "section": "4.40",
+      "name": "Lemma: lemma characterize representable fibred category (Representable categories fibred in groupoids)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a category fibred in groupoids.\n\\begin{enumerate}\n\\item $\\mathcal{S}$ is representable if and only if\nthe following conditions are satisfied:\n\\begin{enumerate}\n\\item $\\mathcal{S}$ is fibred in setoids, and\n\\item the presheaf $U \\mapsto \\Ob(\\mathcal{S}_U)/\\cong$ is\nrepresentable.\n\\end{enumerate}\n\\item If $\\mathcal{S}$ is representable the pair $(X, j)$, where $j$ is the\nequivalence $j : \\mathcal{S} \\to \\mathcal{C}/X$, is uniquely determined\nup to isomorphism.\n\\end{enumerate}\n\n[Stacks Tag 02Y3, categories.tex, https://stacks.math.columbia.edu/tag/02Y3]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "004B",
+      "section": "4.41",
+      "name": "MILESTONE: Lemma: lemma yoneda 2category (The 2-Yoneda lemma)",
+      "content": "Let $\\mathcal{S}\\to \\mathcal{C}$ be fibred in groupoids.\nLet $U \\in \\Ob(\\mathcal{C})$.\nThe functor\n$$\n\\Mor_{\\textit{Cat}/\\mathcal{C}}(\\mathcal{C}/U, \\mathcal{S})\n\\longrightarrow\n\\mathcal{S}_U\n$$\ngiven by $G \\mapsto G(\\text{id}_U)$ is an equivalence.\n\n[Stacks Tag 004B, categories.tex, https://stacks.math.columbia.edu/tag/004B]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "026B",
+      "section": "8.3",
+      "name": "Definition: definition descent data (Descent data in fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a fibred category.\nMake a choice of pullbacks as in Categories,\nDefinition \\ref{categories-definition-pullback-functor-fibred-category}.\nLet $\\mathcal{U} = \\{f_i : U_i \\to U\\}_{i \\in I}$\nbe a family of morphisms of $\\mathcal{C}$. Assume all the fibre products\n$U_i \\times_U U_j$, and $U_i \\times_U U_j \\times_U U_k$ exist.\n\\begin{enumerate}\n\\item A {\\it descent datum $(X_i, \\varphi_{ij})$ in $\\mathcal{S}$\nrelative to the family $\\{f_i : U_i \\to U\\}$} is given by an object $X_i$\nof $\\mathcal{S}_{U_i}$ for each $i \\in I$, an isomorphism\n$\\varphi_{ij} : \\text{pr}_0^*X_i \\to \\text{pr}_1^*X_j$\nin $\\mathcal{S}_{U_i \\times_U U_j}$ for each pair $(i, j) \\in I^2$\nsuch that for every triple of indices $(i, j, k) \\in I^3$ the\ndiagram\n$$\n\\xymatrix{\n\\text{pr}_0^*X_i \\ar[rd]_{\\text{pr}_{01}^*\\varphi_{ij}}\n\\ar[rr]_{\\text{pr}_{02}^*\\varphi_{ik}} & &\n\\text{pr}_2^*X_k \\\\\n& \\text{pr}_1^*X_j \\ar[ru]_{\\text{pr}_{12}^*\\varphi_{jk}} &\n}\n$$\nin the category $\\mathcal{S}_{U_i \\times_U U_j \\times_U U_k}$\ncommutes. This is called the {\\it cocycle condition}.\n\\item A {\\it morphism $\\psi : (X_i, \\varphi_{ij}) \\to\n(X'_i, \\varphi'_{ij})$ of descent data} is given\nby a family $\\psi = (\\psi_i)_{i\\in I}$ of morphisms\n$\\psi_i : X_i \\to X'_i$ in $\\mathcal{S}_{U_i}$\nsuch that all the diagrams\n$$\n\\xymatrix{\n\\text{pr}_0^*X_i \\ar[r]_{\\varphi_{ij}} \\ar[d]_{\\text{pr}_0^*\\psi_i}\n& \\text{pr}_1^*X_j \\ar[d]^{\\text{pr}_1^*\\psi_j} \\\\\n\\text{pr}_0^*X'_i \\ar[r]^{\\varphi'_{ij}} &\n\\text{pr}_1^*X'_j \\\\\n}\n$$\nin the categories $\\mathcal{S}_{U_i \\times_U U_j}$ commute.\n\\item The category of descent data relative to\n[... statement trimmed; see the tag online ...]\n\n[Stacks Tag 026B, stacks.tex, https://stacks.math.columbia.edu/tag/026B]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02ZD",
+      "section": "8.3",
+      "name": "Lemma: lemma pullback (Descent data in fibred categories)",
+      "content": "(Pullback of descent data.)\nLet $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a fibred category.\nMake a choice pullbacks as in Categories,\nDefinition \\ref{categories-definition-pullback-functor-fibred-category}.\nLet $\\mathcal{U} = \\{f_i : U_i \\to U\\}_{i \\in I}$, and\n$\\mathcal{V} = \\{V_j \\to V\\}_{j \\in J}$\nbe a families of morphisms of $\\mathcal{C}$ with fixed target.\nAssume all the fibre products\n$U_i \\times_U U_{i'}$, $U_i \\times_U U_{i'} \\times_U U_{i''}$,\n$V_j \\times_V V_{j'}$, and $V_j \\times_V V_{j'} \\times_V V_{j''}$ exist.\nLet $\\alpha : I \\to J$, $h : U \\to V$ and\n$g_i : U_i \\to V_{\\alpha(i)}$ be a morphism of families\nof maps with fixed target, see\nSites, Definition \\ref{sites-definition-morphism-coverings}.\n\\begin{enumerate}\n\\item Let $(Y_j, \\varphi_{jj'})$ be a descent datum relative to the\nfamily $\\{V_j \\to V\\}$. The system\n$$\n\\left(\ng_i^*Y_{\\alpha(i)},\n(g_i \\times g_{i'})^*\\varphi_{\\alpha(i)\\alpha(i')}\n\\right)\n$$\nis a descent datum relative to $\\mathcal{U}$.\n\\item This construction defines a functor between descent data relative\nto $\\mathcal{V}$ and descent data relative to $\\mathcal{U}$.\n\\item Given a second $\\alpha' : I \\to J$, $h' : U \\to V$ and\n$g'_i : U_i \\to V_{\\alpha'(i)}$ morphism of families\nof maps with fixed target, then if $h = h'$ the two resulting functors\nbetween descent data are canonically isomorphic.\n\\end{enumerate}\n\n[Stacks Tag 02ZD, stacks.tex, https://stacks.math.columbia.edu/tag/02ZD]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "02ZE",
+      "section": "8.3",
+      "name": "Definition: definition pullback functor (Descent data in fibred categories)",
+      "content": "With $\\mathcal{U} = \\{U_i \\to U\\}_{i \\in I}$,\n$\\mathcal{V} = \\{V_j \\to V\\}_{j \\in J}$,\n$\\alpha : I \\to J$, $h : U \\to V$,\nand $g_i : U_i \\to V_{\\alpha(i)}$ as in Lemma \\ref{lemma-pullback}\nthe functor\n$$\n(Y_j, \\varphi_{jj'}) \\longmapsto\n(g_i^*Y_{\\alpha(i)}, (g_i \\times g_{i'})^*\\varphi_{\\alpha(i)\\alpha(i')})\n$$\nconstructed in that lemma\nis called the {\\it pullback functor} on descent data.\n\n[Stacks Tag 02ZE, stacks.tex, https://stacks.math.columbia.edu/tag/02ZE]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "026D",
+      "section": "8.3",
+      "name": "Lemma: lemma trivial cocycle (Descent data in fibred categories)",
+      "content": "In the situation of\nDefinition \\ref{definition-effective-descent-datum} part (2) the maps\n$can_{ij} : \\text{pr}_0^*f_i^*X \\to \\text{pr}_1^*f_j^*X$ are equal to\n$(\\alpha_{\\text{pr}_1, f_j})_X \\circ (\\alpha_{\\text{pr}_0, f_i})_X^{-1}$\nwhere $\\alpha_{\\cdot, \\cdot}$ is as in\nCategories, Lemma \\ref{categories-lemma-fibred}\nand where we\nuse the equality $f_i \\circ \\text{pr}_0 = f_j \\circ \\text{pr}_1$\nas maps $U_i \\times_U U_j \\to U$.\n\n[Stacks Tag 026D, stacks.tex, https://stacks.math.columbia.edu/tag/026D]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "026E",
+      "section": "8.3",
+      "name": "MILESTONE: Definition: definition effective descent datum (Descent data in fibred categories)",
+      "content": "Let $\\mathcal{C}$ be a category.\nLet $p : \\mathcal{S} \\to \\mathcal{C}$ be a fibred category.\nMake a choice of pullbacks as in Categories,\nDefinition \\ref{categories-definition-pullback-functor-fibred-category}.\nLet $\\mathcal{U} = \\{f_i : U_i \\to U\\}_{i \\in I}$ be a family of morphisms\nwith target $U$. Assume all the fibre products\n$U_i \\times_U U_j$ and $U_i \\times_U U_j \\times_U U_k$ exist.\n\\begin{enumerate}\n\\item Given an object $X$ of $\\mathcal{S}_U$ the {\\it trivial descent datum}\nis the descent datum $(X, \\text{id}_X)$ with respect to the family\n$\\{\\text{id}_U : U \\to U\\}$.\n\\item Given an object $X$ of $\\mathcal{S}_U$\nwe have a {\\it canonical descent datum} on the family of\nobjects $f_i^*X$ by pulling back the trivial\ndescent datum $(X, \\text{id}_X)$ via the\nobvious map $\\{f_i : U_i \\to U\\} \\to \\{\\text{id}_U : U \\to U\\}$.\nWe denote this descent datum $(f_i^*X, can)$.\n\\item A descent datum $(X_i, \\varphi_{ij})$\nrelative to $\\{f_i : U_i \\to U\\}$ is called {\\it effective}\nif there exists an object $X$ of $\\mathcal{S}_U$ such that\n$(X_i, \\varphi_{ij})$ is isomorphic to $(f_i^*X, can)$.\n\\end{enumerate}\n\n[Stacks Tag 026E, stacks.tex, https://stacks.math.columbia.edu/tag/026E]",
+      "formalized": false,
+      "artifact_ids": []
+    }
+  ],
+  "allowed_imports": null,
+  "forbidden_imports": [],
+  "preamble": "/-\n  SHARED KERNEL: build ON Mathlib, do not rebuild it.\n\n  - Import Mathlib freely; prefer Mathlib.CategoryTheory.* as the substrate.\n  - Extend what exists (e.g. CategoryTheory.FiberedCategory.*) instead of\n    redefining it. A statement Mathlib already has is calibration only (N0)\n    and must not be re-proved from scratch.\n  - Cite the Stacks tag of the statement you formalize in a comment:\n    `-- Stacks Tag 02XM`.\n  - The compiled LMS corpus (LMS.Foundation) is importable and openable.\n-/"
+}
