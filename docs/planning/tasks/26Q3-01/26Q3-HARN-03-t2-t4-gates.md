@@ -8,7 +8,7 @@ than typechecking tricks.
 |-------|-------|
 | **Story Points** | 5 |
 | **Priority** | CRITICAL |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔄 IN PROGRESS |
 | **Branch** | `26Q3-HARN-03-t2-t4-gates` |
 | **Dependencies** | 26Q3-HARN-01, 26Q3-HARN-02 |
 | **PR Size Target** | <400 lines |
@@ -41,33 +41,44 @@ Gates implemented here (numbering from `calibration-program.md` §2):
 
 **T4 — axiom/sorry audit**
 
-- [ ] Rejects source containing `sorry` (already partially in `RealLeanVerifier`;
-      lift into a named gate with a structured reason)
-- [ ] Rejects any new `axiom` declaration in agent-authored code
-- [ ] Rejects `native_decide` (compiler-trusting, not kernel-checked)
-- [ ] Post-compile check via `#print axioms <name>` (lean-lsp `lean_verify`):
-      the axiom set must be a subset of
-      `{propext, Classical.choice, Quot.sound}`; anything else is a failure with
-      the offending axiom named
+- [x] Rejects source containing `sorry` (already partially in `RealLeanVerifier`;
+      lift into a named gate with a structured reason) — `T4.sorry`,
+      word-boundary match on comment-stripped source
+- [x] Rejects any new `axiom` declaration in agent-authored code —
+      `T4.axiom_decl`, offending names in `detail`
+- [x] Rejects `native_decide` (compiler-trusting, not kernel-checked) —
+      `T4.native_decide`
+- [x] Post-compile check via `#print axioms <name>`: the axiom set must be a
+      subset of `{propext, Classical.choice, Quot.sound}`; anything else is a
+      failure with the offending axiom named — `T4.axiom_audit`. Implemented by
+      appending `#print axioms` to the artifact and compiling under the
+      verifier's own `lake env lean` (the lean-lsp MCP is not importable from
+      the harness; the subprocess route reuses the exact verification
+      environment). No toolchain → INCONCLUSIVE, never a pass
 
 **T2 — non-vacuity**
 
-- [ ] Rejects artifacts whose Lean code introduces **no named declaration** —
-      i.e. `example`-only submissions
-- [ ] Rejects declarations whose statement is alpha-equivalent to an existing
-      Mathlib declaration's statement (delegate the search to 26Q3-HARN-04)
-- [ ] For a theorem with hypotheses, attempt a satisfiability witness: flag
-      (do not silently pass) statements whose hypotheses are contradictory,
-      making the theorem vacuously true
-- [ ] Undecidable cases are recorded as `INCONCLUSIVE` and routed to D4 human
-      review — never counted as passing
+- [x] Rejects artifacts whose Lean code introduces **no named declaration** —
+      i.e. `example`-only submissions — `T2.named_declaration`
+- [x] Alpha-equivalence to an existing Mathlib statement: **delegated to
+      26Q3-HARN-04** via an injectable `duplicate_checker`; until wired,
+      `T2.duplicate` reports INCONCLUSIVE (routed to D4) rather than
+      pretending it searched
+- [x] For a theorem with hypotheses, attempt a satisfiability witness —
+      `T2.hypothesis_satisfiability`: explicit `False` and textual `P`/`¬P`
+      hypothesis pairs FAIL; otherwise an `example : ∃ <telescope>, True`
+      witness probe runs, and no-witness-found is INCONCLUSIVE (flagged),
+      never a silent pass
+- [x] Undecidable cases are recorded as `INCONCLUSIVE` and routed to D4 human
+      review — never counted as passing (`GateResult.passed` is strict;
+      `Artifact.gates_passed` requires gates to have run)
 
 **Reporting**
 
-- [ ] Each artifact carries `gate_results: list[GateResult]` with
-      `{gate, passed, reason, detail}`
-- [ ] A `gate_failure_histogram` is emitted per run — the failure distribution is
-      a primary output of the calibration, not debug output
+- [x] Each artifact carries `gate_results: list[GateResult]` with
+      `{gate, outcome, passed, reason, detail}`, serialized in artifacts.json
+- [x] A `gate_failure_histogram` (and a separate `gate_inconclusive_histogram`)
+      is emitted per run via `analyze_library` / `print_analysis`
 
 ---
 
@@ -75,13 +86,16 @@ Gates implemented here (numbering from `calibration-program.md` §2):
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `lms/gates/__init__.py` | CREATE | Gate protocol + registry |
+| `lms/gates/__init__.py` | CREATE | Re-exports + `default_gate_runner` (kept minimal so 26Q3-HARN-04's `novelty.py` merges cleanly) |
+| `lms/gates/base.py` | CREATE | Gate protocol, `GateResult`/`GateOutcome`, `GateRunner`, `LeanProbeRunner` |
+| `lms/gates/lean_source.py` | CREATE | Best-effort Lean source scanning (declarations, namespaces, theorem binders) |
 | `lms/gates/axioms.py` | CREATE | T4 |
 | `lms/gates/vacuity.py` | CREATE | T2 |
-| `lms/artifacts.py` | MODIFY | `gate_results` field |
-| `lms/society.py` | MODIFY | Run gates after verification |
-| `lms/metrics.py` | MODIFY | Gate-failure histogram |
+| `lms/artifacts.py` | MODIFY | `gate_results` field + strict `gates_passed` |
+| `lms/society.py` | MODIFY | `_apply_gates` after verification in all three paths |
+| `lms/metrics.py` | MODIFY | Gate-failure + gate-inconclusive histograms |
 | `tests/test_gates_axioms.py`, `tests/test_gates_vacuity.py` | CREATE | Unit tests |
+| `scripts/verify/26Q3-01/verify_26Q3-HARN-03.sh` | CREATE | Structure checks + pytest delegation |
 
 ---
 
@@ -105,6 +119,12 @@ Gates implemented here (numbering from `calibration-program.md` §2):
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] A regression test asserts the trivial `example` above is **rejected**
-- [ ] `uv run pytest`, `uv run ruff check`, `uv run mypy` clean
+- [x] All acceptance criteria checked off
+- [x] A regression test asserts the trivial `example` above is **rejected**
+      (`test_trivial_example_rejected`)
+- [x] `uv run pytest` clean (576 passed, 43 new). Neither ruff nor mypy is a
+      project dependency; via `uvx`, `lms/gates/` + both test files are
+      ruff-clean and mypy-clean. `lms/society.py` carries 4 pre-existing ruff
+      findings and 3 pre-existing mypy findings at the merge base — left
+      untouched to keep the diff minimal for the parallel HARN-05/-12 work
+      in the same file

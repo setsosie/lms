@@ -133,6 +133,8 @@ async def run_experiment(
     iterative_mode: bool = False,
     max_attempts: int = 5,
     checkpoint_interval: int = 10,
+    use_working_groups: bool = False,
+    n_working_groups: int = 3,
 ) -> None:
     """Run an LMS experiment.
 
@@ -150,6 +152,9 @@ async def run_experiment(
         iterative_mode: If True, each agent gets multiple verification attempts
         max_attempts: Max attempts per agent in iterative mode
         checkpoint_interval: Save checkpoint every N generations
+        use_working_groups: If True, run committee mode (planning panel →
+            working groups → review committee → verify). Requires a goal.
+        n_working_groups: Number of parallel working groups in committee mode
     """
     print("\nStarting LMS Experiment")
     print(f"  Agents: {n_agents}")
@@ -217,6 +222,13 @@ async def run_experiment(
         society.iterative_mode = True
         society.max_attempts = max_attempts
 
+    # Enable committee mode if requested. The fail-fast lives in main(), but
+    # callers of run_experiment get the same loud error from run_generation
+    # if they ask for committees without a goal.
+    if use_working_groups:
+        society.use_working_groups = True
+        society.n_working_groups = n_working_groups
+
     # Clear the shared foundation before generation 1 proposes anything.
     # It lives inside the Lean project (imports must resolve through Lake), so
     # it persists between runs unless something clears it. Left alone, this
@@ -236,7 +248,9 @@ async def run_experiment(
     if max_tokens:
         print(f"  Budget: {max_tokens:,} tokens")
     print(f"  Verifier: {verifier_name}")
-    if iterative_mode:
+    if use_working_groups:
+        print(f"  Mode: COMMITTEE ({n_working_groups} groups)")
+    elif iterative_mode:
         print(f"  Mode: ITERATIVE ({max_attempts} attempts/agent)")
     print()
 
@@ -246,7 +260,12 @@ async def run_experiment(
 
     # Run experiment
     print(f"Running generations (checkpoint every {checkpoint_interval})...")
-    mode = "iterative" if iterative_mode else "standard"
+    if use_working_groups:
+        mode = "committee"
+    elif iterative_mode:
+        mode = "iterative"
+    else:
+        mode = "standard"
     try:
         for gen in range(n_generations):
             crash_log.log_generation_start(gen, mode)
@@ -427,6 +446,8 @@ async def resume_experiment(
     iterative_mode: bool = False,
     max_attempts: int = 5,
     checkpoint_interval: int = 10,
+    use_working_groups: bool = False,
+    n_working_groups: int = 3,
 ) -> None:
     """Resume an experiment from a checkpoint.
 
@@ -440,6 +461,9 @@ async def resume_experiment(
         iterative_mode: If True, each agent gets multiple verification attempts
         max_attempts: Max attempts per agent in iterative mode
         checkpoint_interval: Save checkpoint every N generations
+        use_working_groups: If True, run committee mode; the checkpoint must
+            carry a goal for the planning panel to allocate from
+        n_working_groups: Number of parallel working groups in committee mode
     """
     # Load metadata to get provider info
     metadata = json.loads((checkpoint_dir / "metadata.json").read_text())
@@ -506,12 +530,28 @@ async def resume_experiment(
         society.iterative_mode = True
         society.max_attempts = max_attempts
 
+    # Enable committee mode if requested
+    if use_working_groups:
+        if society.goal is None:
+            print(
+                "Error: --groups requires a goal, and this checkpoint has none. "
+                "Committee mode allocates tasks from the goal's dependency graph."
+            )
+            return
+        society.use_working_groups = True
+        society.n_working_groups = n_working_groups
+
     # Setup signal handlers for graceful shutdown
     setup_signal_handlers(society, checkpoint_dir, society.goal)
 
     # Initialize crash recovery log (appends to existing log)
     crash_log = CrashRecoveryLog(checkpoint_dir)
-    mode = "iterative" if iterative_mode else "standard"
+    if use_working_groups:
+        mode = "committee"
+    elif iterative_mode:
+        mode = "iterative"
+    else:
+        mode = "standard"
     start_time = datetime.now()
 
     # Continue running with periodic checkpoints
@@ -587,8 +627,8 @@ async def resume_experiment(
     print(f"\nCheckpoint updated: {checkpoint_dir}")
 
 
-def main() -> None:
-    """Main CLI entry point."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser (module-level so tests can exercise it)."""
     parser = argparse.ArgumentParser(
         description="LMS: LLM Mathematical Society Experiments",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -704,7 +744,42 @@ def main() -> None:
         help="Save checkpoint every N generations (default: 10)",
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--groups",
+        action="store_true",
+        help="Committee mode: a planning panel allocates goal tasks to working "
+        "groups, and a review committee screens their output before "
+        "verification. Requires --goal",
+    )
+
+    parser.add_argument(
+        "--n-groups",
+        type=int,
+        default=3,
+        help="Number of parallel working groups in committee mode",
+    )
+
+    return parser
+
+
+def main() -> None:
+    """Main CLI entry point."""
+    args = build_parser().parse_args()
+
+    # Committee mode has hard requirements; fail before any tokens are spent.
+    if args.groups and not args.goal and not args.resume:
+        print(
+            "Error: --groups requires --goal. Committee mode allocates tasks "
+            "from the goal's dependency graph."
+        )
+        return
+    if args.groups and args.iterative:
+        print(
+            "Error: --groups and --iterative are mutually exclusive for now. "
+            "Reconciling committee mode with the iterative retry loop is "
+            "tracked separately (26Q3-HARN-12 decision gate)."
+        )
+        return
 
     # Handle --list-goals
     if args.list_goals:
@@ -736,6 +811,8 @@ def main() -> None:
                 iterative_mode=args.iterative,
                 max_attempts=args.max_attempts,
                 checkpoint_interval=args.checkpoint_interval,
+                use_working_groups=args.groups,
+                n_working_groups=args.n_groups,
             )
         )
         return
@@ -798,6 +875,8 @@ def main() -> None:
             iterative_mode=args.iterative,
             max_attempts=args.max_attempts,
             checkpoint_interval=args.checkpoint_interval,
+            use_working_groups=args.groups,
+            n_working_groups=args.n_groups,
         )
     )
 

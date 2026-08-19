@@ -1,0 +1,170 @@
+{
+  "name": "Shared Kernel Track A: Spectral Sequences",
+  "description": "Formalize spectral sequences from the Stacks Project homological algebra chapter: the basic notions, exact couples and their derived couples, the spectral sequence of a differential object, of a filtered complex, and of a double complex, with convergence statements. Mathlib coverage of spectral sequences is essentially zero; this track is the committee-unanimous #1 kernel priority. Build ON Mathlib (homology API); novelty is measured by the N0/N1 classifier, not assumed.",
+  "source": "The Stacks Project, Chapter 12 \u00a720-25 (https://stacks.math.columbia.edu)",
+  "definitions": [
+    {
+      "tag": "011N",
+      "section": "12.20",
+      "name": "Definition: definition spectral sequence (Spectral sequences)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\n\\begin{enumerate}\n\\item A {\\it spectral sequence in $\\mathcal{A}$} is given by a\nsystem $(E_r, d_r)_{r \\geq 1}$ where each $E_r$ is an object\nof $\\mathcal{A}$, each $d_r : E_r \\to E_r$ is a morphism such\nthat $d_r \\circ d_r = 0$ and $E_{r + 1} = \\Ker(d_r)/\\Im(d_r)$\nfor $r \\geq 1$.\n\\item A {\\it morphism of spectral sequences}\n$f : (E_r, d_r)_{r \\geq 1} \\to (E'_r, d'_r)_{r \\geq 1}$ is\ngiven by a family of morphisms $f_r : E_r \\to E'_r$ such that\n$f_r \\circ d_r = d'_r \\circ f_r$ and such that $f_{r + 1}$\nis the morphism induced by $f_r$ via the identifications\n$E_{r + 1} = \\Ker(d_r)/\\Im(d_r)$\nand\n$E'_{r + 1} = \\Ker(d'_r)/\\Im(d'_r)$.\n\\end{enumerate}\n\n[Stacks Tag 011N, homology.tex, https://stacks.math.columbia.edu/tag/011N]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011O",
+      "section": "12.20",
+      "name": "Definition: definition limit spectral sequence (Spectral sequences)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $(E_r, d_r)_{r \\geq 1}$ be a spectral sequence.\n\\begin{enumerate}\n\\item If the subobjects $Z_{\\infty} = \\bigcap Z_r$\nand $B_{\\infty} = \\bigcup B_r$ of $E_1$ exist then we define\nthe {\\it limit}\\footnote{This notation is not universally accepted. In some\nreferences an additional pair of subobjects\n$Z_\\infty$ and $B_\\infty$ of $E_1$ such that\n$0 = B_1 \\subset B_2 \\subset \\ldots \\subset B_\\infty \\subset Z_\\infty\n\\subset \\ldots \\subset Z_2 \\subset Z_1 = E_1$\nis part of the data comprising a spectral sequence!}\nof the spectral sequence to be the object\n$E_{\\infty} = Z_{\\infty}/B_{\\infty}$.\n\\item We say that the spectral sequence {\\it degenerates at $E_r$}\nif the differentials $d_r, d_{r + 1}, \\ldots$ are all zero.\n\\end{enumerate}\n\n[Stacks Tag 011O, homology.tex, https://stacks.math.columbia.edu/tag/011O]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011Q",
+      "section": "12.21",
+      "name": "Definition: definition exact couple (Spectral sequences: exact couples)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\n\\begin{enumerate}\n\\item An {\\it exact couple} is a datum $(A, E, \\alpha, f, g)$ where\n$A$, $E$ are objects of $\\mathcal{A}$ and $\\alpha$, $f$, $g$\nare morphisms as in the following diagram\n$$\n\\xymatrix{\nA \\ar[rr]_{\\alpha} & & A \\ar[ld]^g \\\\\n& E \\ar[lu]^f &\n}\n$$\nwith the property that the kernel of each arrow is the image\nof its predecessor. So $\\Ker(\\alpha) = \\Im(f)$,\n$\\Ker(f) = \\Im(g)$, and $\\Ker(g) = \\Im(\\alpha)$.\n\\item A {\\it morphism of exact couples}\n$t : (A, E, \\alpha, f, g) \\to (A', E', \\alpha', f', g')$\nis given by morphisms $t_A : A \\to A'$ and\n$t_E : E \\to E'$ such that\n$\\alpha' \\circ t_A = t_A \\circ \\alpha$,\n$f' \\circ t_E = t_A \\circ f$, and\n$g' \\circ t_A = t_E \\circ g$.\n\\end{enumerate}\n\n[Stacks Tag 011Q, homology.tex, https://stacks.math.columbia.edu/tag/011Q]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011R",
+      "section": "12.21",
+      "name": "Lemma: lemma derived exact couple (Spectral sequences: exact couples)",
+      "content": "Let $(A, E, \\alpha, f, g)$ be an exact couple in an abelian category\n$\\mathcal{A}$. Set\n\\begin{enumerate}\n\\item $d = g \\circ f : E \\to E$ so that $d \\circ d = 0$,\n\\item $E' = \\Ker(d)/\\Im(d)$,\n\\item $A' = \\Im(\\alpha)$,\n\\item $\\alpha' : A' \\to A'$ induced by $\\alpha$,\n\\item $f' : E' \\to A'$ induced by $f$,\n\\item $g' : A' \\to E'$ induced by ``$g \\circ \\alpha^{-1}$''.\n\\end{enumerate}\nThen we have\n\\begin{enumerate}\n\\item $\\Ker(d) = f^{-1}(\\Ker(g)) = f^{-1}(\\Im(\\alpha))$,\n\\item $\\Im(d) = g(\\Im(f)) = g(\\Ker(\\alpha))$,\n\\item $(A', E', \\alpha', f', g')$ is an exact couple.\n\\end{enumerate}\n\n[Stacks Tag 011R, homology.tex, https://stacks.math.columbia.edu/tag/011R]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011S",
+      "section": "12.21",
+      "name": "Definition: definition spectral sequence associated exact couple (Spectral sequences: exact couples)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $(A, E, \\alpha, f, g)$ be an exact couple.\nThe {\\it spectral sequence associated to the exact couple}\nis the spectral sequence $(E_r, d_r)_{r \\geq 1}$ with\n$E_1 = E$, $d_1 = d$, $E_2 = E'$, $d_2 = d' = g' \\circ f'$,\n$E_3 = E''$, $d_3 = d'' = g'' \\circ f''$,\nand so on.\n\n[Stacks Tag 011S, homology.tex, https://stacks.math.columbia.edu/tag/011S]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011T",
+      "section": "12.21",
+      "name": "Lemma: lemma spectral sequence associated exact couple (Spectral sequences: exact couples)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $(A, E, \\alpha, f, g)$ be an exact couple.\nLet $(E_r, d_r)_{r \\geq 1}$ be the spectral sequence\nassociated to the exact couple.\nIn this case we have\n$$\n0 = B_1 \\subset \\ldots \\subset\nB_{r + 1} = g(\\Ker(\\alpha^r))\n\\subset \\ldots \\subset\nZ_{r + 1} = f^{-1}(\\Im(\\alpha^r))\n\\subset \\ldots \\subset Z_1 = E\n$$\nand the map $d_{r + 1} : E_{r + 1} \\to E_{r + 1}$\nis described by the following rule:\nFor any (test) object $T$ of $\\mathcal{A}$ and any elements\n$x : T \\to Z_{r + 1}$ and $y : T \\to A$ such that\n$f \\circ x = \\alpha^r \\circ y$ we have\n$$\nd_{r + 1} \\circ \\overline{x} = \\overline{g \\circ y}\n$$\nwhere $\\overline{x} : T \\to E_{r + 1}$ is the\ninduced morphism.\n\n[Stacks Tag 011T, homology.tex, https://stacks.math.columbia.edu/tag/011T]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011V",
+      "section": "12.22",
+      "name": "Definition: definition differential object (Spectral sequences: differential objects)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nA {\\it differential object} of $\\mathcal{A}$\nis a pair $(A, d)$ consisting of an\nobject $A$ of $\\mathcal{A}$\nendowed with a selfmap $d$ such that $d \\circ d = 0$.\nA {\\it morphism of differential objects} $(A, d) \\to (B, d)$\nis given by a morphism $\\alpha : A \\to B$ such that\n$d \\circ \\alpha = \\alpha \\circ d$.\n\n[Stacks Tag 011V, homology.tex, https://stacks.math.columbia.edu/tag/011V]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "011X",
+      "section": "12.22",
+      "name": "Definition: definition differential object homology (Spectral sequences: differential objects)",
+      "content": "For a differential object $(A, d)$ we denote\n$$\nH(A, d) = \\Ker(d)/\\Im(d)\n$$\nits {\\it homology}.\n\n[Stacks Tag 011X, homology.tex, https://stacks.math.columbia.edu/tag/011X]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012B",
+      "section": "12.23",
+      "name": "Definition: definition filtered differential (Spectral sequences: filtered differential objects)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nA {\\it filtered differential object} $(K, F, d)$ is a filtered object\n$(K, F)$ of $\\mathcal{A}$ endowed with an endomorphism\n$d : (K, F) \\to (K, F)$ whose square is zero: $d \\circ d = 0$.\n\n[Stacks Tag 012B, homology.tex, https://stacks.math.columbia.edu/tag/012B]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012C",
+      "section": "12.23",
+      "name": "Lemma: lemma spectral sequence filtered differential (Spectral sequences: filtered differential objects)",
+      "content": "Let $\\mathcal{A}$ be an abelian category. Let $(K, F, d)$ be a\nfiltered differential object of $\\mathcal{A}$. There is a\nspectral sequence $(E_r, d_r)_{r \\geq 0}$ in $\\text{Gr}(\\mathcal{A})$\nassociated to $(K, F, d)$ such that $d_r : E_r \\to E_r[r]$\nfor all $r$ and such that the graded pieces\n$E_r^p$ and maps $d_r^p : E_r^p \\to E_r^{p + r}$\nare as given above. Furthermore, $E_0^p = \\text{gr}^p K$,\n$d_0^p = \\text{gr}^p(d)$, and $E_1^p = H(\\text{gr}^pK, \\text{gr}^p(d))$.\n\n[Stacks Tag 012C, homology.tex, https://stacks.math.columbia.edu/tag/012C]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012L",
+      "section": "12.24",
+      "name": "Definition: definition filtered complex (Spectral sequences: filtered complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nA {\\it filtered complex $K^\\bullet$ of $\\mathcal{A}$}\nis a complex of $\\text{Fil}(\\mathcal{A})$ (see\nDefinition \\ref{definition-filtered}).\n\n[Stacks Tag 012L, homology.tex, https://stacks.math.columbia.edu/tag/012L]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012M",
+      "section": "12.24",
+      "name": "Lemma: lemma spectral sequence filtered complex (Spectral sequences: filtered complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category. Let $(K^\\bullet, F)$ be a\nfiltered complex of $\\mathcal{A}$. There is a spectral sequence\n$(E_r, d_r)_{r \\geq 0}$ in the category of bigraded objects of $\\mathcal{A}$\nassociated to $(K^\\bullet, F)$ such that $d_r$ has bidegree $(r, - r + 1)$\nand such that $E_r$ has bigraded pieces $E_r^{p, q}$ and maps\n$d_r^{p, q} : E_r^{p, q} \\to E_r^{p + r, q - r + 1}$ as given above.\nFurthermore, we have $E_0^{p, q} = \\text{gr}^p(K^{p + q})$,\n$d_0^{p, q} = \\text{gr}^p(d^{p + q})$,\nand $E_1^{p, q} = H^{p + q}(\\text{gr}^p(K^\\bullet))$.\n\n[Stacks Tag 012M, homology.tex, https://stacks.math.columbia.edu/tag/012M]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012P",
+      "section": "12.24",
+      "name": "Definition: definition filtration cohomology filtered complex (Spectral sequences: filtered complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $(K^\\bullet, F)$ be a filtered complex of $\\mathcal{A}$.\nThe {\\it induced filtration} on $H^n(K^\\bullet)$ is the filtration defined\nby $F^pH^n(K^\\bullet) = \\Im(H^n(F^pK^\\bullet) \\to H^n(K^\\bullet))$.\n\n[Stacks Tag 012P, homology.tex, https://stacks.math.columbia.edu/tag/012P]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012U",
+      "section": "12.24",
+      "name": "Definition: definition filtered complex ss converges (Spectral sequences: filtered complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category. Let $(K^\\bullet, F)$ be a\nfiltered complex of $\\mathcal{A}$. We say the spectral sequence\nassociated to $(K^\\bullet, F)$\n\\begin{enumerate}\n\\item {\\it weakly converges to $H^*(K^\\bullet)$} if\n$\\text{gr}^pH^n(K^\\bullet) = E_{\\infty}^{p, n - p}$\nvia Lemma \\ref{lemma-compute-cohomology-filtered-complex}\nfor all $p, n \\in \\mathbf{Z}$,\n\\item {\\it abuts to $H^*(K^\\bullet)$} if it weakly converges to\n$H^*(K^\\bullet)$ and $\\bigcap_p F^pH^n(K^\\bullet) = 0$ and\n$\\bigcup_p F^p H^n(K^\\bullet) = H^n(K^\\bullet)$ for all $n$,\n\\item {\\it converges to $H^*(K^\\bullet)$} if it is regular,\nabuts to $H^*(K^\\bullet)$, and\n$H^n(K^\\bullet) = \\lim_p H^n(K^\\bullet)/F^pH^n(K^\\bullet)$.\n\\end{enumerate}\n\n[Stacks Tag 012U, homology.tex, https://stacks.math.columbia.edu/tag/012U]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012V",
+      "section": "12.24",
+      "name": "Lemma: lemma filtered complex ss converges (Spectral sequences: filtered complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category. Let $(K^\\bullet, F)$ be a filtered\ncomplex of $\\mathcal{A}$. The associated spectral sequence\n\\begin{enumerate}\n\\item weakly converges to $H^*(K^\\bullet)$ if and only if for every\n$p, q \\in \\mathbf{Z}$ we have equality in equations\n(\\ref{equation-at-bottom-bigraded}) and (\\ref{equation-on-top-bigraded}),\n\\item abuts to $H^*(K)$ if and only if it weakly converges to $H^*(K^\\bullet)$\nand we have\n$\\bigcap_p (\\Ker(d) \\cap F^pK^n + \\Im(d) \\cap K^n) = \\Im(d) \\cap K^n$\nand\n$\\bigcup_p (\\Ker(d) \\cap F^pK^n + \\Im(d) \\cap K^n) = \\Ker(d) \\cap K^n$.\n\\end{enumerate}\n\n[Stacks Tag 012V, homology.tex, https://stacks.math.columbia.edu/tag/012V]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "012W",
+      "section": "12.24",
+      "name": "MILESTONE: Lemma: lemma biregular ss converges (Spectral sequences: filtered complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category. Let $(K^\\bullet, F)$ be a\nfiltered complex of $\\mathcal{A}$. Assume that the filtration on each $K^n$\nis finite (see Definition \\ref{definition-filtered}). Then\n\\begin{enumerate}\n\\item the spectral sequence associated to $(K^\\bullet, F)$ is bounded,\n\\item the filtration on each $H^n(K^\\bullet)$ is finite,\n\\item the spectral sequence associated to $(K^\\bullet, F)$ converges\nto $H^*(K^\\bullet)$,\n\\item if $\\mathcal{C} \\subset \\mathcal{A}$ is a weak Serre subcategory\nand for some $r$ we have $E_r^{p, q} \\in \\mathcal{C}$ for all\n$p, q \\in \\mathbf{Z}$, then $H^n(K^\\bullet)$ is in $\\mathcal{C}$.\n\\end{enumerate}\n\n[Stacks Tag 012W, homology.tex, https://stacks.math.columbia.edu/tag/012W]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0130",
+      "section": "12.25",
+      "name": "Lemma: lemma ss double complex (Spectral sequences: double complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $K^{\\bullet, \\bullet}$ be a double complex.\nThe spectral sequences associated to $K^{\\bullet, \\bullet}$\nhave the following terms:\n\\begin{enumerate}\n\\item ${}'E_0^{p, q} = K^{p, q}$ with\n${}'d_0^{p, q} = (-1)^p d_2^{p, q} : K^{p, q} \\to K^{p, q + 1}$,\n\\item ${}''E_0^{p, q} = K^{q, p}$ with\n${}''d_0^{p, q} = d_1^{q, p} : K^{q, p} \\to K^{q + 1, p}$,\n\\item ${}'E_1^{p, q} = H^q(K^{p, \\bullet})$ with\n${}'d_1^{p, q} = H^q(d_1^{p, \\bullet})$,\n\\item ${}''E_1^{p, q} = H^q(K^{\\bullet, p})$ with\n${}''d_1^{p, q} = (-1)^q H^q(d_2^{\\bullet, p})$,\n\\item ${}'E_2^{p, q} = H^p_I(H^q_{II}(K^{\\bullet, \\bullet}))$,\n\\item ${}''E_2^{p, q} = H^p_{II}(H^q_I(K^{\\bullet, \\bullet}))$.\n\\end{enumerate}\n\n[Stacks Tag 0130, homology.tex, https://stacks.math.columbia.edu/tag/0130]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0131",
+      "section": "12.25",
+      "name": "Definition: definition ss double complex converge (Spectral sequences: double complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $K^{\\bullet, \\bullet}$ be a double complex.\nWe say the spectral sequence $({}'E_r, {}'d_r)_{r \\geq 0}$\n{\\it weakly converges to $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$},\n{\\it abuts to $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$}, or\n{\\it converges to $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$}\nif Definition \\ref{definition-filtered-complex-ss-converges} applies.\nSimilarly we say the spectral sequence $({}''E_r, {}''d_r)_{r \\geq 0}$\n{\\it weakly converges to $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$},\n{\\it abuts to $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$}, or\n{\\it converges to $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$}\nif Definition \\ref{definition-filtered-complex-ss-converges} applies.\n\n[Stacks Tag 0131, homology.tex, https://stacks.math.columbia.edu/tag/0131]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0132",
+      "section": "12.25",
+      "name": "MILESTONE: Lemma: lemma first quadrant ss (Spectral sequences: double complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category. Let $K^{\\bullet, \\bullet}$\nbe a double complex. Assume that for every $n \\in \\mathbf{Z}$ there are\nonly finitely many nonzero $K^{p, q}$ with $p + q = n$. Then\n\\begin{enumerate}\n\\item the two spectral sequences associated to $K^{\\bullet, \\bullet}$\nare bounded,\n\\item the filtrations $F_I$, $F_{II}$ on each\n$H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$ are finite,\n\\item the spectral sequences $({}'E_r, {}'d_r)_{r \\geq 0}$ and\n$({}''E_r, {}''d_r)_{r \\geq 0}$ converge to\n$H^*(\\text{Tot}(K^{\\bullet, \\bullet}))$,\n\\item if $\\mathcal{C} \\subset \\mathcal{A}$ is a weak Serre subcategory\nand for some $r$ we have ${}'E_r^{p, q} \\in \\mathcal{C}$ for all\n$p, q \\in \\mathbf{Z}$, then $H^n(\\text{Tot}(K^{\\bullet, \\bullet}))$\nis in $\\mathcal{C}$. Similarly for $({}''E_r, {}''d_r)_{r \\geq 0}$.\n\\end{enumerate}\n\n[Stacks Tag 0132, homology.tex, https://stacks.math.columbia.edu/tag/0132]",
+      "formalized": false,
+      "artifact_ids": []
+    },
+    {
+      "tag": "0133",
+      "section": "12.25",
+      "name": "Lemma: lemma double complex gives resolution (Spectral sequences: double complexes)",
+      "content": "Let $\\mathcal{A}$ be an abelian category.\nLet $K^\\bullet$ be a complex.\nLet $A^{\\bullet, \\bullet}$ be a double complex.\nLet $\\alpha^p : K^p \\to A^{p, 0}$ be morphisms.\nAssume that\n\\begin{enumerate}\n\\item For every $n \\in \\mathbf{Z}$ there are only finitely many nonzero\n$A^{p, q}$ with $p + q = n$.\n\\item We have $A^{p, q} = 0$ if $q < 0$.\n\\item The morphisms $\\alpha^p$ give rise to a morphism\nof complexes $\\alpha : K^\\bullet \\to A^{\\bullet, 0}$.\n\\item The complex $A^{p, \\bullet}$ is exact in all degrees\n$q \\not = 0$ and the morphism $K^p \\to A^{p, 0}$ induces\nan isomorphism $K^p \\to \\Ker(d_2^{p, 0})$.\n\\end{enumerate}\nThen $\\alpha$ induces a quasi-isomorphism\n$$\nK^\\bullet \\longrightarrow \\text{Tot}(A^{\\bullet, \\bullet})\n$$\nof complexes.\nMoreover, there is a variant of this lemma involving the second\nvariable $q$ instead of $p$.\n\n[Stacks Tag 0133, homology.tex, https://stacks.math.columbia.edu/tag/0133]",
+      "formalized": false,
+      "artifact_ids": []
+    }
+  ],
+  "allowed_imports": null,
+  "forbidden_imports": [],
+  "preamble": "/-\n  SHARED KERNEL: build ON Mathlib, do not rebuild it.\n\n  - Import Mathlib freely; prefer Mathlib.CategoryTheory.* as the substrate.\n  - Extend what exists (e.g. CategoryTheory.FiberedCategory.*) instead of\n    redefining it. A statement Mathlib already has is calibration only (N0)\n    and must not be re-proved from scratch.\n  - Cite the Stacks tag of the statement you formalize in a comment:\n    `-- Stacks Tag 02XM`.\n  - The compiled LMS corpus (LMS.Foundation) is importable and openable.\n-/"
+}

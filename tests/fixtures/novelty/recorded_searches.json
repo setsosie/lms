@@ -1,0 +1,1766 @@
+{
+  "recorded": "2026-08-19 live loogle + leansearch",
+  "mathlib_rev": "fe3134f0c3508d2fd6394307be226ffa9b8cb4ba",
+  "stages": {
+    "loogle": {
+      "Category": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Lean.Parser.Category",
+            "module": "Init.Notation",
+            "type_signature": " : Type"
+          },
+          {
+            "name": "Lean.Parser.Category.attr",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.command",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.doElem",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.level",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.mk",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.prec",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.prio",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.rawStx",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.structInstFieldDecl",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.stx",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.tactic",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.term",
+            "module": "Init.Notation",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.grind",
+            "module": "Init.Grind.Interactive",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.grind_filter",
+            "module": "Init.Grind.Interactive",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.grind_ref",
+            "module": "Init.Grind.Interactive",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.rcasesPat",
+            "module": "Init.RCases",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.rintroPat",
+            "module": "Init.RCases",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.conv",
+            "module": "Init.Conv",
+            "type_signature": " : Lean.Parser.Category"
+          },
+          {
+            "name": "Lean.Parser.Category.binderPred",
+            "module": "Init.BinderPredicates",
+            "type_signature": " : Lean.Parser.Category"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "id_comp": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Function.id_comp",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} (f : α → β) : id ∘ f = f"
+          },
+          {
+            "name": "AddHom.id_comp",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [Add M] [Add N] (f : M →ₙ+ N) : (AddHom.id N).comp f = f"
+          },
+          {
+            "name": "AddMonoidHom.id_comp",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [AddZero M] [AddZero N] (f : M →+ N) : (AddMonoidHom.id N).comp f = f"
+          },
+          {
+            "name": "MonoidHom.id_comp",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [MulOne M] [MulOne N] (f : M →* N) : (MonoidHom.id N).comp f = f"
+          },
+          {
+            "name": "MulHom.id_comp",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [Mul M] [Mul N] (f : M →ₙ* N) : (MulHom.id N).comp f = f"
+          },
+          {
+            "name": "OneHom.id_comp",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [One M] [One N] (f : OneHom M N) : (OneHom.id N).comp f = f"
+          },
+          {
+            "name": "ZeroHom.id_comp",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [Zero M] [Zero N] (f : ZeroHom M N) : (ZeroHom.id N).comp f = f"
+          },
+          {
+            "name": "MonoidWithZeroHom.id_comp",
+            "module": "Mathlib.Algebra.GroupWithZero.Hom",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [MulZeroOneClass α] [MulZeroOneClass β] (f : α →*₀ β) : (MonoidWithZeroHom.id β).comp f = f"
+          },
+          {
+            "name": "NonUnitalRingHom.id_comp",
+            "module": "Mathlib.Algebra.Ring.Hom.Defs",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [NonUnitalNonAssocSemiring α] [NonUnitalNonAssocSemiring β] (f : α →ₙ+* β) : (NonUnitalRingHom.id β).comp f = f"
+          },
+          {
+            "name": "RingHom.id_comp",
+            "module": "Mathlib.Algebra.Ring.Hom.Defs",
+            "type_signature": " {α : Type u_2} {β : Type u_3} {x✝ : NonAssocSemiring α} {x✝¹ : NonAssocSemiring β} (f : α →+* β) : (RingHom.id β).comp f = f"
+          },
+          {
+            "name": "RelHom.id_comp",
+            "module": "Mathlib.Order.RelIso.Basic",
+            "type_signature": " {α : Type u_1} {β : Type u_2} {r : α → α → Prop} {s : β → β → Prop} (f : r →r s) : (RelHom.id s).comp f = f"
+          },
+          {
+            "name": "OrderEmbedding.id_comp",
+            "module": "Mathlib.Order.Hom.Basic",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [LE α] [LE β] (f : α ↪o β) : (OrderEmbedding.id α).comp f = f"
+          },
+          {
+            "name": "OrderHom.id_comp",
+            "module": "Mathlib.Order.Hom.Basic",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Preorder α] [Preorder β] (f : α →o β) : OrderHom.id.comp f = f"
+          },
+          {
+            "name": "Functor.Comp.functor_id_comp",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": " {F : Type u_1 → Type u_2} [AF : Functor F] [LawfulFunctor F] : Functor.Comp.functor = AF"
+          },
+          {
+            "name": "AddConstMap.id_comp",
+            "module": "Mathlib.Algebra.AddConstMap.Basic",
+            "type_signature": " {G : Type u_1} {H : Type u_2} [Add G] [Add H] {a : G} {b : H} (f : AddConstMap G H a b) : AddConstMap.id.comp f = f"
+          },
+          {
+            "name": "BotHom.id_comp",
+            "module": "Mathlib.Order.Hom.Bounded",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Bot α] [Bot β] (f : BotHom α β) : (BotHom.id β).comp f = f"
+          },
+          {
+            "name": "TopHom.id_comp",
+            "module": "Mathlib.Order.Hom.Bounded",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Top α] [Top β] (f : TopHom α β) : (TopHom.id β).comp f = f"
+          },
+          {
+            "name": "BoundedOrderHom.id_comp",
+            "module": "Mathlib.Order.Hom.Bounded",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Preorder α] [Preorder β] [BoundedOrder α] [BoundedOrder β] (f : BoundedOrderHom α β) : (BoundedOrderHom.id β).comp f = f"
+          },
+          {
+            "name": "InfHom.id_comp",
+            "module": "Mathlib.Order.Hom.Lattice",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Min α] [Min β] (f : InfHom α β) : (InfHom.id β).comp f = f"
+          },
+          {
+            "name": "LatticeHom.id_comp",
+            "module": "Mathlib.Order.Hom.Lattice",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Lattice α] [Lattice β] (f : LatticeHom α β) : (LatticeHom.id β).comp f = f"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "comp_id": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Function.comp_id",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} (f : α → β) : f ∘ id = f"
+          },
+          {
+            "name": "AddHom.comp_id",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [Add M] [Add N] (f : M →ₙ+ N) : f.comp (AddHom.id M) = f"
+          },
+          {
+            "name": "AddMonoidHom.comp_id",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [AddZero M] [AddZero N] (f : M →+ N) : f.comp (AddMonoidHom.id M) = f"
+          },
+          {
+            "name": "MonoidHom.comp_id",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [MulOne M] [MulOne N] (f : M →* N) : f.comp (MonoidHom.id M) = f"
+          },
+          {
+            "name": "MulHom.comp_id",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [Mul M] [Mul N] (f : M →ₙ* N) : f.comp (MulHom.id M) = f"
+          },
+          {
+            "name": "OneHom.comp_id",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [One M] [One N] (f : OneHom M N) : f.comp (OneHom.id M) = f"
+          },
+          {
+            "name": "ZeroHom.comp_id",
+            "module": "Mathlib.Algebra.Group.Hom.Defs",
+            "type_signature": " {M : Type u_4} {N : Type u_5} [Zero M] [Zero N] (f : ZeroHom M N) : f.comp (ZeroHom.id M) = f"
+          },
+          {
+            "name": "MonoidWithZeroHom.comp_id",
+            "module": "Mathlib.Algebra.GroupWithZero.Hom",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [MulZeroOneClass α] [MulZeroOneClass β] (f : α →*₀ β) : f.comp (MonoidWithZeroHom.id α) = f"
+          },
+          {
+            "name": "NonUnitalRingHom.comp_id",
+            "module": "Mathlib.Algebra.Ring.Hom.Defs",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [NonUnitalNonAssocSemiring α] [NonUnitalNonAssocSemiring β] (f : α →ₙ+* β) : f.comp (NonUnitalRingHom.id α) = f"
+          },
+          {
+            "name": "RingHom.comp_id",
+            "module": "Mathlib.Algebra.Ring.Hom.Defs",
+            "type_signature": " {α : Type u_2} {β : Type u_3} {x✝ : NonAssocSemiring α} {x✝¹ : NonAssocSemiring β} (f : α →+* β) : f.comp (RingHom.id α) = f"
+          },
+          {
+            "name": "RelHom.comp_id",
+            "module": "Mathlib.Order.RelIso.Basic",
+            "type_signature": " {α : Type u_1} {β : Type u_2} {r : α → α → Prop} {s : β → β → Prop} (f : r →r s) : f.comp (RelHom.id r) = f"
+          },
+          {
+            "name": "OrderEmbedding.comp_id",
+            "module": "Mathlib.Order.Hom.Basic",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [LE α] [LE β] (f : α ↪o β) : f.comp (OrderEmbedding.id β) = f"
+          },
+          {
+            "name": "OrderHom.comp_id",
+            "module": "Mathlib.Order.Hom.Basic",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Preorder α] [Preorder β] (f : α →o β) : f.comp OrderHom.id = f"
+          },
+          {
+            "name": "Functor.Comp.functor_comp_id",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": " {F : Type u_1 → Type u_2} [AF : Functor F] [LawfulFunctor F] : Functor.Comp.functor = AF"
+          },
+          {
+            "name": "AddConstMap.comp_id",
+            "module": "Mathlib.Algebra.AddConstMap.Basic",
+            "type_signature": " {G : Type u_1} {H : Type u_2} [Add G] [Add H] {a : G} {b : H} (f : AddConstMap G H a b) : f.comp AddConstMap.id = f"
+          },
+          {
+            "name": "BotHom.comp_id",
+            "module": "Mathlib.Order.Hom.Bounded",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Bot α] [Bot β] (f : BotHom α β) : f.comp (BotHom.id α) = f"
+          },
+          {
+            "name": "TopHom.comp_id",
+            "module": "Mathlib.Order.Hom.Bounded",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Top α] [Top β] (f : TopHom α β) : f.comp (TopHom.id α) = f"
+          },
+          {
+            "name": "BoundedOrderHom.comp_id",
+            "module": "Mathlib.Order.Hom.Bounded",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Preorder α] [Preorder β] [BoundedOrder α] [BoundedOrder β] (f : BoundedOrderHom α β) : f.comp (BoundedOrderHom.id α) = f"
+          },
+          {
+            "name": "InfHom.comp_id",
+            "module": "Mathlib.Order.Hom.Lattice",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Min α] [Min β] (f : InfHom α β) : f.comp (InfHom.id α) = f"
+          },
+          {
+            "name": "LatticeHom.comp_id",
+            "module": "Mathlib.Order.Hom.Lattice",
+            "type_signature": " {α : Type u_2} {β : Type u_3} [Lattice α] [Lattice β] (f : LatticeHom α β) : f.comp (LatticeHom.id α) = f"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "assoc": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Std.Associative",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u} (op : α → α → α) : Prop"
+          },
+          {
+            "name": "Std.Associative.assoc",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u} {op : α → α → α} [self : Std.Associative op] (a b c : α) : op (op a b) c = op a (op b c)"
+          },
+          {
+            "name": "Std.Associative.mk",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u} {op : α → α → α} (assoc : ∀ (a b c : α), op (op a b) c = op a (op b c)) : Std.Associative op"
+          },
+          {
+            "name": "instAssociativeAnd",
+            "module": "Init.SimpLemmas",
+            "type_signature": " : Std.Associative And"
+          },
+          {
+            "name": "instAssociativeOr",
+            "module": "Init.SimpLemmas",
+            "type_signature": " : Std.Associative Or"
+          },
+          {
+            "name": "instAssociativeBoolAnd",
+            "module": "Init.SimpLemmas",
+            "type_signature": " : Std.Associative fun x1 x2 => x1 && x2"
+          },
+          {
+            "name": "instAssociativeBoolOr",
+            "module": "Init.SimpLemmas",
+            "type_signature": " : Std.Associative fun x1 x2 => x1 || x2"
+          },
+          {
+            "name": "and_assoc",
+            "module": "Init.SimpLemmas",
+            "type_signature": " {a b c : Prop} : (a ∧ b) ∧ c ↔ a ∧ b ∧ c"
+          },
+          {
+            "name": "or_assoc",
+            "module": "Init.SimpLemmas",
+            "type_signature": " {a b c : Prop} : (a ∨ b) ∨ c ↔ a ∨ b ∨ c"
+          },
+          {
+            "name": "Bool.and_assoc",
+            "module": "Init.SimpLemmas",
+            "type_signature": " (a b c : Bool) : (a && b && c) = (a && (b && c))"
+          },
+          {
+            "name": "Bool.or_assoc",
+            "module": "Init.SimpLemmas",
+            "type_signature": " (a b c : Bool) : (a || b || c) = (a || (b || c))"
+          },
+          {
+            "name": "Nat.instAssociativeHAdd",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " : Std.Associative fun x1 x2 => x1 + x2"
+          },
+          {
+            "name": "Nat.instAssociativeHMul",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " : Std.Associative fun x1 x2 => x1 * x2"
+          },
+          {
+            "name": "Nat.add_assoc",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " (n m k : ℕ) : n + m + k = n + (m + k)"
+          },
+          {
+            "name": "Nat.mul_assoc",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " (n m k : ℕ) : n * m * k = n * (m * k)"
+          },
+          {
+            "name": "Nat.add_sub_assoc",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " {m k : ℕ} (h : k ≤ m) (n : ℕ) : n + m - k = n + (m - k)"
+          },
+          {
+            "name": "List.instAssociativeHAppend",
+            "module": "Init.Data.List.Basic",
+            "type_signature": " {α : Type u} : Std.Associative fun x1 x2 => x1 ++ x2"
+          },
+          {
+            "name": "List.append_assoc",
+            "module": "Init.Data.List.Basic",
+            "type_signature": " {α : Type u} (as bs cs : List α) : as ++ bs ++ cs = as ++ (bs ++ cs)"
+          },
+          {
+            "name": "LawfulMonad.bind_assoc",
+            "module": "Init.Control.Lawful.Basic",
+            "type_signature": " {m : Type u → Type v} {inst✝ : Monad m} [self : LawfulMonad m] {α β γ : Type u} (x : m α) (f : α → m β) (g : β → m γ) : x >>= f >>= g = x >>= fun x => f x >>= g"
+          },
+          {
+            "name": "LawfulApplicative.seq_assoc",
+            "module": "Init.Control.Lawful.Basic",
+            "type_signature": " {f : Type u → Type v} {inst✝ : Applicative f} [self : LawfulApplicative f] {α β γ : Type u} (x : f α) (g : f (α → β)) (h : f (β → γ)) : h <*> (g <*> x) = Function.comp <$> h <*> g <*> x"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "Functor": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Functor",
+            "module": "Init.Prelude",
+            "type_signature": " (f : Type u → Type v) : Type (max (u + 1) v)"
+          },
+          {
+            "name": "MonadFunctorT",
+            "module": "Init.Prelude",
+            "type_signature": " (m : Type u → Type v) (n : Type u → Type w) : Type (max (max (u + 1) v) w)"
+          },
+          {
+            "name": "monadFunctorRefl",
+            "module": "Init.Prelude",
+            "type_signature": " (m : Type u_1 → Type u_2) : MonadFunctorT m m"
+          },
+          {
+            "name": "MonadFunctor",
+            "module": "Init.Prelude",
+            "type_signature": " (m : semiOutParam (Type u → Type v)) (n : Type u → Type w) : Type (max (max (u + 1) v) w)"
+          },
+          {
+            "name": "Applicative.toFunctor",
+            "module": "Init.Prelude",
+            "type_signature": " {f : Type u → Type v} [self : Applicative f] : Functor f"
+          },
+          {
+            "name": "ReaderT.instMonadFunctor",
+            "module": "Init.Prelude",
+            "type_signature": " (ρ : Type u_1) (m : Type u_1 → Type u_2) : MonadFunctor m (ReaderT ρ m)"
+          },
+          {
+            "name": "ReaderT.instFunctorOfMonad",
+            "module": "Init.Prelude",
+            "type_signature": " {ρ : Type u} {m : Type u → Type v} [Monad m] : Functor (ReaderT ρ m)"
+          },
+          {
+            "name": "Functor.mapConst",
+            "module": "Init.Prelude",
+            "type_signature": " {f : Type u → Type v} [self : Functor f] {α β : Type u} : α → f β → f α"
+          },
+          {
+            "name": "Functor.map",
+            "module": "Init.Prelude",
+            "type_signature": " {f : Type u → Type v} [self : Functor f] {α β : Type u} : (α → β) → f α → f β"
+          },
+          {
+            "name": "instMonadWithReaderOfOfMonadFunctor",
+            "module": "Init.Prelude",
+            "type_signature": " {ρ : Type u} {m n : Type u → Type v} [MonadFunctor m n] [MonadWithReaderOf ρ m] : MonadWithReaderOf ρ n"
+          },
+          {
+            "name": "Lean.instMonadQuotationOfMonadFunctorOfMonadLift",
+            "module": "Init.Prelude",
+            "type_signature": " {m n : Type → Type} [MonadFunctor m n] [MonadLift m n] [Lean.MonadQuotation m] : Lean.MonadQuotation n"
+          },
+          {
+            "name": "Lean.instMonadRefOfMonadLiftOfMonadFunctor",
+            "module": "Init.Prelude",
+            "type_signature": " (m n : Type → Type) [MonadLift m n] [MonadFunctor m n] [Lean.MonadRef m] : Lean.MonadRef n"
+          },
+          {
+            "name": "instMonadFunctorTOfMonadFunctor",
+            "module": "Init.Prelude",
+            "type_signature": " (m : Type u_1 → Type u_2) (n : Type u_1 → Type u_3) (o : Type u_1 → Type u_4) [MonadFunctor n o] [MonadFunctorT m n] : MonadFunctorT m o"
+          },
+          {
+            "name": "MonadFunctorT.mk",
+            "module": "Init.Prelude",
+            "type_signature": " {m : Type u → Type v} {n : Type u → Type w} (monadMap : {α : Type u} → ({β : Type u} → m β → m β) → n α → n α) : MonadFunctorT m n"
+          },
+          {
+            "name": "MonadFunctorT.monadMap",
+            "module": "Init.Prelude",
+            "type_signature": " {m : Type u → Type v} {n : Type u → Type w} [self : MonadFunctorT m n] {α : Type u} : ({β : Type u} → m β → m β) → n α → n α"
+          },
+          {
+            "name": "MonadFunctor.mk",
+            "module": "Init.Prelude",
+            "type_signature": " {m : semiOutParam (Type u → Type v)} {n : Type u → Type w} (monadMap : {α : Type u} → ({β : Type u} → m β → m β) → n α → n α) : MonadFunctor m n"
+          },
+          {
+            "name": "MonadFunctor.monadMap",
+            "module": "Init.Prelude",
+            "type_signature": " {m : semiOutParam (Type u → Type v)} {n : Type u → Type w} [self : MonadFunctor m n] {α : Type u} : ({β : Type u} → m β → m β) → n α → n α"
+          },
+          {
+            "name": "Functor.mk",
+            "module": "Init.Prelude",
+            "type_signature": " {f : Type u → Type v} (map : {α β : Type u} → (α → β) → f α → f β) (mapConst : {α β : Type u} → α → f β → f α) : Functor f"
+          },
+          {
+            "name": "Functor.discard",
+            "module": "Init.Control.Basic",
+            "type_signature": " {f : Type u → Type v} {α : Type u} [Functor f] (x : f α) : f PUnit.{u + 1}"
+          },
+          {
+            "name": "Functor.mapRev",
+            "module": "Init.Control.Basic",
+            "type_signature": " {f : Type u → Type v} [Functor f] {α β : Type u} : f α → (α → β) → f β"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "Functor.comp": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Complement",
+            "module": "Init.Prelude",
+            "type_signature": " (α : Type u) : Type u"
+          },
+          {
+            "name": "Complement.complement",
+            "module": "Init.Prelude",
+            "type_signature": " {α : Type u} [self : Complement α] : α → α"
+          },
+          {
+            "name": "Complement.mk",
+            "module": "Init.Prelude",
+            "type_signature": " {α : Type u} (complement : α → α) : Complement α"
+          },
+          {
+            "name": "Function.comp",
+            "module": "Init.Prelude",
+            "type_signature": " {α : Sort u} {β : Sort v} {δ : Sort w} (f : β → δ) (g : α → β) : α → δ"
+          },
+          {
+            "name": "Lean.trustCompiler",
+            "module": "Init.Core",
+            "type_signature": " : True"
+          },
+          {
+            "name": "Function.comp_id",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} (f : α → β) : f ∘ id = f"
+          },
+          {
+            "name": "Function.id_comp",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} (f : α → β) : id ∘ f = f"
+          },
+          {
+            "name": "Function.false_comp",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} {f : α → β} : (fun x => false) ∘ f = fun x => false"
+          },
+          {
+            "name": "Function.true_comp",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} {f : α → β} : (fun x => true) ∘ f = fun x => true"
+          },
+          {
+            "name": "Function.comp_apply",
+            "module": "Init.Core",
+            "type_signature": " {β : Sort u_1} {δ : Sort u_2} {α : Sort u_3} {f : β → δ} {g : α → β} {x : α} : (f ∘ g) x = f (g x)"
+          },
+          {
+            "name": "Function.comp_def",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} {δ : Sort u_3} (f : β → δ) (g : α → β) : f ∘ g = fun x => f (g x)"
+          },
+          {
+            "name": "Function.const_comp",
+            "module": "Init.Core",
+            "type_signature": " {α : Sort u_1} {β : Sort u_2} {γ : Sort u_3} {f : α → β} {c : γ} : Function.const β c ∘ f = Function.const α c"
+          },
+          {
+            "name": "Function.comp_const",
+            "module": "Init.Core",
+            "type_signature": " {β : Sort u_1} {γ : Sort u_2} {α : Sort u_3} {f : β → γ} {b : β} : f ∘ Function.const α b = Function.const α (f b)"
+          },
+          {
+            "name": "Nat.recCompiled",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " {motive : ℕ → Sort u} (zero : motive Nat.zero) (succ : (n : ℕ) → motive n → motive n.succ) (t : ℕ) : motive t"
+          },
+          {
+            "name": "Nat.rec_eq_recCompiled",
+            "module": "Init.Data.Nat.Basic",
+            "type_signature": " : @Nat.rec = @Nat.recCompiled"
+          },
+          {
+            "name": "Lean.TSyntax.Compat.instCoeTailSyntax",
+            "module": "Init.Meta.Defs",
+            "type_signature": " {k : Lean.SyntaxNodeKinds} : CoeTail Lean.Syntax (Lean.TSyntax k)"
+          },
+          {
+            "name": "Lean.TSyntax.Compat.instCoeTailArraySyntaxTSyntaxArray",
+            "module": "Init.Meta.Defs",
+            "type_signature": " {k : Lean.SyntaxNodeKinds} : CoeTail (Array Lean.Syntax) (Lean.TSyntaxArray k)"
+          },
+          {
+            "name": "Lean.TSyntax.Compat.instCoeTailArraySyntaxTSepArray",
+            "module": "Init.Meta.Defs",
+            "type_signature": " {k : Lean.SyntaxNodeKinds} {sep : String} : CoeTail (Array Lean.Syntax) (Lean.Syntax.TSepArray k sep)"
+          },
+          {
+            "name": "instDecidablePredComp",
+            "module": "Init.PropLemmas",
+            "type_signature": " {α✝ : Sort u_1} {p : α✝ → Prop} {α✝¹ : Sort u_2} {f : α✝¹ → α✝} [DecidablePred p] : DecidablePred (p ∘ f)"
+          },
+          {
+            "name": "Classical.propComplete",
+            "module": "Init.Classical",
+            "type_signature": " (a : Prop) : a = True ∨ a = False"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "Functor.comp_obj": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "Prefunctor.comp_obj",
+            "module": "Mathlib.Combinatorics.Quiver.Prefunctor",
+            "type_signature": " {U : Type u_1} [Quiver U] {V : Type u_2} [Quiver V] {W : Type u_3} [Quiver W] (F : U ⥤q V) (G : V ⥤q W) (X : U) : (F ⋙q G).obj X = G.obj (F.obj X)"
+          },
+          {
+            "name": "CategoryTheory.Functor.comp_obj",
+            "module": "Mathlib.CategoryTheory.Functor.Basic",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {E : Type u₃} [CategoryTheory.Category.{v₃, u₃} E] (F : CategoryTheory.Functor C D) (G : CategoryTheory.Functor D E) (X : C) : (F.comp G).obj X = G.obj (F.obj X)"
+          },
+          {
+            "name": "CategoryTheory.Bicategory.postcomp_obj",
+            "module": "Mathlib.CategoryTheory.Bicategory.Basic",
+            "type_signature": " {B : Type u} [CategoryTheory.Bicategory B] {b c : B} (a : B) (f : b ⟶ c) (x✝ : a ⟶ b) : (CategoryTheory.Bicategory.postcomp a f).obj x✝ = CategoryTheory.CategoryStruct.comp x✝ f"
+          },
+          {
+            "name": "CategoryTheory.Bicategory.precomp_obj",
+            "module": "Mathlib.CategoryTheory.Bicategory.Basic",
+            "type_signature": " {B : Type u} [CategoryTheory.Bicategory B] {a b : B} (c : B) (f : a ⟶ b) (x✝ : b ⟶ c) : (CategoryTheory.Bicategory.precomp c f).obj x✝ = CategoryTheory.CategoryStruct.comp f x✝"
+          },
+          {
+            "name": "CategoryTheory.Cat.Hom.comp_obj",
+            "module": "Mathlib.CategoryTheory.Category.Cat",
+            "type_signature": " {C D E : CategoryTheory.Cat} (F : C ⟶ D) (G : D ⟶ E) (X : ↑C) : (CategoryTheory.CategoryStruct.comp F G).toFunctor.obj X = G.toFunctor.obj (F.toFunctor.obj X)"
+          },
+          {
+            "name": "CategoryTheory.Functor.Elements.precomp_obj_fst",
+            "module": "Mathlib.CategoryTheory.Elements",
+            "type_signature": " {C : Type u} [CategoryTheory.Category.{v, u} C] {D : Type u_1} [CategoryTheory.Category.{u_2, u_1} D] (F : CategoryTheory.Functor C D) (G : CategoryTheory.Functor D (Type w)) (x : (F.comp G).Elements) : ((CategoryTheory.Functor.Elements.precomp F G).obj x).fst = F.obj x.fst"
+          },
+          {
+            "name": "CategoryTheory.Functor.Elements.precomp_obj_snd",
+            "module": "Mathlib.CategoryTheory.Elements",
+            "type_signature": " {C : Type u} [CategoryTheory.Category.{v, u} C] {D : Type u_1} [CategoryTheory.Category.{u_2, u_1} D] (F : CategoryTheory.Functor C D) (G : CategoryTheory.Functor D (Type w)) (x : (F.comp G).Elements) : ((CategoryTheory.Functor.Elements.precomp F G).obj x).snd = x.snd"
+          },
+          {
+            "name": "CategoryTheory.Functor.LeftExtension.precomp_obj_left",
+            "module": "Mathlib.CategoryTheory.Functor.KanExtension.Basic",
+            "type_signature": " {C : Type u_1} {C' : Type u_2} {H : Type u_3} {D : Type u_5} [CategoryTheory.Category.{v_1, u_1} C] [CategoryTheory.Category.{v_2, u_2} C'] [CategoryTheory.Category.{v_3, u_3} H] [CategoryTheory.Category.{v_5, u_5} D] (L : CategoryTheory.Functor C D) (F : CategoryTheory.Functor C H) (G : CategoryTheory.Functor C' C) (X : CategoryTheory.Comma (CategoryTheory.Functor.fromPUnit F) ((CategoryTheory.Functor.whiskeringLeft C D H).obj L)) : ((CategoryTheory.Functor.LeftExtension.precomp L F G).obj X).left = X.left"
+          },
+          {
+            "name": "CategoryTheory.Functor.RightExtension.precomp_obj_right",
+            "module": "Mathlib.CategoryTheory.Functor.KanExtension.Basic",
+            "type_signature": " {C : Type u_1} {C' : Type u_2} {H : Type u_3} {D : Type u_5} [CategoryTheory.Category.{v_1, u_1} C] [CategoryTheory.Category.{v_2, u_2} C'] [CategoryTheory.Category.{v_3, u_3} H] [CategoryTheory.Category.{v_5, u_5} D] (L : CategoryTheory.Functor C D) (F : CategoryTheory.Functor C H) (G : CategoryTheory.Functor C' C) (X : CategoryTheory.Comma ((CategoryTheory.Functor.whiskeringLeft C D H).obj L) (CategoryTheory.Functor.fromPUnit F)) : ((CategoryTheory.Functor.RightExtension.precomp L F G).obj X).right = X.right"
+          },
+          {
+            "name": "CategoryTheory.Functor.LeftExtension.precomp_obj_right",
+            "module": "Mathlib.CategoryTheory.Functor.KanExtension.Basic",
+            "type_signature": " {C : Type u_1} {C' : Type u_2} {H : Type u_3} {D : Type u_5} [CategoryTheory.Category.{v_1, u_1} C] [CategoryTheory.Category.{v_2, u_2} C'] [CategoryTheory.Category.{v_3, u_3} H] [CategoryTheory.Category.{v_5, u_5} D] (L : CategoryTheory.Functor C D) (F : CategoryTheory.Functor C H) (G : CategoryTheory.Functor C' C) (X : CategoryTheory.Comma (CategoryTheory.Functor.fromPUnit F) ((CategoryTheory.Functor.whiskeringLeft C D H).obj L)) : ((CategoryTheory.Functor.LeftExtension.precomp L F G).obj X).right = X.right"
+          },
+          {
+            "name": "CategoryTheory.Functor.RightExtension.precomp_obj_left",
+            "module": "Mathlib.CategoryTheory.Functor.KanExtension.Basic",
+            "type_signature": " {C : Type u_1} {C' : Type u_2} {H : Type u_3} {D : Type u_5} [CategoryTheory.Category.{v_1, u_1} C] [CategoryTheory.Category.{v_2, u_2} C'] [CategoryTheory.Category.{v_3, u_3} H] [CategoryTheory.Category.{v_5, u_5} D] (L : CategoryTheory.Functor C D) (F : CategoryTheory.Functor C H) (G : CategoryTheory.Functor C' C) (X : CategoryTheory.Comma ((CategoryTheory.Functor.whiskeringLeft C D H).obj L) (CategoryTheory.Functor.fromPUnit F)) : ((CategoryTheory.Functor.RightExtension.precomp L F G).obj X).left = X.left"
+          },
+          {
+            "name": "CategoryTheory.Functor.LeftExtension.precomp_obj_hom_app",
+            "module": "Mathlib.CategoryTheory.Functor.KanExtension.Basic",
+            "type_signature": " {C : Type u_1} {C' : Type u_2} {H : Type u_3} {D : Type u_5} [CategoryTheory.Category.{v_1, u_1} C] [CategoryTheory.Category.{v_2, u_2} C'] [CategoryTheory.Category.{v_3, u_3} H] [CategoryTheory.Category.{v_5, u_5} D] (L : CategoryTheory.Functor C D) (F : CategoryTheory.Functor C H) (G : CategoryTheory.Functor C' C) (X : CategoryTheory.Comma (CategoryTheory.Functor.fromPUnit F) ((CategoryTheory.Functor.whiskeringLeft C D H).obj L)) (X✝ : C') : ((CategoryTheory.Functor.LeftExtension.precomp L F G).obj X).hom.app X✝ = X.hom.app (G.obj X✝)"
+          },
+          {
+            "name": "CategoryTheory.Functor.RightExtension.precomp_obj_hom_app",
+            "module": "Mathlib.CategoryTheory.Functor.KanExtension.Basic",
+            "type_signature": " {C : Type u_1} {C' : Type u_2} {H : Type u_3} {D : Type u_5} [CategoryTheory.Category.{v_1, u_1} C] [CategoryTheory.Category.{v_2, u_2} C'] [CategoryTheory.Category.{v_3, u_3} H] [CategoryTheory.Category.{v_5, u_5} D] (L : CategoryTheory.Functor C D) (F : CategoryTheory.Functor C H) (G : CategoryTheory.Functor C' C) (X : CategoryTheory.Comma ((CategoryTheory.Functor.whiskeringLeft C D H).obj L) (CategoryTheory.Functor.fromPUnit F)) (X✝ : C') : ((CategoryTheory.Functor.RightExtension.precomp L F G).obj X).hom.app X✝ = X.hom.app (G.obj X✝)"
+          },
+          {
+            "name": "CategoryTheory.ComposableArrows.precomp_obj",
+            "module": "Mathlib.CategoryTheory.ComposableArrows.Basic",
+            "type_signature": " {C : Type u_1} [CategoryTheory.Category.{v_1, u_1} C] {n : ℕ} (F : CategoryTheory.ComposableArrows C n) {X : C} (f : X ⟶ F.left) (a✝ : Fin (n + 1 + 1)) : (F.precomp f).obj a✝ = CategoryTheory.ComposableArrows.Precomp.obj F X a✝"
+          },
+          {
+            "name": "TopologicalSpace.Opens.map_comp_obj",
+            "module": "Mathlib.Topology.Category.TopCat.Opens",
+            "type_signature": " {X Y Z : TopCat} (f : X ⟶ Y) (g : Y ⟶ Z) (U : TopologicalSpace.Opens ↑Z) : (TopologicalSpace.Opens.map (CategoryTheory.CategoryStruct.comp f g)).obj U = (TopologicalSpace.Opens.map f).obj ((TopologicalSpace.Opens.map g).obj U)"
+          },
+          {
+            "name": "TopologicalSpace.Opens.map_comp_obj_unop",
+            "module": "Mathlib.Topology.Category.TopCat.Opens",
+            "type_signature": " {X Y Z : TopCat} (f : X ⟶ Y) (g : Y ⟶ Z) (U : (TopologicalSpace.Opens ↑Z)ᵒᵖ) : (TopologicalSpace.Opens.map (CategoryTheory.CategoryStruct.comp f g)).obj (Opposite.unop U) = (TopologicalSpace.Opens.map f).obj ((TopologicalSpace.Opens.map g).obj (Opposite.unop U))"
+          },
+          {
+            "name": "TopologicalSpace.Opens.map_comp_obj'",
+            "module": "Mathlib.Topology.Category.TopCat.Opens",
+            "type_signature": " {X Y Z : TopCat} (f : X ⟶ Y) (g : Y ⟶ Z) (U : Set ↑Z) (p : IsOpen U) : (TopologicalSpace.Opens.map (CategoryTheory.CategoryStruct.comp f g)).obj { carrier := U, is_open' := p } = (TopologicalSpace.Opens.map f).obj ((TopologicalSpace.Opens.map g).obj { carrier := U, is_open' := p })"
+          },
+          {
+            "name": "TopologicalSpace.Opens.op_map_comp_obj",
+            "module": "Mathlib.Topology.Category.TopCat.Opens",
+            "type_signature": " {X Y Z : TopCat} (f : X ⟶ Y) (g : Y ⟶ Z) (U : (TopologicalSpace.Opens ↑Z)ᵒᵖ) : (TopologicalSpace.Opens.map (CategoryTheory.CategoryStruct.comp f g)).op.obj U = (TopologicalSpace.Opens.map f).op.obj ((TopologicalSpace.Opens.map g).op.obj U)"
+          },
+          {
+            "name": "CategoryTheory.TwoSquare.costructuredArrowDownwardsPrecomp_obj",
+            "module": "Mathlib.CategoryTheory.GuitartExact.Basic",
+            "type_signature": " {C₁ : Type u₁} {C₂ : Type u₂} {C₃ : Type u₃} {C₄ : Type u₄} [CategoryTheory.Category.{v₁, u₁} C₁] [CategoryTheory.Category.{v₂, u₂} C₂] [CategoryTheory.Category.{v₃, u₃} C₃] [CategoryTheory.Category.{v₄, u₄} C₄] {T : CategoryTheory.Functor C₁ C₂} {L : CategoryTheory.Functor C₁ C₃} {R : CategoryTheory.Functor C₂ C₄} {B : CategoryTheory.Functor C₃ C₄} (w : CategoryTheory.TwoSquare T L R B) {X₂ X₂' : C₂} {X₃ : C₃} (g : R.obj X₂ ⟶ B.obj X₃) (g' : R.obj X₂' ⟶ B.obj X₃) (γ : X₂' ⟶ X₂) (hγ : CategoryTheory.CategoryStruct.comp (R.map γ) g = g') (A : w.CostructuredArrowDownwards g) : (w.costructuredArrowDownwardsPrecomp g g' γ hγ).obj A = CategoryTheory.TwoSquare.CostructuredArrowDownwards.mk w g' (CategoryTheory.CostructuredArrow.left A).right (CategoryTheory.CategoryStruct.comp γ (CategoryTheory.CostructuredArrow.left A).hom) (CategoryTheory.StructuredArrow.Hom.right (CategoryTheory.CostructuredArrow.hom A)) ⋯"
+          },
+          {
+            "name": "CategoryTheory.StrictlyUnitaryLaxFunctor.comp_obj",
+            "module": "Mathlib.CategoryTheory.Bicategory.Functor.StrictlyUnitary",
+            "type_signature": " {B : Type u₁} [CategoryTheory.Bicategory B] {C : Type u₂} [CategoryTheory.Bicategory C] {D : Type u₃} [CategoryTheory.Bicategory D] (F : CategoryTheory.StrictlyUnitaryLaxFunctor B C) (G : CategoryTheory.StrictlyUnitaryLaxFunctor C D) (X : B) : (F.comp G).obj X = G.obj (F.obj X)"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "NatTrans": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.NatTrans",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] (F G : CategoryTheory.Functor C D) : Type (max u₁ v₂)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.id",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] (F : CategoryTheory.Functor C D) : CategoryTheory.NatTrans F F"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.instInhabited",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] (F : CategoryTheory.Functor C D) : Inhabited (CategoryTheory.NatTrans F F)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : CategoryTheory.NatTrans F G) (β : CategoryTheory.NatTrans G H) : CategoryTheory.NatTrans F H"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.app",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (self : CategoryTheory.NatTrans F G) (X : C) : F.obj X ⟶ G.obj X"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.id_app'",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] (F : CategoryTheory.Functor C D) (X : C) : (CategoryTheory.NatTrans.id F).app X = CategoryTheory.CategoryStruct.id (F.obj X)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.ext",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} {inst✝ : CategoryTheory.Category.{v₁, u₁} C} {D : Type u₂} {inst✝¹ : CategoryTheory.Category.{v₂, u₂} D} {F G : CategoryTheory.Functor C D} {x y : CategoryTheory.NatTrans F G} (app : x.app = y.app) : x = y"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.ext_iff",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} {inst✝ : CategoryTheory.Category.{v₁, u₁} C} {D : Type u₂} {inst✝¹ : CategoryTheory.Category.{v₂, u₂} D} {F G : CategoryTheory.Functor C D} {x y : CategoryTheory.NatTrans F G} : x = y ↔ x.app = y.app"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_app",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : CategoryTheory.NatTrans F G) (β : CategoryTheory.NatTrans G H) (X : C) : (α.vcomp β).app X = CategoryTheory.CategoryStruct.comp (α.app X) (β.app X)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.naturality",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (self : CategoryTheory.NatTrans F G) ⦃X Y : C⦄ (f : X ⟶ Y) : CategoryTheory.CategoryStruct.comp (F.map f) (self.app Y) = CategoryTheory.CategoryStruct.comp (self.app X) (G.map f)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.naturality'",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (self : CategoryTheory.NatTrans G F) ⦃X Y : C⦄ (f : Y ⟶ X) : CategoryTheory.CategoryStruct.comp (self.app Y) (F.map f) = CategoryTheory.CategoryStruct.comp (G.map f) (self.app X)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.mk'",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (app : (X : C) → G.obj X ⟶ F.obj X) (naturality : ∀ ⦃X Y : C⦄ (f : Y ⟶ X), CategoryTheory.CategoryStruct.comp (app Y) (F.map f) = CategoryTheory.CategoryStruct.comp (G.map f) (app X)) : CategoryTheory.NatTrans G F"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.mk",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (app : (X : C) → F.obj X ⟶ G.obj X) (naturality : ∀ ⦃X Y : C⦄ (f : X ⟶ Y), CategoryTheory.CategoryStruct.comp (F.map f) (app Y) = CategoryTheory.CategoryStruct.comp (app X) (G.map f) := by cat_disch) : CategoryTheory.NatTrans F G"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.naturality_assoc",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (self : CategoryTheory.NatTrans F G) ⦃X Y : C⦄ (f : X ⟶ Y) {Z : D} (h : G.obj Y ⟶ Z) : CategoryTheory.CategoryStruct.comp (F.map f) (CategoryTheory.CategoryStruct.comp (self.app Y) h) = CategoryTheory.CategoryStruct.comp (self.app X) (CategoryTheory.CategoryStruct.comp (G.map f) h)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.«term_◫_»",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " : Lean.TrailingParserDescr"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.id_app",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] (F : CategoryTheory.Functor C D) (X : C) : (CategoryTheory.CategoryStruct.id F).app X = CategoryTheory.CategoryStruct.id (F.obj X)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.epi_of_epi_app",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (α : F ⟶ G) [∀ (X : C), CategoryTheory.Epi (α.app X)] : CategoryTheory.Epi α"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.mono_of_mono_app",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G : CategoryTheory.Functor C D} (α : G ⟶ F) [∀ (X : C), CategoryTheory.Mono (α.app X)] : CategoryTheory.Mono α"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_eq_comp",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : F ⟶ G) (β : G ⟶ H) : CategoryTheory.NatTrans.vcomp α β = CategoryTheory.CategoryStruct.comp α β"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.hcomp",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {E : Type u₃} [CategoryTheory.Category.{v₃, u₃} E] {F G : CategoryTheory.Functor C D} {H I : CategoryTheory.Functor D E} (α : F ⟶ G) (β : H ⟶ I) : F.comp H ⟶ G.comp I"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "NatTrans.vcomp": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.NatTrans.vcomp",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : CategoryTheory.NatTrans F G) (β : CategoryTheory.NatTrans G H) : CategoryTheory.NatTrans F H"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_app",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : CategoryTheory.NatTrans F G) (β : CategoryTheory.NatTrans G H) (X : C) : (α.vcomp β).app X = CategoryTheory.CategoryStruct.comp (α.app X) (β.app X)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_eq_comp",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : F ⟶ G) (β : G ⟶ H) : CategoryTheory.NatTrans.vcomp α β = CategoryTheory.CategoryStruct.comp α β"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_app'",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [CategoryTheory.Category.{v₂, u₂} D] {F G H : CategoryTheory.Functor C D} (α : F ⟶ G) (β : G ⟶ H) (X : C) : (CategoryTheory.CategoryStruct.comp α β).app X = CategoryTheory.CategoryStruct.comp (α.app X) (β.app X)"
+          },
+          {
+            "name": "MultilinearMap.iteratedFDerivComponent",
+            "module": "Mathlib.LinearAlgebra.Multilinear.Basic",
+            "type_signature": " {R : Type uR} {ι : Type uι} {M₁ : ι → Type v₁} {M₂ : Type v₂} [CommSemiring R] [(i : ι) → AddCommMonoid (M₁ i)] [AddCommMonoid M₂] [(i : ι) → Module R (M₁ i)] [Module R M₂] {α : Type u_1} (f : MultilinearMap R M₁ M₂) {s : Set ι} (e : α ≃ ↑s) [DecidablePred fun x => x ∈ s] : MultilinearMap R (fun i => M₁ ↑i) (MultilinearMap R (fun x => (i : ι) → M₁ i) M₂)"
+          },
+          {
+            "name": "CategoryTheory.TwoSquare.vComp",
+            "module": "Mathlib.CategoryTheory.Functor.TwoSquare",
+            "type_signature": " {C₁ : Type u₁} {C₂ : Type u₂} {C₃ : Type u₃} {C₄ : Type u₄} [CategoryTheory.Category.{v₁, u₁} C₁] [CategoryTheory.Category.{v₂, u₂} C₂] [CategoryTheory.Category.{v₃, u₃} C₃] [CategoryTheory.Category.{v₄, u₄} C₄] {T : CategoryTheory.Functor C₁ C₂} {L : CategoryTheory.Functor C₁ C₃} {R : CategoryTheory.Functor C₂ C₄} {B : CategoryTheory.Functor C₃ C₄} {C₇ : Type u₇} {C₈ : Type u₈} [CategoryTheory.Category.{v₇, u₇} C₇] [CategoryTheory.Category.{v₈, u₈} C₈] {L' : CategoryTheory.Functor C₃ C₇} {R'' : CategoryTheory.Functor C₄ C₈} {B'' : CategoryTheory.Functor C₇ C₈} (w : CategoryTheory.TwoSquare T L R B) (w' : CategoryTheory.TwoSquare B L' R'' B'') : CategoryTheory.TwoSquare T (L.comp L') (R.comp R'') B''"
+          },
+          {
+            "name": "CategoryTheory.TwoSquare.hCompVCompHComp",
+            "module": "Mathlib.CategoryTheory.Functor.TwoSquare",
+            "type_signature": " {C₁ : Type u₁} {C₂ : Type u₂} {C₃ : Type u₃} {C₄ : Type u₄} [CategoryTheory.Category.{v₁, u₁} C₁] [CategoryTheory.Category.{v₂, u₂} C₂] [CategoryTheory.Category.{v₃, u₃} C₃] [CategoryTheory.Category.{v₄, u₄} C₄] {T : CategoryTheory.Functor C₁ C₂} {L : CategoryTheory.Functor C₁ C₃} {R : CategoryTheory.Functor C₂ C₄} {B : CategoryTheory.Functor C₃ C₄} {C₅ : Type u₅} {C₆ : Type u₆} {C₇ : Type u₇} {C₈ : Type u₈} [CategoryTheory.Category.{v₅, u₅} C₅] [CategoryTheory.Category.{v₆, u₆} C₆] [CategoryTheory.Category.{v₇, u₇} C₇] [CategoryTheory.Category.{v₈, u₈} C₈] {T' : CategoryTheory.Functor C₂ C₅} {R' : CategoryTheory.Functor C₅ C₆} {B' : CategoryTheory.Functor C₄ C₆} {L' : CategoryTheory.Functor C₃ C₇} {R'' : CategoryTheory.Functor C₄ C₈} {B'' : CategoryTheory.Functor C₇ C₈} {C₉ : Type u₉} [CategoryTheory.Category.{v₉, u₉} C₉] {R₃ : CategoryTheory.Functor C₆ C₉} {B₃ : CategoryTheory.Functor C₈ C₉} (w₁ : CategoryTheory.TwoSquare T L R B) (w₂ : CategoryTheory.TwoSquare T' R R' B') (w₃ : CategoryTheory.TwoSquare B L' R'' B'') (w₄ : CategoryTheory.TwoSquare B' R'' R₃ B₃) : (w₁.hComp w₂).vComp (w₃.hComp w₄) = (w₁.vComp w₃).hComp (w₂.vComp w₄)"
+          },
+          {
+            "name": "CategoryTheory.TwoSquare.vComp_app",
+            "module": "Mathlib.CategoryTheory.Functor.TwoSquare",
+            "type_signature": " {C₁ : Type u₁} {C₂ : Type u₂} {C₃ : Type u₃} {C₄ : Type u₄} [CategoryTheory.Category.{v₁, u₁} C₁] [CategoryTheory.Category.{v₂, u₂} C₂] [CategoryTheory.Category.{v₃, u₃} C₃] [CategoryTheory.Category.{v₄, u₄} C₄] {T : CategoryTheory.Functor C₁ C₂} {L : CategoryTheory.Functor C₁ C₃} {R : CategoryTheory.Functor C₂ C₄} {B : CategoryTheory.Functor C₃ C₄} {C₇ : Type u₇} {C₈ : Type u₈} [CategoryTheory.Category.{v₇, u₇} C₇] [CategoryTheory.Category.{v₈, u₈} C₈] {L' : CategoryTheory.Functor C₃ C₇} {R'' : CategoryTheory.Functor C₄ C₈} {B'' : CategoryTheory.Functor C₇ C₈} (w : CategoryTheory.TwoSquare T L R B) (w' : CategoryTheory.TwoSquare B L' R'' B'') (X : C₁) : (w.vComp w').app X = CategoryTheory.CategoryStruct.comp (R''.map (w.natTrans.app X)) (w'.natTrans.app (L.obj X))"
+          },
+          {
+            "name": "CategoryTheory.conjugateEquiv_mateEquiv_vcomp",
+            "module": "Mathlib.CategoryTheory.Adjunction.Mates",
+            "type_signature": " {A : Type u₁} {B : Type u₂} {C : Type u₃} {D : Type u₄} [CategoryTheory.Category.{v₁, u₁} A] [CategoryTheory.Category.{v₂, u₂} B] [CategoryTheory.Category.{v₃, u₃} C] [CategoryTheory.Category.{v₄, u₄} D] {G : CategoryTheory.Functor A C} {H : CategoryTheory.Functor B D} {L₁ : CategoryTheory.Functor A B} {R₁ : CategoryTheory.Functor B A} {L₂ : CategoryTheory.Functor A B} {R₂ : CategoryTheory.Functor B A} {L₃ : CategoryTheory.Functor C D} {R₃ : CategoryTheory.Functor D C} (adj₁ : L₁ ⊣ R₁) (adj₂ : L₂ ⊣ R₂) (adj₃ : L₃ ⊣ R₃) (α : L₂ ⟶ L₁) (β : CategoryTheory.TwoSquare G L₂ L₃ H) : (CategoryTheory.mateEquiv adj₁ adj₃) (β.whiskerLeft α) = ((CategoryTheory.mateEquiv adj₂ adj₃) β).whiskerTop ((CategoryTheory.conjugateEquiv adj₁ adj₂) α)"
+          },
+          {
+            "name": "CategoryTheory.mateEquiv_conjugateEquiv_vcomp",
+            "module": "Mathlib.CategoryTheory.Adjunction.Mates",
+            "type_signature": " {A : Type u₁} {B : Type u₂} {C : Type u₃} {D : Type u₄} [CategoryTheory.Category.{v₁, u₁} A] [CategoryTheory.Category.{v₂, u₂} B] [CategoryTheory.Category.{v₃, u₃} C] [CategoryTheory.Category.{v₄, u₄} D] {G : CategoryTheory.Functor A C} {H : CategoryTheory.Functor B D} {L₁ : CategoryTheory.Functor A B} {R₁ : CategoryTheory.Functor B A} {L₂ : CategoryTheory.Functor C D} {R₂ : CategoryTheory.Functor D C} {L₃ : CategoryTheory.Functor C D} {R₃ : CategoryTheory.Functor D C} (adj₁ : L₁ ⊣ R₁) (adj₂ : L₂ ⊣ R₂) (adj₃ : L₃ ⊣ R₃) (α : CategoryTheory.TwoSquare G L₁ L₂ H) (β : L₃ ⟶ L₂) : (CategoryTheory.mateEquiv adj₁ adj₃) (α.whiskerRight β) = ((CategoryTheory.mateEquiv adj₁ adj₂) α).whiskerBottom ((CategoryTheory.conjugateEquiv adj₂ adj₃) β)"
+          },
+          {
+            "name": "CategoryTheory.mateEquiv_vcomp",
+            "module": "Mathlib.CategoryTheory.Adjunction.Mates",
+            "type_signature": " {A : Type u₁} {B : Type u₂} {C : Type u₃} {D : Type u₄} {E : Type u₅} {F : Type u₆} [CategoryTheory.Category.{v₁, u₁} A] [CategoryTheory.Category.{v₂, u₂} B] [CategoryTheory.Category.{v₃, u₃} C] [CategoryTheory.Category.{v₄, u₄} D] [CategoryTheory.Category.{v₅, u₅} E] [CategoryTheory.Category.{v₆, u₆} F] {G₁ : CategoryTheory.Functor A C} {G₂ : CategoryTheory.Functor C E} {H₁ : CategoryTheory.Functor B D} {H₂ : CategoryTheory.Functor D F} {L₁ : CategoryTheory.Functor A B} {R₁ : CategoryTheory.Functor B A} {L₂ : CategoryTheory.Functor C D} {R₂ : CategoryTheory.Functor D C} {L₃ : CategoryTheory.Functor E F} {R₃ : CategoryTheory.Functor F E} (adj₁ : L₁ ⊣ R₁) (adj₂ : L₂ ⊣ R₂) (adj₃ : L₃ ⊣ R₃) (α : CategoryTheory.TwoSquare G₁ L₁ L₂ H₁) (β : CategoryTheory.TwoSquare G₂ L₂ L₃ H₂) : (CategoryTheory.mateEquiv adj₁ adj₃) (α.hComp β) = ((CategoryTheory.mateEquiv adj₁ adj₂) α).vComp ((CategoryTheory.mateEquiv adj₂ adj₃) β)"
+          },
+          {
+            "name": "Continuous.homeoOfEquivCompactToT2",
+            "module": "Mathlib.Topology.Homeomorph.Lemmas",
+            "type_signature": " {X : Type u_1} {Y : Type u_2} [TopologicalSpace X] [TopologicalSpace Y] [CompactSpace X] [T2Space Y] {f : X ≃ Y} (hf : Continuous ⇑f) : X ≃ₜ Y"
+          },
+          {
+            "name": "Continuous.toEquiv_homeoOfEquivCompactToT2",
+            "module": "Mathlib.Topology.Homeomorph.Lemmas",
+            "type_signature": " {X : Type u_1} {Y : Type u_2} [TopologicalSpace X] [TopologicalSpace Y] [CompactSpace X] [T2Space Y] {f : X ≃ Y} (hf : Continuous ⇑f) : hf.homeoOfEquivCompactToT2.toEquiv = f"
+          },
+          {
+            "name": "CategoryTheory.CatCommSq.vComp",
+            "module": "Mathlib.CategoryTheory.CatCommSq",
+            "type_signature": " {C₁ : Type u_1} {C₂ : Type u_2} {C₃ : Type u_3} {C₄ : Type u_4} {C₅ : Type u_5} {C₆ : Type u_6} [CategoryTheory.Category.{v_1, u_1} C₁] [CategoryTheory.Category.{v_2, u_2} C₂] [CategoryTheory.Category.{v_3, u_3} C₃] [CategoryTheory.Category.{v_4, u_4} C₄] [CategoryTheory.Category.{v_5, u_5} C₅] [CategoryTheory.Category.{v_6, u_6} C₆] (L₁ : CategoryTheory.Functor C₁ C₂) (L₂ : CategoryTheory.Functor C₂ C₃) (H₁ : CategoryTheory.Functor C₁ C₄) (H₂ : CategoryTheory.Functor C₂ C₅) (H₃ : CategoryTheory.Functor C₃ C₆) (R₁ : CategoryTheory.Functor C₄ C₅) (R₂ : CategoryTheory.Functor C₅ C₆) [CategoryTheory.CatCommSq H₁ L₁ R₁ H₂] [CategoryTheory.CatCommSq H₂ L₂ R₂ H₃] : CategoryTheory.CatCommSq H₁ (L₁.comp L₂) (R₁.comp R₂) H₃"
+          },
+          {
+            "name": "CategoryTheory.CatCommSq.vComp'",
+            "module": "Mathlib.CategoryTheory.CatCommSq",
+            "type_signature": " {C₁ : Type u_1} {C₂ : Type u_2} {C₃ : Type u_3} {C₄ : Type u_4} {C₅ : Type u_5} {C₆ : Type u_6} [CategoryTheory.Category.{v_1, u_1} C₁] [CategoryTheory.Category.{v_2, u_2} C₂] [CategoryTheory.Category.{v_3, u_3} C₃] [CategoryTheory.Category.{v_4, u_4} C₄] [CategoryTheory.Category.{v_5, u_5} C₅] [CategoryTheory.Category.{v_6, u_6} C₆] {L₁ : CategoryTheory.Functor C₁ C₂} {L₂ : CategoryTheory.Functor C₂ C₃} {H₁ : CategoryTheory.Functor C₁ C₄} {H₂ : CategoryTheory.Functor C₂ C₅} {H₃ : CategoryTheory.Functor C₃ C₆} {R₁ : CategoryTheory.Functor C₄ C₅} {R₂ : CategoryTheory.Functor C₅ C₆} (S₁ : CategoryTheory.CatCommSq H₁ L₁ R₁ H₂) (S₂ : CategoryTheory.CatCommSq H₂ L₂ R₂ H₃) : CategoryTheory.CatCommSq H₁ (L₁.comp L₂) (R₁.comp R₂) H₃"
+          },
+          {
+            "name": "CategoryTheory.CatCommSq.vComp_iso_hom_app",
+            "module": "Mathlib.CategoryTheory.CatCommSq",
+            "type_signature": " {C₁ : Type u_1} {C₂ : Type u_2} {C₃ : Type u_3} {C₄ : Type u_4} {C₅ : Type u_5} {C₆ : Type u_6} [CategoryTheory.Category.{v_1, u_1} C₁] [CategoryTheory.Category.{v_2, u_2} C₂] [CategoryTheory.Category.{v_3, u_3} C₃] [CategoryTheory.Category.{v_4, u_4} C₄] [CategoryTheory.Category.{v_5, u_5} C₅] [CategoryTheory.Category.{v_6, u_6} C₆] (L₁ : CategoryTheory.Functor C₁ C₂) (L₂ : CategoryTheory.Functor C₂ C₃) (H₁ : CategoryTheory.Functor C₁ C₄) (H₂ : CategoryTheory.Functor C₂ C₅) (H₃ : CategoryTheory.Functor C₃ C₆) (R₁ : CategoryTheory.Functor C₄ C₅) (R₂ : CategoryTheory.Functor C₅ C₆) [CategoryTheory.CatCommSq H₁ L₁ R₁ H₂] [CategoryTheory.CatCommSq H₂ L₂ R₂ H₃] (X : C₁) : (CategoryTheory.CatCommSq.iso H₁ (L₁.comp L₂) (R₁.comp R₂) H₃).hom.app X = CategoryTheory.CategoryStruct.comp (R₂.map ((CategoryTheory.CatCommSq.iso H₁ L₁ R₁ H₂).hom.app X)) ((CategoryTheory.CatCommSq.iso H₂ L₂ R₂ H₃).hom.app (L₁.obj X))"
+          },
+          {
+            "name": "CategoryTheory.CatCommSq.vComp_iso_inv_app",
+            "module": "Mathlib.CategoryTheory.CatCommSq",
+            "type_signature": " {C₁ : Type u_1} {C₂ : Type u_2} {C₃ : Type u_3} {C₄ : Type u_4} {C₅ : Type u_5} {C₆ : Type u_6} [CategoryTheory.Category.{v_1, u_1} C₁] [CategoryTheory.Category.{v_2, u_2} C₂] [CategoryTheory.Category.{v_3, u_3} C₃] [CategoryTheory.Category.{v_4, u_4} C₄] [CategoryTheory.Category.{v_5, u_5} C₅] [CategoryTheory.Category.{v_6, u_6} C₆] (L₁ : CategoryTheory.Functor C₁ C₂) (L₂ : CategoryTheory.Functor C₂ C₃) (H₁ : CategoryTheory.Functor C₁ C₄) (H₂ : CategoryTheory.Functor C₂ C₅) (H₃ : CategoryTheory.Functor C₃ C₆) (R₁ : CategoryTheory.Functor C₄ C₅) (R₂ : CategoryTheory.Functor C₅ C₆) [CategoryTheory.CatCommSq H₁ L₁ R₁ H₂] [CategoryTheory.CatCommSq H₂ L₂ R₂ H₃] (X : C₁) : (CategoryTheory.CatCommSq.iso H₁ (L₁.comp L₂) (R₁.comp R₂) H₃).inv.app X = CategoryTheory.CategoryStruct.comp ((CategoryTheory.CatCommSq.iso H₂ L₂ R₂ H₃).inv.app (L₁.obj X)) (R₂.map ((CategoryTheory.CatCommSq.iso H₁ L₁ R₁ H₂).inv.app X))"
+          },
+          {
+            "name": "CategoryTheory.Presieve.natTransEquivCompatibleFamily",
+            "module": "Mathlib.CategoryTheory.Sites.IsSheafFor",
+            "type_signature": " {C : Type u₁} [CategoryTheory.Category.{v₁, u₁} C] {X : C} {S : CategoryTheory.Sieve X} [CategoryTheory.LocallySmall.{w, v₁, u₁} C] {F : CategoryTheory.Functor Cᵒᵖ (Type w)} : ((CategoryTheory.Sieve.shrinkFunctor.{w, v₁, u₁} S).toFunctor ⟶ F) ≃ { x // x.Compatible }"
+          },
+          {
+            "name": "SimplexCategory.revCompRevIso",
+            "module": "Mathlib.AlgebraicTopology.SimplexCategory.Rev",
+            "type_signature": " : SimplexCategory.rev.comp SimplexCategory.rev ≅ CategoryTheory.Functor.id SimplexCategory"
+          },
+          {
+            "name": "SimplexCategory.revCompRevIso_hom_app",
+            "module": "Mathlib.AlgebraicTopology.SimplexCategory.Rev",
+            "type_signature": " (X : SimplexCategory) : SimplexCategory.revCompRevIso.hom.app X = CategoryTheory.CategoryStruct.id X"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "sameDenom_eq_iff_exists_postcomp_W": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [],
+        "closed_by": null,
+        "error": null
+      },
+      "sameDenom_eq_iff_exists_postcomp": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [],
+        "closed_by": null,
+        "error": null
+      },
+      "exists_lift_commSq": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [],
+        "closed_by": null,
+        "error": null
+      },
+      "isIso_map_iff_inSaturation": {
+        "stage": "loogle",
+        "available": true,
+        "hits": [],
+        "closed_by": null,
+        "error": null
+      }
+    },
+    "semantic": {
+      "Category": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Category.mk",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "{obj : Type u} →\n  [toCategoryStruct : CategoryTheory.CategoryStruct.{v, u} obj] →\n    autoParam (∀ {X Y : obj} (f : X ⟶ Y), CategoryTheory.CategoryStruct.comp (CategoryTheory.CategoryStruct.id X) f = f)\n        CategoryTheory.Category.id_comp._autoParam →\n      autoParam\n          (∀ {X Y : obj} (f : X ⟶ Y), CategoryTheory.CategoryStruct.comp f (CategoryTheory.CategoryStruct.id Y) = f)\n          CategoryTheory.Category.comp_id._autoParam →\n        autoParam\n            (∀ {W X Y Z : obj} (f ..."
+          },
+          {
+            "name": "CategoryTheory.Core",
+            "module": "Mathlib.CategoryTheory.Core",
+            "type_signature": "Type u₁ → Type u₁"
+          },
+          {
+            "name": "CategoryTheory.CategoryStruct.mk",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "{obj : Type u} →\n  [toQuiver : Quiver obj] →\n    ((X : obj) → X ⟶ X) → ({X Y Z : obj} → (X ⟶ Y) → (Y ⟶ Z) → (X ⟶ Z)) → CategoryTheory.CategoryStruct.{v, u} obj"
+          },
+          {
+            "name": "CategoryTheory.Core.of",
+            "module": "Mathlib.CategoryTheory.Core",
+            "type_signature": "{C : Type u₁} → CategoryTheory.Core C → C"
+          },
+          {
+            "name": "CategoryTheory.SmallCategoryOfSet.mk",
+            "module": "Mathlib.CategoryTheory.SmallRepresentatives",
+            "type_signature": "{Ω : Type w} →\n  (obj : Set Ω) →\n    (hom : ↑obj → ↑obj → Set Ω) →\n      (id : (X : ↑obj) → ↑(hom X X)) →\n        (comp : {X Y Z : ↑obj} → ↑(hom X Y) → ↑(hom Y Z) → ↑(hom X Z)) →\n          autoParam (∀ {X Y : ↑obj} (f : ↑(hom X Y)), comp (id X) f = f)\n              CategoryTheory.SmallCategoryOfSet.id_comp._autoParam →\n            autoParam (∀ {X Y : ↑obj} (f : ↑(hom X Y)), comp f (id Y) = f)\n                CategoryTheory.SmallCategoryOfSet.comp_id._autoParam →\n              autoParam\n      ..."
+          },
+          {
+            "name": "CategoryTheory.types",
+            "module": "Mathlib.CategoryTheory.Types.Basic",
+            "type_signature": ": LargeCategory (Type u)"
+          },
+          {
+            "name": "CategoryTheory.Category.assoc'",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "{W X Y Z : C} (f : X ⟶ W) (g : Y ⟶ X) (h : Z ⟶ Y) : h ≫ g ≫ f = (h ≫ g) ≫ f"
+          },
+          {
+            "name": "RingCat.instCategory",
+            "module": "Mathlib.Algebra.Category.Ring.Basic",
+            "type_signature": ": Category RingCat"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "id_comp": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Category.id_comp",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "∀ {obj : Type u} [self : CategoryTheory.Category.{v, u} obj] {X Y : obj} (f : X ⟶ Y),\n  CategoryTheory.CategoryStruct.comp (CategoryTheory.CategoryStruct.id X) f = f"
+          },
+          {
+            "name": "CategoryTheory.Sigma.SigmaHom.id_comp",
+            "module": "Mathlib.CategoryTheory.Sigma.Basic",
+            "type_signature": ": ∀ {X Y : Σ i, C i} (f : X ⟶ Y), 𝟙 X ≫ f = f"
+          },
+          {
+            "name": "CategoryTheory.SmallCategoryOfSet.id_comp",
+            "module": "Mathlib.CategoryTheory.SmallRepresentatives",
+            "type_signature": "∀ {Ω : Type w} (self : CategoryTheory.SmallCategoryOfSet Ω) {X Y : ↑self.obj} (f : ↑(self.hom X Y)),\n  self.comp (self.id X) f = f"
+          },
+          {
+            "name": "CategoryTheory.Bicategory.leftUnitor",
+            "module": "Mathlib.CategoryTheory.Bicategory.Basic",
+            "type_signature": "{B : Type u} →\n  [self : CategoryTheory.Bicategory B] →\n    {a b : B} → (f : a ⟶ b) → CategoryTheory.CategoryStruct.comp (CategoryTheory.CategoryStruct.id a) f ≅ f"
+          },
+          {
+            "name": "Mathlib.Tactic.Coherence.insert_id_lhs",
+            "module": "Mathlib.Tactic.CategoryTheory.Coherence",
+            "type_signature": "{C : Type*} [Category* C] {X Y : C} (f g : X ⟶ Y) (w : f ≫ 𝟙 _ = g) : f = g"
+          },
+          {
+            "name": "CategoryTheory.Cat.Hom.id_map",
+            "module": "Mathlib.CategoryTheory.Category.Cat",
+            "type_signature": "{C : Cat.{v, u}} {X Y : C} (f : X ⟶ Y) : (𝟙 C : C ⟶ C).toFunctor.map f = f"
+          },
+          {
+            "name": "CategoryTheory.id_of_comp_left_id",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "(f : X ⟶ X) (w : ∀ {Y : C} (g : X ⟶ Y), f ≫ g = g) : f = 𝟙 X"
+          },
+          {
+            "name": "CategoryTheory.FreeMonoidalCategory.HomEquiv.id_comp",
+            "module": "Mathlib.CategoryTheory.Monoidal.Free.Basic",
+            "type_signature": "∀ {C : Type u} {X Y : CategoryTheory.FreeMonoidalCategory C} (f : X.Hom Y),\n  CategoryTheory.FreeMonoidalCategory.HomEquiv ((CategoryTheory.FreeMonoidalCategory.Hom.id X).comp f) f"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "comp_id": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Category.comp_id",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "∀ {obj : Type u} [self : CategoryTheory.Category.{v, u} obj] {X Y : obj} (f : X ⟶ Y),\n  CategoryTheory.CategoryStruct.comp f (CategoryTheory.CategoryStruct.id Y) = f"
+          },
+          {
+            "name": "CategoryTheory.SmallCategoryOfSet.comp_id",
+            "module": "Mathlib.CategoryTheory.SmallRepresentatives",
+            "type_signature": "∀ {Ω : Type w} (self : CategoryTheory.SmallCategoryOfSet Ω) {X Y : ↑self.obj} (f : ↑(self.hom X Y)),\n  self.comp f (self.id Y) = f"
+          },
+          {
+            "name": "CategoryTheory.Sigma.SigmaHom.comp_id",
+            "module": "Mathlib.CategoryTheory.Sigma.Basic",
+            "type_signature": ": ∀ {X Y : Σ i, C i} (f : X ⟶ Y), f ≫ 𝟙 Y = f"
+          },
+          {
+            "name": "Mathlib.Tactic.Coherence.insert_id_rhs",
+            "module": "Mathlib.Tactic.CategoryTheory.Coherence",
+            "type_signature": "{C : Type*} [Category* C] {X Y : C} (f g : X ⟶ Y) (w : f = g ≫ 𝟙 _) : f = g"
+          },
+          {
+            "name": "CategoryTheory.Limits.WalkingParallelPairHom.comp_id",
+            "module": "Mathlib.CategoryTheory.Limits.Shapes.Equalizers",
+            "type_signature": "{X Y : WalkingParallelPair} (f : WalkingParallelPairHom X Y) : comp f (id Y) = f"
+          },
+          {
+            "name": "CategoryTheory.Sigma.SigmaHom.id_comp",
+            "module": "Mathlib.CategoryTheory.Sigma.Basic",
+            "type_signature": ": ∀ {X Y : Σ i, C i} (f : X ⟶ Y), 𝟙 X ≫ f = f"
+          },
+          {
+            "name": "Mathlib.Tactic.Coherence.insert_id_lhs",
+            "module": "Mathlib.Tactic.CategoryTheory.Coherence",
+            "type_signature": "{C : Type*} [Category* C] {X Y : C} (f g : X ⟶ Y) (w : f ≫ 𝟙 _ = g) : f = g"
+          },
+          {
+            "name": "CategoryTheory.CategoryStruct.id",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "{obj : Type u} → [self : CategoryTheory.CategoryStruct.{v, u} obj] → (X : obj) → X ⟶ X"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "assoc": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Category.assoc'",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "{W X Y Z : C} (f : X ⟶ W) (g : Y ⟶ X) (h : Z ⟶ Y) : h ≫ g ≫ f = (h ≫ g) ≫ f"
+          },
+          {
+            "name": "CategoryTheory.Category.assoc",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "∀ {obj : Type u} [self : CategoryTheory.Category.{v, u} obj] {W X Y Z : obj} (f : W ⟶ X) (g : X ⟶ Y) (h : Y ⟶ Z),\n  CategoryTheory.CategoryStruct.comp (CategoryTheory.CategoryStruct.comp f g) h =\n    CategoryTheory.CategoryStruct.comp f (CategoryTheory.CategoryStruct.comp g h)"
+          },
+          {
+            "name": "CategoryTheory.Sigma.SigmaHom.assoc",
+            "module": "Mathlib.CategoryTheory.Sigma.Basic",
+            "type_signature": ": ∀ {X Y Z W : Σ i, C i} (f : X ⟶ Y) (g : Y ⟶ Z) (h : Z ⟶ W), (f ≫ g) ≫ h = f ≫ g ≫ h"
+          },
+          {
+            "name": "CategoryTheory.SmallCategoryOfSet.assoc",
+            "module": "Mathlib.CategoryTheory.SmallRepresentatives",
+            "type_signature": "∀ {Ω : Type w} (self : CategoryTheory.SmallCategoryOfSet Ω) {X Y Z T : ↑self.obj} (f : ↑(self.hom X Y))\n  (g : ↑(self.hom Y Z)) (h : ↑(self.hom Z T)), self.comp (self.comp f g) h = self.comp f (self.comp g h)"
+          },
+          {
+            "name": "FintypeCat.comp_hom_assoc",
+            "module": "Mathlib.CategoryTheory.FintypeCat",
+            "type_signature": "∀ {X Y Z : FintypeCat} (f : X ⟶ Y) (g : Y ⟶ Z) {Z_1 : Type u_1} (h : Z.carrier ⟶ Z_1),\n  CategoryTheory.CategoryStruct.comp (CategoryTheory.CategoryStruct.comp f g).hom h =\n    CategoryTheory.CategoryStruct.comp (g.hom ∘ f.hom) h"
+          },
+          {
+            "name": "CategoryTheory.Skeleton.comp_hom_assoc",
+            "module": "Mathlib.CategoryTheory.Skeletal",
+            "type_signature": "∀ {C : Type u₁} [inst : CategoryTheory.Category.{v₁, u₁} C] {X Y Z : CategoryTheory.Skeleton C} (f : X ⟶ Y) (g : Y ⟶ Z)\n  {Z_1 : C} (h : Quotient.out Z ⟶ Z_1),\n  CategoryTheory.CategoryStruct.comp (CategoryTheory.CategoryStruct.comp f g).hom h =\n    CategoryTheory.CategoryStruct.comp f.hom (CategoryTheory.CategoryStruct.comp g.hom h)"
+          },
+          {
+            "name": "CategoryTheory.CategoryStruct.comp",
+            "module": "Mathlib.CategoryTheory.Category.Basic",
+            "type_signature": "{obj : Type u} → [self : CategoryTheory.CategoryStruct.{v, u} obj] → {X Y Z : obj} → (X ⟶ Y) → (Y ⟶ Z) → (X ⟶ Z)"
+          },
+          {
+            "name": "CategoryTheory.Prod.fac'_assoc",
+            "module": "Mathlib.CategoryTheory.Products.Basic",
+            "type_signature": "∀ {C : Type u₁} [inst : CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [inst_1 : CategoryTheory.Category.{v₂, u₂} D]\n  {x y : C × D} (f : x ⟶ y) {Z : C × D} (h : y ⟶ Z),\n  CategoryTheory.CategoryStruct.comp f h =\n    CategoryTheory.CategoryStruct.comp (CategoryTheory.Prod.mkHom f.1 (CategoryTheory.CategoryStruct.id x.2))\n      (CategoryTheory.CategoryStruct.comp (CategoryTheory.Prod.mkHom (CategoryTheory.CategoryStruct.id y.1) f.2) h)"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "Functor": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Functorial.mk.noConfusion",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "{C : Type u₁} →\n  {inst : CategoryTheory.Category.{v₁, u₁} C} →\n    {D : Type u₂} →\n      {inst_1 : CategoryTheory.Category.{v₂, u₂} D} →\n        {F : C → D} →\n          {P : Sort u} →\n            {map : {X Y : C} → (X ⟶ Y) → (F X ⟶ F Y)} →\n              {map_id :\n                  autoParam\n                    (∀ {X : C}, map (CategoryTheory.CategoryStruct.id X) = CategoryTheory.CategoryStruct.id (F X))\n                    CategoryTheory.Functorial.map_id._autoParam} →\n                {map_c..."
+          },
+          {
+            "name": "CategoryTheory.instFunctorialObj",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "(F : C ⥤ D) : Functorial.{v₁, v₂} F.obj"
+          },
+          {
+            "name": "CategoryTheory.Functorial.mk",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "{C : Type u₁} →\n  [inst : CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} →\n      [inst_1 : CategoryTheory.Category.{v₂, u₂} D] →\n        {F : C → D} →\n          (map : {X Y : C} → (X ⟶ Y) → (F X ⟶ F Y)) →\n            autoParam (∀ {X : C}, map (CategoryTheory.CategoryStruct.id X) = CategoryTheory.CategoryStruct.id (F X))\n                CategoryTheory.Functorial.map_id._autoParam →\n              autoParam\n                  (∀ {X Y Z : C} {f : X ⟶ Y} {g : Y ⟶ Z},\n                    ma..."
+          },
+          {
+            "name": "CategoryTheory.Functor.mk",
+            "module": "Mathlib.CategoryTheory.Functor.Basic",
+            "type_signature": "{C : Type u₁} →\n  [inst : CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} →\n      [inst_1 : CategoryTheory.Category.{v₂, u₂} D] →\n        (obj : C → D) →\n          (map : {X Y : C} → (X ⟶ Y) → (obj X ⟶ obj Y)) →\n            autoParam (∀ (X : C), map (CategoryTheory.CategoryStruct.id X) = CategoryTheory.CategoryStruct.id (obj X))\n                CategoryTheory.Functor.map_id._autoParam →\n              autoParam\n                  (∀ {X Y Z : C} (f : X ⟶ Y) (g : Y ⟶ Z),\n                 ..."
+          },
+          {
+            "name": "CategoryTheory.Functor.of",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "(F : C → D) [I : Functorial.{v₁, v₂} F] : C ⥤ D"
+          },
+          {
+            "name": "CategoryTheory.Functorial",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "{C : Type u₁} →\n  [CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} → [CategoryTheory.Category.{v₂, u₂} D] → (C → D) → Type (max v₁ v₂ u₁ u₂)"
+          },
+          {
+            "name": "CategoryTheory.Functorial.map",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "{C : Type u₁} →\n  {inst : CategoryTheory.Category.{v₁, u₁} C} →\n    {D : Type u₂} →\n      {inst_1 : CategoryTheory.Category.{v₂, u₂} D} →\n        (F : C → D) → [self : CategoryTheory.Functorial F] → {X Y : C} → (X ⟶ Y) → (F X ⟶ F Y)"
+          },
+          {
+            "name": "CategoryTheory.Functor.rec",
+            "module": "Mathlib.CategoryTheory.Functor.Basic",
+            "type_signature": "{C : Type u₁} →\n  [inst : CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} →\n      [inst_1 : CategoryTheory.Category.{v₂, u₂} D] →\n        {motive : CategoryTheory.Functor C D → Sort u} →\n          ((obj : C → D) →\n              (map : {X Y : C} → (X ⟶ Y) → (obj X ⟶ obj Y)) →\n                (map_id :\n                    ∀ (X : C), map (CategoryTheory.CategoryStruct.id X) = CategoryTheory.CategoryStruct.id (obj X)) →\n                  (map_comp :\n                      ∀ {X Y Z : C} (f ..."
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "Functor.comp": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Functor.comp",
+            "module": "Mathlib.CategoryTheory.Functor.Basic",
+            "type_signature": "(F : C ⥤ D) (G : D ⥤ E) : C ⥤ E"
+          },
+          {
+            "name": "Functor.Comp.functor",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": ": Functor (Comp F G)"
+          },
+          {
+            "name": "Functor.Comp.lawfulFunctor",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": ": LawfulFunctor (Comp F G)"
+          },
+          {
+            "name": "CategoryTheory.functorial_comp",
+            "module": "Mathlib.CategoryTheory.Functor.Functorial",
+            "type_signature": "(F : C → D) [Functorial.{v₁, v₂} F] (G : D → E) [Functorial.{v₂, v₃} G] : Functorial.{v₁, v₃} (G ∘ F)"
+          },
+          {
+            "name": "CategoryTheory.Cat.Hom.comp_toFunctor",
+            "module": "Mathlib.CategoryTheory.Category.Cat",
+            "type_signature": "{C D E : Cat.{v, u}} (F : C ⟶ D) (G : D ⟶ E) : (F ≫ G).toFunctor = F.toFunctor ⋙ G.toFunctor"
+          },
+          {
+            "name": "Functor.Comp",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": "(F : Type u → Type w) (G : Type v → Type u) (α : Type v) : Type w"
+          },
+          {
+            "name": "PFunctor.comp",
+            "module": "Mathlib.Data.PFunctor.Univariate.Basic",
+            "type_signature": "(P₂ : PFunctor.{uA₂, uB₂}) (P₁ : PFunctor.{uA₁, uB₁}) : PFunctor.{max uA₁ uA₂ uB₂, max uB₁ uB₂}"
+          },
+          {
+            "name": "Functor.Comp.map",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": "{α β : Type v} (h : α → β) : Comp F G α → Comp F G β"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "Functor.comp_obj": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.Functor.comp",
+            "module": "Mathlib.CategoryTheory.Functor.Basic",
+            "type_signature": "(F : C ⥤ D) (G : D ⥤ E) : C ⥤ E"
+          },
+          {
+            "name": "CategoryTheory.Cat.Hom.comp_obj",
+            "module": "Mathlib.CategoryTheory.Category.Cat",
+            "type_signature": "{C D E : Cat.{v, u}} (F : C ⟶ D) (G : D ⟶ E) (X : C) : (F ≫ G).toFunctor.obj X = G.toFunctor.obj (F.toFunctor.obj X)"
+          },
+          {
+            "name": "CategoryTheory.Functor.comp_obj",
+            "module": "Mathlib.CategoryTheory.Functor.Basic",
+            "type_signature": "∀ {C : Type u₁} [inst : CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [inst_1 : CategoryTheory.Category.{v₂, u₂} D]\n  {E : Type u₃} [inst_2 : CategoryTheory.Category.{v₃, u₃} E] (F : CategoryTheory.Functor C D)\n  (G : CategoryTheory.Functor D E) (X : C), (F.comp G).obj X = G.obj (F.obj X)"
+          },
+          {
+            "name": "Functor.Comp.map",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": "{α β : Type v} (h : α → β) : Comp F G α → Comp F G β"
+          },
+          {
+            "name": "Functor.Comp.functor",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": ": Functor (Comp F G)"
+          },
+          {
+            "name": "Functor.Comp.lawfulFunctor",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": ": LawfulFunctor (Comp F G)"
+          },
+          {
+            "name": "CategoryTheory.StrictlyUnitaryPseudofunctor.comp_obj",
+            "module": "Mathlib.CategoryTheory.Bicategory.Functor.StrictlyUnitary",
+            "type_signature": "∀ {B : Type u₁} [inst : CategoryTheory.Bicategory B] {C : Type u₂} [inst_1 : CategoryTheory.Bicategory C] {D : Type u₃}\n  [inst_2 : CategoryTheory.Bicategory D] (F : CategoryTheory.StrictlyUnitaryPseudofunctor B C)\n  (G : CategoryTheory.StrictlyUnitaryPseudofunctor C D) (X : B), (F.comp G).obj X = G.obj (F.obj X)"
+          },
+          {
+            "name": "Functor.Comp",
+            "module": "Mathlib.Control.Functor",
+            "type_signature": "(F : Type u → Type w) (G : Type v → Type u) (α : Type v) : Type w"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "NatTrans": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.NatTrans.mk",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": "{C : Type u₁} →\n  [inst : CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} →\n      [inst_1 : CategoryTheory.Category.{v₂, u₂} D] →\n        {F G : CategoryTheory.Functor C D} →\n          (app : (X : C) → F.obj X ⟶ G.obj X) →\n            autoParam\n                (∀ ⦃X Y : C⦄ (f : X ⟶ Y),\n                  CategoryTheory.CategoryStruct.comp (F.map f) (app Y) =\n                    CategoryTheory.CategoryStruct.comp (app X) (G.map f))\n                CategoryTheory.NatTrans.naturality._aut..."
+          },
+          {
+            "name": "CategoryTheory.NatTrans",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": "{C : Type u₁} →\n  [inst : CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} →\n      [inst_1 : CategoryTheory.Category.{v₂, u₂} D] →\n        CategoryTheory.Functor C D → CategoryTheory.Functor C D → Type (max u₁ v₂)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.naturality_apply",
+            "module": "Mathlib.CategoryTheory.ConcreteCategory.Basic",
+            "type_signature": "{C D : Type*} [Category* C] [Category* D] {FD : D → D → Type*} {CD : D → Type*} [∀ X Y, FunLike (FD X Y) (CD X) (CD Y)]\n  [ConcreteCategory D FD] {F G : C ⥤ D} (φ : F ⟶ G) {X Y : C} (f : X ⟶ Y) (x : ToType (F.obj X)) :\n  φ.app Y (F.map f x) = G.map f (φ.app X x)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.mapSquare_app_τ₁",
+            "module": "Mathlib.CategoryTheory.Square",
+            "type_signature": "∀ {C : Type u} [inst : CategoryTheory.Category.{v, u} C] {D : Type u'} [inst_1 : CategoryTheory.Category.{v', u'} D]\n  {F G : CategoryTheory.Functor C D} (τ : F ⟶ G) (sq : CategoryTheory.Square C),\n  ((CategoryTheory.NatTrans.mapSquare τ).app sq).τ₁ = τ.app sq.X₁"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.app",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": "{C : Type u₁} →\n  [inst : CategoryTheory.Category.{v₁, u₁} C] →\n    {D : Type u₂} →\n      [inst_1 : CategoryTheory.Category.{v₂, u₂} D] →\n        {F G : CategoryTheory.Functor C D} → CategoryTheory.NatTrans F G → (X : C) → F.obj X ⟶ G.obj X"
+          },
+          {
+            "name": "CategoryTheory.Limits.mapPair",
+            "module": "Mathlib.CategoryTheory.Limits.Shapes.BinaryProducts",
+            "type_signature": ": F ⟶ G"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.pi'",
+            "module": "Mathlib.CategoryTheory.Pi.Basic",
+            "type_signature": "{E : Type*} [Category* E] {F G : E ⥤ ∀ i, C i} (τ : ∀ i, F ⋙ Pi.eval C i ⟶ G ⋙ Pi.eval C i) : F ⟶ G"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.naturality",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": "∀ {C : Type u₁} [inst : CategoryTheory.Category.{v₁, u₁} C] {D : Type u₂} [inst_1 : CategoryTheory.Category.{v₂, u₂} D]\n  {F G : CategoryTheory.Functor C D} (self : CategoryTheory.NatTrans F G) ⦃X Y : C⦄ (f : X ⟶ Y),\n  CategoryTheory.CategoryStruct.comp (F.map f) (self.app Y) = CategoryTheory.CategoryStruct.comp (self.app X) (G.map f)"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "NatTrans.vcomp": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.NatTrans.vcomp",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": "(α : NatTrans F G) (β : NatTrans G H) : NatTrans F H"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_eq_comp",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": "(α : F ⟶ G) (β : G ⟶ H) : vcomp α β = α ≫ β"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.comp_app",
+            "module": "Mathlib.CategoryTheory.Functor.Category",
+            "type_signature": "{F G H : C ⥤ D} (α : F ⟶ G) (β : G ⟶ H) (X : C) : (α ≫ β).app X = α.app X ≫ β.app X"
+          },
+          {
+            "name": "CategoryTheory.FunctorToTypes.comp",
+            "module": "Mathlib.CategoryTheory.Types.Basic",
+            "type_signature": "(x : F.obj X) : (σ ≫ τ).app X x = τ.app X (σ.app X x)"
+          },
+          {
+            "name": "CategoryTheory.NatTrans.vcomp_app",
+            "module": "Mathlib.CategoryTheory.NatTrans",
+            "type_signature": "(α : NatTrans F G) (β : NatTrans G H) (X : C) : (vcomp α β).app X = α.app X ≫ β.app X"
+          },
+          {
+            "name": "CategoryTheory.comp_toNatTrans",
+            "module": "Mathlib.CategoryTheory.Monad.Basic",
+            "type_signature": "{T₁ T₂ T₃ : Comonad C} (f : T₁ ⟶ T₂) (g : T₂ ⟶ T₃) :\n  (f ≫ g).toNatTrans = ((f.toNatTrans : _ ⟶ (T₂ : C ⥤ C)) ≫ g.toNatTrans : (T₁ : C ⥤ C) ⟶ T₃)"
+          },
+          {
+            "name": "CategoryTheory.comp_app",
+            "module": "Mathlib.AlgebraicTopology.SimplicialObject.Basic",
+            "type_signature": "∀ (C : Type u) [inst : CategoryTheory.Category.{v, u} C] {X Y Z : CategoryTheory.Functor SimplexCategoryᵒᵖ C}\n  (α : CategoryTheory.NatTrans X Y) (β : CategoryTheory.NatTrans Y Z) (X_1 : SimplexCategoryᵒᵖ),\n  (CategoryTheory.CategoryStruct.comp α β).app X_1 = CategoryTheory.CategoryStruct.comp (α.app X_1) (β.app X_1)"
+          },
+          {
+            "name": "CategoryTheory.Cat.Hom.toNatTrans_comp",
+            "module": "Mathlib.CategoryTheory.Category.Cat",
+            "type_signature": "{C D : Cat.{v, u}} {F G H : C ⟶ D} (η₁ : F ⟶ G) (η₂ : G ⟶ H) : (η₁ ≫ η₂).toNatTrans = η₁.toNatTrans ≫ η₂.toNatTrans"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "sameDenom_eq_iff_exists_postcomp_W": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.MorphismProperty.map_eq_iff_postcomp",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (f₁ f₂ : X ⟶ Y) : L.map f₁ = L.map f₂ ↔ ∃ (Z : C) (s : Y ⟶ Z) (_ : W s), f₁ ≫ s = f₂ ≫ s"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.Localization.map_eq_iff",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (f g : LeftFraction W X Y) :\n  f.map (LeftFraction.Localization.Q W) (Localization.inverts _ _) =\n      g.map (LeftFraction.Localization.Q W) (Localization.inverts _ _) ↔\n    LeftFractionRel f g"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.map_eq_iff_precomp",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{Y Z : C} (f₁ f₂ : Y ⟶ Z) : L.map f₁ = L.map f₂ ↔ ∃ (X : C) (s : X ⟶ Y) (_ : W s), s ≫ f₁ = s ≫ f₂"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.map_eq_iff",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (φ ψ : W.LeftFraction X Y) :\n  φ.map L (Localization.inverts _ _) = ψ.map L (Localization.inverts _ _) ↔ LeftFractionRel φ ψ"
+          },
+          {
+            "name": "CategoryTheory.AreEqualizedByLocalization",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": ": Prop"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction₂Rel",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions.Fractions",
+            "type_signature": "{X Y : C} (z₁ z₂ : W.LeftFraction₂ X Y) : Prop"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction₂.map_eq_iff",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions.Fractions",
+            "type_signature": "{X Y : C} (φ ψ : W.LeftFraction₂ X Y) :\n  (φ.fst.map L (Localization.inverts _ _) = ψ.fst.map L (Localization.inverts _ _) ∧\n      φ.snd.map L (Localization.inverts _ _) = ψ.snd.map L (Localization.inverts _ _)) ↔\n    LeftFraction₂Rel φ ψ"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.Localization.homMk_eq_of_leftFractionRel",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (z₁ z₂ : W.LeftFraction X Y) (h : LeftFractionRel z₁ z₂) : homMk z₁ = homMk z₂"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "sameDenom_eq_iff_exists_postcomp": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.MorphismProperty.map_eq_iff_postcomp",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (f₁ f₂ : X ⟶ Y) : L.map f₁ = L.map f₂ ↔ ∃ (Z : C) (s : Y ⟶ Z) (_ : W s), f₁ ≫ s = f₂ ≫ s"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.Localization.map_eq_iff",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (f g : LeftFraction W X Y) :\n  f.map (LeftFraction.Localization.Q W) (Localization.inverts _ _) =\n      g.map (LeftFraction.Localization.Q W) (Localization.inverts _ _) ↔\n    LeftFractionRel f g"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.map_eq_iff",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (φ ψ : W.LeftFraction X Y) :\n  φ.map L (Localization.inverts _ _) = ψ.map L (Localization.inverts _ _) ↔ LeftFractionRel φ ψ"
+          },
+          {
+            "name": "CategoryTheory.areEqualizedByLocalization_iff",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": "[L.IsLocalization W] : AreEqualizedByLocalization W f g ↔ L.map f = L.map g"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.map_eq_iff_precomp",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{Y Z : C} (f₁ f₂ : Y ⟶ Z) : L.map f₁ = L.map f₂ ↔ ∃ (X : C) (s : X ⟶ Y) (_ : W s), s ≫ f₁ = s ≫ f₂"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.Localization.homMk_eq_of_leftFractionRel",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (z₁ z₂ : W.LeftFraction X Y) (h : LeftFractionRel z₁ z₂) : homMk z₁ = homMk z₂"
+          },
+          {
+            "name": "CategoryTheory.AreEqualizedByLocalization",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": ": Prop"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.Localization.homMk_eq_iff_leftFractionRel",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (z₁ z₂ : W.LeftFraction X Y) : homMk z₁ = homMk z₂ ↔ LeftFractionRel z₁ z₂"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "exists_lift_commSq": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.LocalizerMorphism.catCommSq",
+            "module": "Mathlib.CategoryTheory.Localization.LocalizerMorphism",
+            "type_signature": ": CatCommSq Φ.functor L₁ L₂ (Φ.localizedFunctor L₁ L₂)"
+          },
+          {
+            "name": "CategoryTheory.CommSq.HasLift.congr_simp",
+            "module": "Mathlib.CategoryTheory.LiftingProperties.Basic",
+            "type_signature": "∀ {C : Type u_1} [inst : CategoryTheory.Category.{v_1, u_1} C] {A B X Y : C} {f f_1 : A ⟶ X} (e_f : f = f_1)\n  {i i_1 : A ⟶ B} (e_i : i = i_1) {p p_1 : X ⟶ Y} (e_p : p = p_1) {g g_1 : B ⟶ Y} (e_g : g = g_1)\n  (sq : CategoryTheory.CommSq f i p g), sq.HasLift = ⋯.HasLift"
+          },
+          {
+            "name": "CategoryTheory.Localization.liftNatTrans",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": "(F₁ F₂ : C ⥤ E) (F₁' F₂' : D ⥤ E) [Lifting L W F₁ F₁'] [Lifting L W F₂ F₂'] (τ : F₁ ⟶ F₂) : F₁' ⟶ F₂'"
+          },
+          {
+            "name": "CategoryTheory.CommSq.recOn",
+            "module": "Mathlib.CategoryTheory.CommSq",
+            "type_signature": "{C : Type u_1} →\n  [inst : CategoryTheory.Category.{v_1, u_1} C] →\n    {W X Y Z : C} →\n      {f : W ⟶ X} →\n        {g : W ⟶ Y} →\n          {h : X ⟶ Z} →\n            {i : Y ⟶ Z} →\n              {motive : CategoryTheory.CommSq f g h i → Sort u} →\n                (t : CategoryTheory.CommSq f g h i) →\n                  ((w : CategoryTheory.CategoryStruct.comp f h = CategoryTheory.CategoryStruct.comp g i) → motive ⋯) →\n                    motive t"
+          },
+          {
+            "name": "CategoryTheory.Localization.liftNatIso",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": "(F₁ F₂ : C ⥤ E) (F₁' F₂' : D ⥤ E) [h₁ : Lifting L W F₁ F₁'] [h₂ : Lifting L W F₂ F₂'] (e : F₁ ≅ F₂) : F₁' ≅ F₂'"
+          },
+          {
+            "name": "CategoryTheory.Localization.fac",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": "(F : C ⥤ E) (hF : W.IsInvertedBy F) (L : C ⥤ D) [L.IsLocalization W] : L ⋙ lift F hF L ≅ F"
+          },
+          {
+            "name": "CategoryTheory.HasLiftingPropertyFixedBot",
+            "module": "Mathlib.CategoryTheory.LiftingProperties.Basic",
+            "type_signature": "(b : B ⟶ Y) : Prop"
+          },
+          {
+            "name": "CategoryTheory.CommSq.lift",
+            "module": "Mathlib.CategoryTheory.CommSq",
+            "type_signature": "[hsq : HasLift sq] : B ⟶ X"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      },
+      "isIso_map_iff_inSaturation": {
+        "stage": "semantic",
+        "available": true,
+        "hits": [
+          {
+            "name": "CategoryTheory.MorphismProperty.LeftFraction.Localization.instIsIsoQinv",
+            "module": "Mathlib.CategoryTheory.Localization.CalculusOfFractions",
+            "type_signature": "{X Y : C} (s : X ⟶ Y) (hs : W s) : IsIso (Qinv s hs)"
+          },
+          {
+            "name": "CategoryTheory.Functor.IsLocalization.inverts",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": "∀ {C : Type u_1} {D : Type u_2} {inst : CategoryTheory.Category.{v_1, u_1} C}\n  {inst_1 : CategoryTheory.Category.{v_2, u_2} D} {L : CategoryTheory.Functor C D}\n  {W : CategoryTheory.MorphismProperty C} [self : L.IsLocalization W], W.IsInvertedBy L"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.Q_inverts",
+            "module": "Mathlib.CategoryTheory.Localization.Construction",
+            "type_signature": ": W.IsInvertedBy W.Q"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.Q",
+            "module": "Mathlib.CategoryTheory.Localization.Construction",
+            "type_signature": ": C ⥤ W.Localization"
+          },
+          {
+            "name": "CategoryTheory.Localization.inverts",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": ": W.IsInvertedBy L"
+          },
+          {
+            "name": "CategoryTheory.MorphismProperty.Q'",
+            "module": "Mathlib.CategoryTheory.Localization.HasLocalization",
+            "type_signature": ": C ⥤ W.Localization'"
+          },
+          {
+            "name": "CategoryTheory.Functor.IsLocalization.isEquivalence",
+            "module": "Mathlib.CategoryTheory.Localization.Predicate",
+            "type_signature": "∀ {C : Type u_1} {D : Type u_2} {inst : CategoryTheory.Category.{v_1, u_1} C}\n  {inst_1 : CategoryTheory.Category.{v_2, u_2} D} {L : CategoryTheory.Functor C D}\n  {W : CategoryTheory.MorphismProperty C} [self : L.IsLocalization W],\n  (CategoryTheory.Localization.Construction.lift L ⋯).IsEquivalence"
+          },
+          {
+            "name": "CategoryTheory.Localization.Construction.wIso.congr_simp",
+            "module": "Mathlib.CategoryTheory.Localization.Construction",
+            "type_signature": "∀ {C : Type uC} [inst : CategoryTheory.Category.{uC', uC} C] {W : CategoryTheory.MorphismProperty C} {X Y : C}\n  (w w_1 : X ⟶ Y) (e_w : w = w_1) (hw : W w),\n  CategoryTheory.Localization.Construction.wIso w hw = CategoryTheory.Localization.Construction.wIso w_1 ⋯"
+          }
+        ],
+        "closed_by": null,
+        "error": null
+      }
+    }
+  },
+  "validation": [
+    {
+      "name": "Category",
+      "expected": "N0",
+      "informal": "A category: objects, morphisms, identity, composition, unit and associativity laws",
+      "lean_statement": "structure Category where\n  Obj : Type u\n  Hom : Obj → Obj → Type v\n  id : (x : Obj) → Hom x x\n  comp : {x y z : Obj} → Hom x y → Hom y z → Hom x z\n  id_comp : ∀ {x y : Obj} (f : Hom x y), comp (id x) f = f\n  comp_id : ∀ {x y : Obj} (f : Hom x y), comp f (id y) = f\n  assoc : ∀ {w x y z : Obj} (f : Hom w x) (g : Hom x y) (h : Hom y z),\n          comp (comp f g) h = comp f (comp g h)",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "id_comp",
+      "expected": "N0",
+      "informal": "Composing the identity morphism with f gives f (left unit law of a category)",
+      "lean_statement": "theorem id_comp (f : C.Hom x y) : C.comp (C.id x) f = f := C.id_comp f",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "comp_id",
+      "expected": "N0",
+      "informal": "Composing f with the identity morphism gives f (right unit law of a category)",
+      "lean_statement": "theorem comp_id (f : C.Hom x y) : C.comp f (C.id y) = f := C.comp_id f",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "assoc",
+      "expected": "N0",
+      "informal": "Composition of morphisms in a category is associative",
+      "lean_statement": "theorem assoc (f : C.Hom w x) (g : C.Hom x y) (h : C.Hom y z) :\n    C.comp (C.comp f g) h = C.comp f (C.comp g h) := C.assoc f g h",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "Functor",
+      "expected": "N0",
+      "informal": "A functor between categories: object map and morphism map preserving identity and composition",
+      "lean_statement": "structure Functor (C : Category.{u₁, v₁}) (D : Category.{u₂, v₂}) where\n  obj : C.Obj → D.Obj\n  map : {x y : C.Obj} → C.Hom x y → D.Hom (obj x) (obj y)\n  map_id : ∀ (x : C.Obj), map (C.id x) = D.id (obj x)\n  map_comp : ∀ {x y z : C.Obj} (f : C.Hom x y) (g : C.Hom y z), map (C.comp f g) = D.comp (map f) (map g)",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "Functor.comp",
+      "expected": "N0",
+      "informal": "Composition of two functors is a functor",
+      "lean_statement": "def Functor.comp (F : Functor C D) (G : Functor D E) : Functor C E where\n  obj x := G.obj (F.obj x)\n  map f := G.map (F.map f)",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "Functor.comp_obj",
+      "expected": "N0",
+      "informal": "The composite functor acts on objects by applying both object maps in order",
+      "lean_statement": "theorem Functor.comp_obj (F : Functor C D) (G : Functor D E) (x : C.Obj) :\n    (F.comp G).obj x = G.obj (F.obj x) := rfl",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "NatTrans",
+      "expected": "N0",
+      "informal": "A natural transformation between functors: components with the naturality square",
+      "lean_statement": "structure NatTrans (F G : Functor C D) where\n  app : (x : C.Obj) → D.Hom (F.obj x) (G.obj x)\n  naturality : ∀ {x y : C.Obj} (f : C.Hom x y), D.comp (F.map f) (app y) = D.comp (app x) (G.map f)",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "NatTrans.vcomp",
+      "expected": "N0",
+      "informal": "Vertical composition of natural transformations",
+      "lean_statement": "def NatTrans.vcomp {F G H : Functor C D} (α : NatTrans F G) (β : NatTrans G H) :\n    NatTrans F H where\n  app x := D.comp (α.app x) (β.app x)",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N0"
+      ]
+    },
+    {
+      "name": "sameDenom_eq_iff_exists_postcomp_W",
+      "expected": "N1",
+      "informal": "Two left fractions with the same denominator are equal in the localized category iff their numerators can be equalized by postcomposing with a morphism in W",
+      "lean_statement": "theorem sameDenom_eq_iff_exists_postcomp_W {X Y Y' : C}\n    (f g : X ⟶ Y') (s : Y ⟶ Y') (hs : W s) :\n    (LeftFraction.mk f s hs).map L (Localization.inverts L W) =\n      (LeftFraction.mk g s hs).map L (Localization.inverts L W) ↔\n    ∃ (Z : C) (t : Y' ⟶ Z), W t ∧ f ≫ t = g ≫ t := sorry",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N1"
+      ]
+    },
+    {
+      "name": "sameDenom_eq_iff_exists_postcomp",
+      "expected": "N1",
+      "informal": "Two left fractions with the same denominator are equal in the localized category iff their numerators are equalized by postcomposition with some morphism",
+      "lean_statement": "theorem sameDenom_eq_iff_exists_postcomp {X Y Y' : C}\n    (f g : X ⟶ Y') (s : Y ⟶ Y') (hs : W s) :\n    (LeftFraction.mk f s hs).map L (Localization.inverts L W) =\n      (LeftFraction.mk g s hs).map L (Localization.inverts L W) ↔\n    ∃ (Z : C) (t : Y' ⟶ Z), (∃ u, W (t ≫ u)) ∧ f ≫ t = g ≫ t := sorry",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N1"
+      ]
+    },
+    {
+      "name": "exists_lift_commSq",
+      "expected": "N1",
+      "informal": "A commutative square in the localized category between images of morphisms lifts to a zig-zag commutative diagram in the original category with legs in W",
+      "lean_statement": "theorem exists_lift_commSq {X Y X' Y' : C}\n    (f : X ⟶ Y) (f' : X' ⟶ Y')\n    (a : L.obj X ⟶ L.obj X') (b : L.obj Y ⟶ L.obj Y')\n    (sq : a ≫ L.map f' = L.map f ≫ b) :\n    ∃ (X'' Y'' : C) (g : X ⟶ X'') (s : X' ⟶ X'') (_ : W s)\n      (f'' : X'' ⟶ Y'') (h : Y ⟶ Y'') (t : Y' ⟶ Y'') (_ : W t), True := sorry",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N1"
+      ]
+    },
+    {
+      "name": "isIso_map_iff_inSaturation",
+      "expected": "N1",
+      "informal": "The localization functor sends f to an isomorphism iff f lies in the saturation of W",
+      "lean_statement": "theorem isIso_map_iff_inSaturation {X Y : C} (f : X ⟶ Y) :\n    IsIso (L.map f) ↔ InSaturation (W := W) f := sorry",
+      "acceptable_levels": [
+        "INCONCLUSIVE",
+        "N1"
+      ]
+    }
+  ]
+}
