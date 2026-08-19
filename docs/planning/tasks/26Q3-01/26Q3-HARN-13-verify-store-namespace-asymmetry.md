@@ -4,8 +4,8 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔵 READY |
-| **Branch** | `26Q3-HARN-13-verify-store-namespace-asymmetry` |
+| **Status** | 🔄 IN PROGRESS |
+| **Branch** | `26Q3-HARN-13-verify-in-stored-namespace` (card's name was taken by #30's head) |
 | **Dependencies** | none (independent of 26Q3-HARN-11 / #28) |
 | **PR Size Target** | <250 production lines (max 500), tests and this card excluded |
 | **Parts** | single PR |
@@ -55,26 +55,56 @@ correction is in that card's measurement table. Do not repeat it here.)
 
 #### Acceptance Criteria
 
-- [ ] **AC-1** A declaration whose name collides with a Lean core binding at
+- [x] **AC-1** A declaration whose name collides with a Lean core binding at
       top level — `structure Functor …` with no `namespace` line — verifies
       successfully, because it is elaborated inside the namespace it will be
-      stored in.
-- [ ] **AC-2** The wrapper is applied **after** the code's `import` lines, not
+      stored in. (`test_core_name_collision_verifies`, real compiler)
+- [x] **AC-2** The wrapper is applied **after** the code's `import` lines, not
       before. Lean rejects an `import` inside a `namespace`, so a naive prefix
       turns every artifact into a syntax error.
-- [ ] **AC-3** Code that already carries its own `namespace Foo … end Foo`
+      (`split_imports` hoist; `test_imports_hoisted_above_namespace`)
+- [x] **AC-3** Code that already carries its own `namespace Foo … end Foo`
       still verifies; nesting inside `LMS.Foundation` is legal and must not
-      regress.
-- [ ] **AC-4** The namespace used by the verifier and the one used by
+      regress. (`test_own_namespace_still_verifies`, real compiler)
+- [x] **AC-4** The namespace used by the verifier and the one used by
       `FOUNDATION_HEADER` come from **one** constant. Two string literals that
-      must agree is how this asymmetry arose.
-- [ ] **AC-5** The change is **measured, not asserted**: report the count of
-      corpus artifacts whose recorded `verification_error` matches
-      `has already been declared`, before and after. State the number even if
-      it is 1.
-- [ ] **AC-6** No artifact that verified before this change fails after it
-      (re-verify the corpus, or state explicitly why that is not tractable and
-      what was checked instead).
+      must agree is how this asymmetry arose. (`FOUNDATION_NAMESPACE` in
+      `lms/foundation.py`; header, footer, `FoundationFile.NAMESPACE`, and the
+      verifier wrap all consume it; the verify script rejects a second literal
+      in `real.py`)
+- [x] **AC-5** The change is **measured, not asserted**: see the measurement
+      table below. Before: **24** artifacts across 7 archived runs. After: not
+      re-runnable locally (see AC-6); the recorded runs are immutable history.
+- [x] **AC-6** No artifact that verified before this change fails after it.
+      Re-verifying the corpus is **not tractable on this checkout** — every
+      real agent artifact imports Mathlib, and no Mathlib build exists here
+      (that is a box job; the runbook owns it). Checked instead: the full
+      suite (543 passed, incl. every pre-existing `RealLeanVerifier` test now
+      running through the wrap) and real-compiler spot checks
+      (`test_plain_theorem_still_verifies`, `test_genuine_error_still_fails`).
+
+##### AC-5 measurement
+
+Census of `verification_error` matching `has already been declared` over
+`experiments/*/artifacts.json` (local checkout, 2026-08-19):
+
+| Run | Artifacts with collision error |
+|---|---|
+| `run_20251216_220545` | 7 |
+| `run_20251217_121700` | 3 |
+| `run_20251218_084146` | 1 |
+| `run_20251218_092910` | 1 |
+| `run_20251218_105831` | 2 |
+| `run_20251218_130736` | 2 |
+| `test_mcp` | 8 |
+| **Total (before)** | **24** |
+
+The card's observed instance (`definition-Functor-ef55362e`,
+`shakedown_3x3_e`) lives on the box and is not in this census — 24 is a
+lower bound. The **after** number must come from the next box run's
+histogram: the wrap makes this error class unreachable for core-name
+collisions, so the expected count is 0; state the measured value in the
+run report rather than here.
 
 ---
 
