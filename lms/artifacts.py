@@ -63,6 +63,12 @@ class Artifact:
     # Machine-gate verdicts (faithfulness protocol §4), attached after
     # verification. Empty = gates never ran, which is not the same as passing.
     gate_results: list[GateResult] = field(default_factory=list)
+    # Gate 4 novelty classification (26Q3-HARN-04). "N0" | "N1" | "INCONCLUSIVE",
+    # None when the gate has not run. Evidence names the matching Mathlib
+    # declarations so an N0 verdict is auditable.
+    novelty_level: str | None = None
+    novelty_confidence: float | None = None
+    novelty_evidence: list[str] = field(default_factory=list)
 
     @property
     def verified(self) -> bool:
@@ -106,6 +112,9 @@ class Artifact:
             "stacks_tag": self.stacks_tag,
             "gate_results": [r.to_dict() for r in self.gate_results],
             "gates_passed": self.gates_passed,
+            "novelty_level": self.novelty_level,
+            "novelty_confidence": self.novelty_confidence,
+            "novelty_evidence": self.novelty_evidence,
         }
 
     @classmethod
@@ -133,6 +142,9 @@ class Artifact:
             tokens_used=d.get("tokens_used", 0),
             stacks_tag=d.get("stacks_tag"),
             gate_results=[GateResult.from_dict(r) for r in d.get("gate_results", [])],
+            novelty_level=d.get("novelty_level"),
+            novelty_confidence=d.get("novelty_confidence"),
+            novelty_evidence=d.get("novelty_evidence", []),
         )
 
     @staticmethod

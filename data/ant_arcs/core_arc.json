@@ -1,0 +1,167 @@
+{
+  "arc": "core",
+  "source": "Neukirch, Algebraic Number Theory (Grundlehren 322), Ch. I §2–§7. The arc committed by specs/ant_shakedown.md §3 (2026-06-09): integrality → ideals → Minkowski theory → class number → unit theorem. Statement selection and proposition numbers drafted from memory 2026-08-19; ALL book_ref numbers require D4 confirmation against the book (see docs/review/ant_arc_statements_d4.md).",
+  "mathlib_rev": "fe3134f0c3508d2fd6394307be226ffa9b8cb4ba",
+  "statements": [
+    {
+      "id": "core-01",
+      "book_ref": "Neukirch ANT Ch I §2",
+      "name": "integral_elements_form_ring",
+      "informal": "Let A ⊆ B be an extension of commutative rings. The elements of B that are integral over A form a subring of B containing A (the integral closure of A in B). Representative statement: the sum of two integral elements is integral.",
+      "lean_statement": "theorem ant_c01_integral_add {A B : Type*} [CommRing A] [CommRing B] [Algebra A B] {x y : B} (hx : IsIntegral A x) (hy : IsIntegral A y) : IsIntegral A (x + y) := sorry",
+      "notes": "Expected N0 (Mathlib: IsIntegral.add / integralClosure). Included as calibration anchor."
+    },
+    {
+      "id": "core-02",
+      "book_ref": "Neukirch ANT Ch I §2",
+      "name": "integrality_transitive",
+      "informal": "If C is integral over B and B is integral over A, then C is integral over A (transitivity of integral extensions).",
+      "lean_statement": "theorem ant_c02_integral_trans {A B C : Type*} [CommRing A] [CommRing B] [CommRing C] [Algebra A B] [Algebra B C] [Algebra A C] [IsScalarTower A B C] (h : Algebra.IsIntegral A B) {x : C} (hx : IsIntegral B x) : IsIntegral A x := sorry",
+      "notes": "Expected N0 (Mathlib: isIntegral_trans)."
+    },
+    {
+      "id": "core-03",
+      "book_ref": "Neukirch ANT Ch I §2",
+      "name": "factorial_domain_integrally_closed",
+      "informal": "Every factorial (unique factorization) domain is integrally closed in its field of fractions.",
+      "lean_statement": "theorem ant_c03_ufd_integrally_closed {A : Type*} [CommRing A] [IsDomain A] [UniqueFactorizationMonoid A] : IsIntegrallyClosed A := sorry",
+      "notes": "Expected N0."
+    },
+    {
+      "id": "core-04",
+      "book_ref": "Neukirch ANT Ch I §2",
+      "name": "minpoly_coeffs_in_base",
+      "informal": "Let A be integrally closed with fraction field K, and let x in an extension field of K be integral over A. Then the minimal polynomial of x over K has coefficients in A.",
+      "lean_statement": "theorem ant_c04_minpoly_coeffs {A K L : Type*} [CommRing A] [IsDomain A] [IsIntegrallyClosed A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [Algebra A L] [IsScalarTower A K L] {x : L} (hx : IsIntegral A x) : minpoly K x ∈ Polynomial.lifts (algebraMap A K) := sorry",
+      "notes": "Expected N0 (Mathlib minpoly.isIntegrallyClosed API)."
+    },
+    {
+      "id": "core-05",
+      "book_ref": "Neukirch ANT Ch I §2",
+      "name": "trace_form_nondegenerate",
+      "informal": "For a finite separable field extension L/K, the trace form (x, y) ↦ Tr_{L/K}(xy) is a nondegenerate bilinear form.",
+      "lean_statement": "theorem ant_c05_traceform_nondeg {K L : Type*} [Field K] [Field L] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] : (Algebra.traceForm K L).Nondegenerate := sorry",
+      "notes": "Expected N0 (Mathlib: Algebra.traceForm_nondegenerate). Separability class spelling (Algebra.IsSeparable vs IsSeparable) depends on Mathlib rev."
+    },
+    {
+      "id": "core-06",
+      "book_ref": "Neukirch ANT Ch I §2 (2.8)",
+      "name": "discriminant_of_basis_ne_zero",
+      "informal": "For a finite separable extension L/K, the discriminant d(α₁, …, αₙ) = det(Tr(αᵢαⱼ)) of any K-basis of L is nonzero.",
+      "lean_statement": "theorem ant_c06_discr_ne_zero {K L : Type*} [Field K] [Field L] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] {ι : Type*} [Fintype ι] [DecidableEq ι] (b : Basis ι K L) : Algebra.discr K b ≠ 0 := sorry",
+      "notes": "Expected N0 (Mathlib: Algebra.discr_not_zero_of_basis)."
+    },
+    {
+      "id": "core-07",
+      "book_ref": "Neukirch ANT Ch I §2 (2.10)",
+      "name": "integral_basis_exists",
+      "informal": "The ring of integers O_K of a number field K admits an integral basis: it is a free ℤ-module of rank n = [K : ℚ].",
+      "lean_statement": "theorem ant_c07_integral_basis (K : Type*) [Field K] [NumberField K] : Module.Free ℤ (NumberField.RingOfIntegers K) ∧ Module.finrank ℤ (NumberField.RingOfIntegers K) = Module.finrank ℚ K := sorry",
+      "notes": "Expected N0 (Mathlib: NumberField.RingOfIntegers free + rank lemmas). Conjunction is unidiomatic for Mathlib but faithful to the book's single statement."
+    },
+    {
+      "id": "core-08",
+      "book_ref": "Neukirch ANT Ch I §3 (3.1)",
+      "name": "ring_of_integers_is_dedekind",
+      "informal": "O_K is Noetherian, integrally closed, and every nonzero prime ideal is maximal — i.e. O_K is a Dedekind domain.",
+      "lean_statement": "theorem ant_c08_ringOfIntegers_dedekind (K : Type*) [Field K] [NumberField K] : IsDedekindDomain (NumberField.RingOfIntegers K) := sorry",
+      "notes": "Expected N0 (Mathlib instance)."
+    },
+    {
+      "id": "core-09",
+      "book_ref": "Neukirch ANT Ch I §3 (3.3)",
+      "name": "unique_ideal_factorization",
+      "informal": "In a Dedekind domain, every ideal a ≠ (0), (1) admits a factorization into nonzero prime ideals, unique up to order.",
+      "lean_statement": "theorem ant_c09_ideal_ufm {R : Type*} [CommRing R] [IsDedekindDomain R] : UniqueFactorizationMonoid (Ideal R) := sorry",
+      "notes": "Expected N0 (Mathlib: Ideal.uniqueFactorizationMonoid for Dedekind domains)."
+    },
+    {
+      "id": "core-10",
+      "book_ref": "Neukirch ANT Ch I §3",
+      "name": "fractional_ideals_form_group",
+      "informal": "The nonzero fractional ideals of a Dedekind domain form an abelian group under multiplication; representative statement: every nonzero fractional ideal I satisfies I · I⁻¹ = (1).",
+      "lean_statement": "theorem ant_c10_fracIdeal_mul_inv {R K : Type*} [CommRing R] [IsDedekindDomain R] [Field K] [Algebra R K] [IsFractionRing R K] (I : FractionalIdeal (nonZeroDivisors R) K) (hI : I ≠ 0) : I * I⁻¹ = 1 := sorry",
+      "notes": "Expected N0 (Mathlib: FractionalIdeal.mul_inv_cancel)."
+    },
+    {
+      "id": "core-11",
+      "book_ref": "Neukirch ANT Ch I §6",
+      "name": "ideal_norm_multiplicative",
+      "informal": "The absolute norm 𝔑(a) = [O_K : a] of nonzero ideals of O_K is multiplicative: 𝔑(ab) = 𝔑(a)𝔑(b).",
+      "lean_statement": "theorem ant_c11_absNorm_mul (K : Type*) [Field K] [NumberField K] (I J : Ideal (NumberField.RingOfIntegers K)) : Ideal.absNorm (I * J) = Ideal.absNorm I * Ideal.absNorm J := sorry",
+      "notes": "Expected N0 (Mathlib: Ideal.absNorm is a MonoidHom). Neukirch introduces the ideal norm in §6 en route to the class number; some editions place it in §4–§5 exercises — confirm."
+    },
+    {
+      "id": "core-12",
+      "book_ref": "Neukirch ANT Ch I §4",
+      "name": "lattice_complete_iff_cocompact",
+      "informal": "A lattice Γ in a finite-dimensional real vector space V is complete (i.e. spans V) if and only if the quotient V/Γ is compact.",
+      "lean_statement": "theorem ant_c12_lattice_complete_iff_cocompact {V : Type*} [NormedAddCommGroup V] [NormedSpace ℝ V] [FiniteDimensional ℝ V] (L : AddSubgroup V) [DiscreteTopology L] : Submodule.span ℝ (L : Set V) = ⊤ ↔ CompactSpace (V ⧸ L) := sorry",
+      "notes": "Mathlib has the ZLattice framework; overlap likely but the biconditional as stated may be N1-adjacent glue. Draft may need instance repair to elaborate."
+    },
+    {
+      "id": "core-13",
+      "book_ref": "Neukirch ANT Ch I §4 (4.4)",
+      "name": "minkowski_lattice_point_theorem",
+      "informal": "Minkowski's lattice point theorem: if X is a centrally symmetric convex set in an n-dimensional real vector space with a complete lattice Γ, and vol(X) > 2ⁿ covol(Γ), then X contains a nonzero lattice point. Stated here for Γ = ℤⁿ ⊂ ℝⁿ (covolume 1).",
+      "lean_statement": "theorem ant_c13_minkowski_lattice_point (n : ℕ) {S : Set (Fin n → ℝ)} (hconv : Convex ℝ S) (hsymm : ∀ x ∈ S, -x ∈ S) (hvol : (2 : ENNReal) ^ n < MeasureTheory.volume S) : ∃ x : Fin n → ℤ, x ≠ 0 ∧ (fun i => (x i : ℝ)) ∈ S := sorry",
+      "notes": "Expected N0 (Mathlib: exists_ne_zero_mem_lattice_of_measure_mul_two_pow_lt_measure, in MeasureTheory.Group.GeometryOfNumbers). Specialized to ℤⁿ for statability."
+    },
+    {
+      "id": "core-14",
+      "book_ref": "Neukirch ANT Ch I §5",
+      "name": "ideal_lattice_covolume",
+      "informal": "Under the Minkowski embedding j : K → K_ℝ ≅ ℝʳ × ℂˢ, the image of a nonzero ideal a ⊆ O_K is a complete lattice of covolume √|d_K| · 𝔑(a).",
+      "lean_statement": "theorem ant_c14_ideal_lattice_covolume (K : Type*) [Field K] [NumberField K] (I : Ideal (NumberField.RingOfIntegers K)) (hI : I ≠ ⊥) : MeasureTheory.volume (MeasureTheory.fundamentalDomain (NumberField.mixedEmbedding.idealLattice K I) MeasureTheory.volume) = NumberField.mixedEmbedding.covolumeFactor K * Ideal.absNorm I := sorry",
+      "notes": "SCHEMATIC: idealLattice / covolumeFactor are placeholder names and the normalization constant depends on the chosen Haar measure on ℝʳ × ℂˢ (Neukirch's canonical measure gives √|d_K|·𝔑(a)). Will not elaborate as written; name/semantic search stages only until repaired. Mathlib's NumberField.mixedEmbedding volume lemmas are close — likely N0 in substance."
+    },
+    {
+      "id": "core-15",
+      "book_ref": "Neukirch ANT Ch I §5–§6",
+      "name": "exists_element_of_small_norm",
+      "informal": "In every nonzero ideal a ⊆ O_K there exists a ≠ 0 with |N_{K/ℚ}(a)| ≤ (2/π)ˢ √|d_K| · 𝔑(a), where s is the number of complex places (Neukirch's constant, from the lattice point theorem applied to a box).",
+      "lean_statement": "theorem ant_c15_exists_small_norm (K : Type*) [Field K] [NumberField K] (I : Ideal (NumberField.RingOfIntegers K)) (hI : I ≠ ⊥) : ∃ x ∈ I, x ≠ 0 ∧ |(Algebra.norm ℚ (algebraMap (NumberField.RingOfIntegers K) K x) : ℝ)| ≤ (2 / Real.pi) ^ (NumberField.InfinitePlace.nrComplexPlaces K) * Real.sqrt |(NumberField.discr K : ℝ)| * (Ideal.absNorm I : ℝ) := sorry",
+      "notes": "Mathlib has a Minkowski-bound version (stronger constant); Neukirch's (2/π)ˢ version kept for faithfulness. Namespace spellings (nrComplexPlaces) need checking at the pinned rev."
+    },
+    {
+      "id": "core-16",
+      "book_ref": "Neukirch ANT Ch I §6 (6.3)",
+      "name": "class_group_finite",
+      "informal": "The ideal class group Cl_K = J_K / P_K of a number field is finite.",
+      "lean_statement": "theorem ant_c16_classGroup_finite (K : Type*) [Field K] [NumberField K] : Finite (ClassGroup (NumberField.RingOfIntegers K)) := sorry",
+      "notes": "Expected N0 (Mathlib: ClassGroup finiteness for number fields)."
+    },
+    {
+      "id": "core-17",
+      "book_ref": "Neukirch ANT Ch I §6",
+      "name": "every_class_contains_bounded_ideal",
+      "informal": "Every ideal class of K contains an integral ideal a with 𝔑(a) ≤ M, where M is the Minkowski-type bound (2/π)ˢ√|d_K| — the key lemma for finiteness of the class number.",
+      "lean_statement": "theorem ant_c17_class_contains_bounded_ideal (K : Type*) [Field K] [NumberField K] (C : ClassGroup (NumberField.RingOfIntegers K)) : ∃ I : (Ideal (NumberField.RingOfIntegers K))⁰, ClassGroup.mk0 I = C ∧ (Ideal.absNorm (I : Ideal (NumberField.RingOfIntegers K)) : ℝ) ≤ (2 / Real.pi) ^ (NumberField.InfinitePlace.nrComplexPlaces K) * Real.sqrt |(NumberField.discr K : ℝ)| := sorry",
+      "notes": "SCHEMATIC-leaning: mk0/nonZeroDivisors plumbing and the constant's exact Mathlib form (NumberField.minkowskiBound uses the sharper constant) may need repair. Substance likely N0 (Mathlib: exists_ideal_in_class_of_norm_le)."
+    },
+    {
+      "id": "core-18",
+      "book_ref": "Neukirch ANT Ch I §7 (7.1)",
+      "name": "roots_of_unity_finite_cyclic",
+      "informal": "The group μ(K) of roots of unity in a number field K is finite and cyclic.",
+      "lean_statement": "theorem ant_c18_torsion_finite_cyclic (K : Type*) [Field K] [NumberField K] : Finite (NumberField.Units.torsion K) ∧ IsCyclic (NumberField.Units.torsion K) := sorry",
+      "notes": "Expected N0 (Mathlib: NumberField.Units.torsion finite + cyclic instances)."
+    },
+    {
+      "id": "core-19",
+      "book_ref": "Neukirch ANT Ch I §7",
+      "name": "unit_log_image_complete_lattice",
+      "informal": "The image of O_Kˣ under the logarithmic embedding λ : O_Kˣ → ℝ^{r+s} is a complete lattice in the trace-zero hyperplane H = {x : Σ xᵢ = 0}, and ker λ = μ(K).",
+      "lean_statement": "theorem ant_c19_unit_log_lattice (K : Type*) [Field K] [NumberField K] : DiscreteTopology (NumberField.Units.unitLattice K) ∧ Submodule.span ℝ (NumberField.Units.unitLattice K : Set (NumberField.InfinitePlace K → ℝ)) = NumberField.Units.tracelessSubspace K := sorry",
+      "notes": "SCHEMATIC: unitLattice exists in Mathlib but the traceless-hyperplane spelling (tracelessSubspace) is a placeholder; the span statement needs the actual Mathlib formulation (unitLattice is defined inside the hyperplane there, making the faithful Neukirch statement a definitional unfolding). Substance N0."
+    },
+    {
+      "id": "core-20",
+      "book_ref": "Neukirch ANT Ch I §7 (7.4)",
+      "name": "dirichlet_unit_theorem",
+      "informal": "Dirichlet's unit theorem: O_Kˣ ≅ μ(K) × ℤ^{r+s−1}, where r and s are the numbers of real and complex places of K.",
+      "lean_statement": "theorem ant_c20_dirichlet_units (K : Type*) [Field K] [NumberField K] : Nonempty ((NumberField.RingOfIntegers K)ˣ ≃* NumberField.Units.torsion K × (Fin (NumberField.InfinitePlace.nrRealPlaces K + NumberField.InfinitePlace.nrComplexPlaces K - 1) → Multiplicative ℤ)) := sorry",
+      "notes": "Expected N0 (Dirichlet landed in Mathlib 2023: NumberField.Units.rank + basis of unitLattice). The product-with-functions free-abelian spelling is one of several equivalent forms; classifier should also try the rank formulation."
+    }
+  ]
+}

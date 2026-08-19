@@ -2,7 +2,8 @@
 
 Gate 2 (T4, axiom/sorry audit): `lms.gates.axioms`
 Gate 3 (T2, non-vacuity): `lms.gates.vacuity`
-Gate 4 (novelty N0/N1): `lms.gates.novelty` — 26Q3-HARN-04, separate card.
+Gate 4 (novelty N0/N1): `lms.gates.novelty` — 26Q3-HARN-04, not part of
+`default_gate_runner`; import `apply_novelty_gate` directly.
 """
 
 from lms.gates.axioms import AxiomGate, AxiomProber
