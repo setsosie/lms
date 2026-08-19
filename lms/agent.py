@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 import textwrap
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from lms.accounting import AttemptRecord, CostLedger, statement_key
 from lms.artifacts import Artifact, ArtifactType, ArtifactLibrary, PendingReview
 from lms.foundation import FoundationFile
 from lms.lean.interface import VerificationResult, VerificationStatus
@@ -268,6 +270,7 @@ class Agent:
         textbook: Textbook | None = None,
         max_attempts: int = 5,
         foundation: FoundationFile | None = None,
+        ledger: CostLedger | None = None,
     ) -> IterativeResponse:
         """Propose artifacts with multiple verification attempts.
 
@@ -284,6 +287,9 @@ class Agent:
             textbook: Optional collective wisdom
             max_attempts: Maximum verification attempts (default 5)
             foundation: Optional foundation file with verified definitions to import
+            ledger: Optional cost ledger. When given, every generation call —
+                including ones that parse to zero artifacts — is recorded and
+                attributed to the statement it was spent on (or to overhead)
 
         Returns:
             IterativeResponse with all attempts and final writeup
@@ -343,6 +349,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
 
         for attempt_num in range(1, max_attempts + 1):
             # Query LLM
+            call_start = time.monotonic()
             response = await self.provider.generate(
                 conversation,
                 system_prompt=system_prompt.content,
@@ -358,7 +365,16 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             proposed, _ = self._parse_artifacts(response.content, response.usage)
 
             if not proposed or not proposed[0].lean_code:
-                # No valid artifact, ask to try again
+                # No valid artifact: the spend is real even though nothing
+                # identifiable was produced — it goes to the overhead bucket.
+                self._record_attempt(
+                    ledger,
+                    key=None,
+                    usage=response.usage,
+                    wall_clock_s=time.monotonic() - call_start,
+                    outcome="no_artifact",
+                )
+                # Ask to try again
                 if attempt_num < max_attempts:
                     conversation.append(
                         Message(
@@ -384,6 +400,18 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             if error:
                 artifact.verification_error = error
 
+            attempt_key = statement_key(
+                artifact.stacks_tag, lean_code, artifact.natural_language
+            )
+            self._record_attempt(
+                ledger,
+                key=attempt_key,
+                usage=response.usage,
+                wall_clock_s=time.monotonic() - call_start,
+                outcome=result.status.value,
+                gate_failed=None if success else "lean_verify",
+            )
+
             attempts.append(
                 AttemptResult(
                     attempt_num=attempt_num,
@@ -403,12 +431,20 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                         f"Please provide a <writeup> with a <title> summarizing what you learned.",
                     )
                 )
+                writeup_start = time.monotonic()
                 writeup_response = await self.provider.generate(
                     conversation,
                     system_prompt=system_prompt.content,
                 )
                 total_tokens += (
                     writeup_response.usage.total_tokens if writeup_response.usage else 0
+                )
+                self._record_attempt(
+                    ledger,
+                    key=attempt_key,
+                    usage=writeup_response.usage,
+                    wall_clock_s=time.monotonic() - writeup_start,
+                    outcome="writeup",
                 )
                 writeup, writeup_title = self._extract_writeup(writeup_response.content)
 
@@ -442,12 +478,20 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                         f"what you learned and advice for the next generation.",
                     )
                 )
+                writeup_start = time.monotonic()
                 writeup_response = await self.provider.generate(
                     conversation,
                     system_prompt=system_prompt.content,
                 )
                 total_tokens += (
                     writeup_response.usage.total_tokens if writeup_response.usage else 0
+                )
+                self._record_attempt(
+                    ledger,
+                    key=attempt_key,
+                    usage=writeup_response.usage,
+                    wall_clock_s=time.monotonic() - writeup_start,
+                    outcome="writeup",
                 )
                 writeup, writeup_title = self._extract_writeup(writeup_response.content)
 
@@ -468,6 +512,44 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             success=False,
             writeup="No valid LEAN code was produced in any attempt.",
             total_tokens=total_tokens,
+        )
+
+    def _record_attempt(
+        self,
+        ledger: CostLedger | None,
+        key: str | None,
+        usage: "TokenUsage | None",
+        wall_clock_s: float,
+        outcome: str,
+        gate_failed: str | None = None,
+    ) -> None:
+        """Append one call to the cost ledger (no-op without a ledger).
+
+        A `key` of None routes the spend to the overhead bucket.
+        """
+        if ledger is None:
+            return
+        if key is None:
+            ledger.record_overhead(
+                agent_id=self.id,
+                generation=self.generation,
+                prompt_tokens=usage.input_tokens if usage else 0,
+                completion_tokens=usage.output_tokens if usage else 0,
+                wall_clock_s=wall_clock_s,
+                outcome=outcome,
+            )
+            return
+        ledger.record(
+            AttemptRecord(
+                statement_key=key,
+                agent_id=self.id,
+                generation=self.generation,
+                prompt_tokens=usage.input_tokens if usage else 0,
+                completion_tokens=usage.output_tokens if usage else 0,
+                wall_clock_s=wall_clock_s,
+                outcome=outcome,
+                gate_failed=gate_failed,
+            )
         )
 
     def _extract_writeup(self, text: str) -> tuple[str, str]:

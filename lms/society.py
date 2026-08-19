@@ -6,10 +6,12 @@ import asyncio
 import hashlib
 import json
 import random
+import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from lms.accounting import AttemptRecord, CostLedger, statement_key
 from lms.agent import Agent, AgentResponse, ReviewResult, IterativeResponse
 from lms.artifacts import (
     ArtifactLibrary,
@@ -53,11 +55,18 @@ class GenerationResult:
 
     Attributes:
         generation: Generation number
-        artifacts_created: Total artifacts proposed this generation
+        artifacts_created: Artifacts that actually entered the library this
+            generation. Iterative mode used to count every attempt here,
+            inflating the denominator of any per-artifact rate by the retry
+            count; attempts are now reported separately
         artifacts_verified: Artifacts that passed LEAN verification
         artifacts_referenced: Artifacts that reference existing work
         fresh_creations: Artifacts created without references
         tokens_used: Total tokens used this generation
+        attempts_total: Total verification attempts made this generation
+            (iterative mode; 0 in flat mode where there is one proposal pass)
+        wall_clock_s: Wall-clock seconds for this generation, including
+            foundation persistence
         reviews_total: Total peer reviews performed
         reviews_approved: Artifacts approved by peer review
         reviews_rejected: Artifacts rejected by peer review
@@ -70,6 +79,8 @@ class GenerationResult:
     artifacts_referenced: int
     fresh_creations: int
     tokens_used: int = 0
+    attempts_total: int = 0
+    wall_clock_s: float = 0.0
     # Peer review stats
     reviews_total: int = 0
     reviews_approved: int = 0
@@ -120,6 +131,10 @@ class Society:
         self.results: list[GenerationResult] = []
         self.max_tokens = max_tokens
         self.total_tokens_used = 0
+        # Cost of record: every generation call attributed per statement,
+        # including failed attempts. `total_tokens_used` stays as the running
+        # aggregate; the ledger is what CVFN reads.
+        self.ledger = CostLedger()
         self.current_generation = 0
         self.goal = goal
         self.tokens_by_agent: dict[str, int] = {}  # Track per-agent token usage
@@ -194,11 +209,13 @@ class Society:
         Returns:
             GenerationResult with metrics for this generation
         """
+        gen_start = time.monotonic()
         result = await self._run_generation_impl(generation)
 
         if result.artifacts_verified > 0:
             await self.persist_foundation()
 
+        result.wall_clock_s = time.monotonic() - gen_start
         return result
 
     async def persist_foundation(self) -> bool:
@@ -304,19 +321,23 @@ class Society:
             )
 
         # ===== PHASE 1: PROPOSE (parallel) =====
-        propose_tasks = [
-            agent.propose(
+        async def timed_propose(agent: Agent) -> tuple[AgentResponse, float]:
+            start = time.monotonic()
+            response = await agent.propose(
                 self.library,
                 goal=self.goal,
                 textbook=self.textbook,
                 foundation=self.foundation,
             )
-            for agent in self.agents
-        ]
-        responses: list[AgentResponse] = await asyncio.gather(*propose_tasks)
+            return response, time.monotonic() - start
+
+        propose_tasks = [timed_propose(agent) for agent in self.agents]
+        timed_responses: list[tuple[AgentResponse, float]] = await asyncio.gather(
+            *propose_tasks
+        )
 
         # Process propose results and queue for review
-        for agent, response in zip(self.agents, responses):
+        for agent, (response, propose_elapsed) in zip(self.agents, timed_responses):
             # Track tokens
             if response.tokens_used:
                 tokens = response.tokens_used.total_tokens
@@ -325,6 +346,9 @@ class Society:
                 if agent.id not in self.tokens_by_agent:
                     self.tokens_by_agent[agent.id] = 0
                 self.tokens_by_agent[agent.id] += tokens
+
+            # Attribute the spend per statement (overhead if nothing parsed)
+            self._ledger_propose_response(agent, response, propose_elapsed, generation)
 
             # Initialize per-agent stats
             if agent.id not in self.artifacts_by_agent:
@@ -375,14 +399,18 @@ class Society:
                 pending = review_queue.get_for_review(exclude_agent=agent.id)
                 if pending:
                     review_assignments.append((agent, pending))
-                    review_tasks.append(agent.review(pending))
+                    review_tasks.append(self._timed_review(agent, pending))
 
             # Run reviews in parallel
             if review_tasks:
-                review_results: list[ReviewResult] = await asyncio.gather(*review_tasks)
+                review_results: list[tuple[ReviewResult, float]] = await asyncio.gather(
+                    *review_tasks
+                )
 
                 # Process review results
-                for (agent, pending), result in zip(review_assignments, review_results):
+                for (agent, pending), (result, review_elapsed) in zip(
+                    review_assignments, review_results
+                ):
                     reviews_total += 1
                     self.reviews_by_agent[agent.id]["given"] += 1
 
@@ -392,6 +420,27 @@ class Society:
                         generation_tokens += tokens
                         self.total_tokens_used += tokens
                         self.tokens_by_agent[agent.id] += tokens
+
+                    # Review spend belongs to the reviewed statement's cost
+                    self.ledger.record(
+                        AttemptRecord(
+                            statement_key=statement_key(
+                                pending.artifact.stacks_tag,
+                                pending.artifact.lean_code,
+                                pending.artifact.natural_language,
+                            ),
+                            agent_id=agent.id,
+                            generation=generation,
+                            prompt_tokens=result.tokens_used.input_tokens
+                            if result.tokens_used
+                            else 0,
+                            completion_tokens=result.tokens_used.output_tokens
+                            if result.tokens_used
+                            else 0,
+                            wall_clock_s=review_elapsed,
+                            outcome="review",
+                        )
+                    )
 
                     # Mark as reviewed
                     approved = result.decision in ("APPROVE", "MODIFY")
@@ -588,6 +637,65 @@ class Society:
             **self.verifier.toolchain_info(),
         }
 
+    async def _timed_review(
+        self, agent: Agent, pending: PendingReview
+    ) -> tuple[ReviewResult, float]:
+        """Run one review and measure its wall-clock."""
+        start = time.monotonic()
+        result = await agent.review(pending)
+        return result, time.monotonic() - start
+
+    def _ledger_propose_response(
+        self,
+        agent: Agent,
+        response: AgentResponse,
+        elapsed: float,
+        generation: int,
+    ) -> None:
+        """Attribute one propose() response's spend across its artifacts.
+
+        Tokens split across the parsed artifacts with the division remainder
+        going to the first, so conservation against the society total is
+        exact. A response that parses to zero artifacts is pure overhead —
+        recorded, never dropped: at low success rates that spend is most of
+        the bill.
+        """
+        usage = response.tokens_used
+        prompt = usage.input_tokens if usage else 0
+        completion = usage.output_tokens if usage else 0
+        artifacts = response.proposed_artifacts
+        if not artifacts:
+            self.ledger.record_overhead(
+                agent_id=agent.id,
+                generation=generation,
+                prompt_tokens=prompt,
+                completion_tokens=completion,
+                wall_clock_s=elapsed,
+                outcome="no_artifact",
+            )
+            return
+        n = len(artifacts)
+        for i, artifact in enumerate(artifacts):
+            p, c = prompt // n, completion // n
+            if i == 0:
+                p += prompt % n
+                c += completion % n
+            self.ledger.record(
+                AttemptRecord(
+                    statement_key=statement_key(
+                        artifact.stacks_tag,
+                        artifact.lean_code,
+                        artifact.natural_language,
+                    ),
+                    agent_id=agent.id,
+                    generation=generation,
+                    prompt_tokens=p,
+                    completion_tokens=c,
+                    wall_clock_s=elapsed / n,
+                    outcome="proposed",
+                )
+            )
+
     async def _run_generation_iterative(
         self,
         generation: int,
@@ -626,10 +734,12 @@ class Society:
                 textbook=self.textbook,
                 max_attempts=self.max_attempts,
                 foundation=self.foundation,
+                ledger=self.ledger,
             )
             for agent in self.agents
         ]
         responses: list[IterativeResponse] = await asyncio.gather(*iterative_tasks)
+        attempts_total = 0
 
         # Process results
         for agent, response in zip(self.agents, responses):
@@ -648,13 +758,16 @@ class Society:
                     "referenced": 0,
                 }
 
-            # Count all attempts as "created"
-            artifacts_created += len(response.attempts)
-            self.artifacts_by_agent[agent.id]["created"] += len(response.attempts)
+            # Attempts are attempts, not artifacts. Counting every retry as
+            # "created" inflated the denominator of any per-artifact rate by
+            # the retry count; only what actually enters the library counts.
+            attempts_total += len(response.attempts)
 
             # Process final artifact
             if response.final_artifact:
                 artifact = response.final_artifact
+                artifacts_created += 1
+                self.artifacts_by_agent[agent.id]["created"] += 1
 
                 if artifact.references:
                     artifacts_referenced += 1
@@ -730,6 +843,7 @@ class Society:
             artifacts_referenced=artifacts_referenced,
             fresh_creations=fresh_creations,
             tokens_used=generation_tokens,
+            attempts_total=attempts_total,
             reviews_total=0,  # No peer review in iterative mode
             reviews_approved=0,
             reviews_rejected=0,
@@ -1042,6 +1156,10 @@ class Society:
                 # For now, we trust that individually verified artifacts compile together
                 pass
 
+        # Save the cost ledger — per-statement attribution incl. failed
+        # attempts. This is what cvfn_report reads.
+        self.ledger.save(output_dir / "attempts.json")
+
         # Save per-agent stats for accurate resumption
         stats_data = {
             "tokens_by_agent": self.tokens_by_agent,
@@ -1131,6 +1249,11 @@ class Society:
             society.tokens_by_agent = stats.get("tokens_by_agent", {})
             society.artifacts_by_agent = stats.get("artifacts_by_agent", {})
             society.reviews_by_agent = stats.get("reviews_by_agent", {})
+
+        # Restore the cost ledger so a resumed run keeps appending to it
+        attempts_path = output_dir / "attempts.json"
+        if attempts_path.exists():
+            society.ledger = CostLedger.load(attempts_path)
 
         return society
 

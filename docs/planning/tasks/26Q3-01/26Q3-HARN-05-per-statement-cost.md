@@ -8,7 +8,7 @@ that CVFN's numerator is real.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔄 IN PROGRESS |
 | **Branch** | `26Q3-HARN-05-per-statement-cost` |
 | **Dependencies** | 26Q3-HARN-01 |
 | **PR Size Target** | <300 lines |
@@ -35,20 +35,27 @@ gates). The denominator comes from HARN-03/04. This task builds the numerator.
 
 #### Acceptance Criteria
 
-- [ ] `AttemptRecord{statement_key, agent_id, generation, prompt_tokens,
+- [x] `AttemptRecord{statement_key, agent_id, generation, prompt_tokens,
       completion_tokens, wall_clock_s, outcome, gate_failed}` appended for **every**
       generation call, including ones that parse to zero artifacts
-- [ ] `statement_key` is stable across retries of the same target statement (source
+- [x] `statement_key` is stable across retries of the same target statement (source
       anchor / tag where available, else a normalized name) so a retry chain is
       attributable
-- [ ] Unattributable spend (agent produced nothing identifiable) accumulates in an
+- [x] Unattributable spend (agent produced nothing identifiable) accumulates in an
       explicit `overhead` bucket — never silently dropped
-- [ ] Wall-clock recorded per attempt and per generation
-- [ ] `cvfn_report(run_dir)` emits: total tokens, total wall-clock, verified-novel
-      count, CVFN, and the gate-failure histogram
-- [ ] Invariant test: `sum(attempt tokens) + overhead == society.total_tokens_used`
-- [ ] Human review minutes ingestible from a separate file
-      (`review_log.json`, produced in Phase D) and folded into CVFN
+- [x] Wall-clock recorded per attempt and per generation
+- [x] `cvfn_report(run_dir)` emits: total tokens, total wall-clock, verified-novel
+      count, CVFN, and the gate-failure histogram. Until HARN-04 lands there are
+      no novelty labels, so the denominator falls back to the unfiltered
+      `verified_lean` count and the report labels it as such
+- [x] Invariant test: `sum(attempt tokens) + overhead == society.total_tokens_used`
+      (holds for flat and iterative modes; working-group mode is not ledgered —
+      its wiring is 26Q3-HARN-12's card)
+- [x] Human review minutes ingestible from a separate file
+      (`review_log.json`, produced in Phase D) and folded into CVFN. Reported as
+      its own cost axis next to tokens and wall-clock — the three have different
+      units and no exchange rate exists yet, so collapsing them into one scalar
+      would manufacture a number
 
 ---
 
@@ -76,6 +83,10 @@ gates). The denominator comes from HARN-03/04. This task builds the numerator.
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `cvfn_report` runs against an archived December run and produces a number
-- [ ] `uv run pytest`, `uv run ruff check`, `uv run mypy` clean
+- [x] All acceptance criteria checked off
+- [x] `cvfn_report` runs against an archived December run and produces a number
+      — `run_20251218_105831`: 8,987,704 tokens / 0 statements, CVFN honestly
+      undefined (the run is mock-verified; its histogram shows 75 unverified)
+- [x] `uv run pytest` (554 passed), `uv run ruff check` clean; mypy reports only
+      the 12 pre-existing errors also present at the merge base — none in this
+      change's files
