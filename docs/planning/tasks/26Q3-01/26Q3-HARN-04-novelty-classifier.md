@@ -8,7 +8,7 @@ rather than re-derivation.
 |-------|-------|
 | **Story Points** | 5 |
 | **Priority** | CRITICAL |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔄 IN PROGRESS |
 | **Branch** | `26Q3-HARN-04-novelty-classifier` |
 | **Dependencies** | 26Q3-HARN-01, 26Q3-HARN-02 |
 | **PR Size Target** | <400 lines |
@@ -79,8 +79,9 @@ recollection of Mathlib's contents.
 
 - Validation set, both directions:
   - **known N0** — take declarations from `lean/LMS/Categories/Basic.lean`,
-    `Functor.lean`, `Yoneda.lean` (all re-derive Mathlib). The classifier must
-    call these N0.
+    `Functor.lean`, `NatTrans.lean` (all re-derive Mathlib). The classifier must
+    call these N0. (The card originally named `Yoneda.lean`, which does not
+    exist in the corpus; `NatTrans.lean` substituted 2026-08-19.)
   - **known N1** — take the four novel theorems in
     `lean/LMS/Categories/Localization.lean` (Stacks tags 04VB, 04VD, 05Q2). The
     classifier must not find them in Mathlib.

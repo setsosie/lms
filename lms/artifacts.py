@@ -59,6 +59,12 @@ class Artifact:
     tokens_used: int = 0
     # Stacks Project tag this artifact addresses (for goal tracking)
     stacks_tag: str | None = None
+    # Gate 4 novelty classification (26Q3-HARN-04). "N0" | "N1" | "INCONCLUSIVE",
+    # None when the gate has not run. Evidence names the matching Mathlib
+    # declarations so an N0 verdict is auditable.
+    novelty_level: str | None = None
+    novelty_confidence: float | None = None
+    novelty_evidence: list[str] = field(default_factory=list)
 
     @property
     def verified(self) -> bool:
@@ -91,6 +97,9 @@ class Artifact:
             "verification_error": self.verification_error,
             "tokens_used": self.tokens_used,
             "stacks_tag": self.stacks_tag,
+            "novelty_level": self.novelty_level,
+            "novelty_confidence": self.novelty_confidence,
+            "novelty_evidence": self.novelty_evidence,
         }
 
     @classmethod
@@ -117,6 +126,9 @@ class Artifact:
             verification_error=d.get("verification_error"),
             tokens_used=d.get("tokens_used", 0),
             stacks_tag=d.get("stacks_tag"),
+            novelty_level=d.get("novelty_level"),
+            novelty_confidence=d.get("novelty_confidence"),
+            novelty_evidence=d.get("novelty_evidence", []),
         )
 
     @staticmethod
