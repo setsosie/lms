@@ -1,33 +1,30 @@
 #!/bin/bash
-# Verification for 26Q3-HARN-13: Verify an artifact in the namespace it will
+# Verification for 26Q3-HARN-13: verify an artifact in the namespace it will
 # be stored in.
 # Run: bash scripts/verify/26Q3-01/verify_26Q3-HARN-13.sh
-#
-# Behaviour assertions live in tests/test_verify_namespace.py, not here.
-# This script checks structure and delegates behaviour to pytest.
+# Structure checks only; behaviour assertions live in
+# tests/test_verify_namespace.py.
 set -e
 
-# Resolve the repo root from git, not from $0 -- /pre-merge's discrimination
-# check replays this script from a throwaway worktree.
-cd "$(git rev-parse --show-toplevel)"
+# 1. One shared namespace constant exists in foundation.py (AC-4)
+grep -q '^FOUNDATION_NAMESPACE = "LMS.Foundation"' lms/foundation.py
 
-# TODO(AC-1..AC-6): fill in once the implementation lands. Intended shape:
-#
-# 1. The namespace is one shared constant, not two string literals (AC-4).
-#    grep -q "NAMESPACE" lms/lean/real.py
-#    ! grep -q '"namespace LMS.Foundation"' lms/lean/real.py
-#
-# 2. The verifier wraps after imports, not before (AC-2).
-#    grep -q "def _wrap_in_namespace" lms/lean/real.py
-#
-# 3. Behaviour: core-name collision, own-namespace nesting, import hoisting.
-#    uv run pytest tests/test_verify_namespace.py -q
-#
-# 4. No regressions in the surrounding suites.
-#    uv run pytest tests/test_foundation.py tests/test_lean_interface.py -q
-#
-# 5. Touched files lint-clean.
-#    uv run ruff format --check lms/lean/real.py lms/foundation.py
-#    uv run ruff check lms/lean/real.py lms/foundation.py
+# 2. The verifier consumes the constant and carries no second literal (AC-4)
+grep -q 'FOUNDATION_NAMESPACE' lms/lean/real.py
+! grep -q '"LMS.Foundation"' lms/lean/real.py
 
-echo "26Q3-HARN-13: verification passed (STUB -- no checks implemented yet)"
+# 3. Header and footer derive from the constant, not from literals (AC-4)
+grep -q 'namespace {FOUNDATION_NAMESPACE}' lms/foundation.py
+grep -q 'end {FOUNDATION_NAMESPACE}' lms/foundation.py
+
+# 4. The import split is shared, not duplicated (AC-2)
+grep -q '^def split_imports' lms/foundation.py
+grep -q 'split_imports' lms/lean/real.py
+
+# 5. The verifier wraps before writing the temp file (AC-1)
+grep -q '_wrap_in_storage_namespace' lms/lean/real.py
+
+# 6. Behaviour tests exist and pass (AC-1..AC-4, AC-6 spot checks)
+uv run pytest tests/test_verify_namespace.py -q
+
+echo "26Q3-HARN-13: verification passed"
