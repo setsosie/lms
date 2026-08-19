@@ -181,6 +181,13 @@ class Society:
     async def run_generation(self, generation: int) -> GenerationResult:
         """Run one generation, then make its verified work importable.
 
+        Dispatches on `use_working_groups`: committee mode (planning panel →
+        working groups → review committee → verify) when set, the flat
+        propose/review/verify pipeline otherwise. This is the only entry point
+        `lms/run.py` calls, so the dispatch has to live here — the flag was
+        previously declared and never read, which is how committee mode stayed
+        unreachable (26Q3-HARN-12).
+
         Persisting the foundation is part of finishing a generation, not part
         of checkpointing. `Society.save()` only runs every `checkpoint_interval`
         generations (default 10), so on any shorter run the foundation stayed
@@ -194,7 +201,10 @@ class Society:
         Returns:
             GenerationResult with metrics for this generation
         """
-        result = await self._run_generation_impl(generation)
+        if self.use_working_groups:
+            result = await self.run_generation_with_groups(generation)
+        else:
+            result = await self._run_generation_impl(generation)
 
         if result.artifacts_verified > 0:
             await self.persist_foundation()
@@ -693,6 +703,14 @@ class Society:
                 # Add to library
                 self.library.add(artifact)
 
+                # Link references so reuse is measurable. This call existed
+                # only in the flat pipeline, so every --iterative run before
+                # it reported Reuse Rate 0.0% by construction — including runs
+                # where reuse demonstrably happened (shakedown_3x3_d).
+                for ref_id in artifact.references:
+                    if ref_id in self.library:
+                        self.library.add_reference(artifact.id, ref_id)
+
             # Add writeup to textbook (valuable whether success or failure)
             if response.writeup:
                 topics = ["writeup", "iterative"]
@@ -739,19 +757,27 @@ class Society:
         return result
 
     async def run_generation_with_groups(self, generation: int) -> GenerationResult:
-        """Run a generation using the Working Group architecture.
+        """Run a generation using the Working Group (committee) architecture.
 
         This method uses:
         1. PlanningPanel to allocate tasks to groups
         2. WorkingGroups for synchronous agent collaboration
-        3. LEAN verification of final artifacts
-        4. Foundation.lean accumulation of verified code
+        3. A review committee that screens group output before verification
+        4. LEAN verification of surviving artifacts
+        5. Foundation.lean accumulation of verified code
+
+        Prefer calling `run_generation` with `use_working_groups = True`; that
+        wrapper also persists the foundation after a verifying generation.
 
         Args:
             generation: Current generation number
 
         Returns:
             GenerationResult with metrics for this generation
+
+        Raises:
+            ValueError: If there is no goal and no pre-built dependency graph —
+                committee mode has nothing to allocate without one.
         """
         # Check budget before starting
         if self.max_tokens and self.total_tokens_used >= self.max_tokens:
@@ -764,8 +790,15 @@ class Society:
             self.dependency_graph = DependencyGraph.from_goal(self.goal)
 
         if self.dependency_graph is None:
-            # Fallback to regular generation if no goal/graph
-            return await self.run_generation(generation)
+            # This used to silently fall back to flat mode, so a misconfigured
+            # committee run produced a plausible-looking flat run with no error
+            # and no log line. A committee run without a task graph is a
+            # configuration error, not a preference.
+            raise ValueError(
+                "Committee mode requires a goal: the planning panel allocates "
+                "tasks from the goal's dependency graph. Pass a goal (--goal) "
+                "or disable use_working_groups."
+            )
 
         # Initialize counters
         artifacts_created = 0
@@ -773,6 +806,10 @@ class Society:
         artifacts_referenced = 0
         fresh_creations = 0
         generation_tokens = 0
+        reviews_total = 0
+        reviews_approved = 0
+        reviews_rejected = 0
+        reviews_modified = 0
 
         # Get Foundation summary for context
         foundation_summary = self._get_foundation_summary()
@@ -833,7 +870,8 @@ class Society:
         # Run all groups in parallel
         group_results = await asyncio.gather(*[g.run_session() for g in groups])
 
-        # ===== PHASE 3: VERIFICATION =====
+        # ===== PHASE 3: BUILD ARTIFACTS =====
+        pending_reviews: list[tuple[PendingReview, WorkingGroup]] = []
         for group_result, group in zip(group_results, groups):
             if not group_result:
                 # Group failed to produce artifact
@@ -869,6 +907,91 @@ class Society:
                 generation=generation,
                 notes=group_result.get("notes"),
             )
+            pending_reviews.append((PendingReview(artifact=artifact), group))
+
+            # The transcript is the record of the session; it goes to the
+            # textbook whatever the review or the verifier later decide.
+            self.textbook.add(
+                content=group.get_transcript(),
+                author=f"group-{group.config.group_id}",
+                generation=generation,
+                topics=[group.config.task_tag, "transcript"],
+                title=f"[GROUP {group.config.group_id}] {group.config.task_name}",
+                entry_type="transcript",
+            )
+
+        # ===== PHASE 4: REVIEW COMMITTEE =====
+        # The stage the pipeline always intended and never had: committee
+        # output is reviewed before it reaches the verifier. Reviewers are the
+        # society's agents — idle in committee mode — through the same tested
+        # `Agent.review` path the flat pipeline uses. MODIFY is honored, so a
+        # reviewer can repair code rather than only veto it.
+        if self.use_peer_review and pending_reviews and self.agents:
+            reviewers = [
+                self.agents[i % len(self.agents)] for i in range(len(pending_reviews))
+            ]
+            review_results: list[ReviewResult] = await asyncio.gather(
+                *[
+                    reviewer.review(pending)
+                    for reviewer, (pending, _) in zip(reviewers, pending_reviews)
+                ]
+            )
+
+            surviving: list[tuple[PendingReview, WorkingGroup]] = []
+            for (pending, group), reviewer, review in zip(
+                pending_reviews, reviewers, review_results
+            ):
+                reviews_total += 1
+                if reviewer.id not in self.reviews_by_agent:
+                    self.reviews_by_agent[reviewer.id] = {
+                        "given": 0,
+                        "approved": 0,
+                        "rejected": 0,
+                        "modified": 0,
+                    }
+                self.reviews_by_agent[reviewer.id]["given"] += 1
+
+                if review.tokens_used:
+                    tokens = review.tokens_used.total_tokens
+                    generation_tokens += tokens
+                    self.total_tokens_used += tokens
+                    self.tokens_by_agent[reviewer.id] = (
+                        self.tokens_by_agent.get(reviewer.id, 0) + tokens
+                    )
+
+                if review.decision == "REJECT":
+                    reviews_rejected += 1
+                    self.reviews_by_agent[reviewer.id]["rejected"] += 1
+                    artifact = pending.artifact
+                    artifact.verification_error = (
+                        f"Rejected by review committee ({reviewer.id}): "
+                        f"{review.reasoning}"
+                    )
+                    self.library.add(artifact)
+                    self.dependency_graph.update_status(
+                        group.config.task_tag, TaskStatus.AVAILABLE
+                    )
+                    continue
+
+                if review.decision == "MODIFY" and review.modified_code:
+                    reviews_modified += 1
+                    self.reviews_by_agent[reviewer.id]["modified"] += 1
+                    pending.artifact.lean_code = review.modified_code
+                    pending.artifact.notes = (
+                        pending.artifact.notes or ""
+                    ) + f"\n[Modified by {reviewer.id}]"
+                else:
+                    reviews_approved += 1
+                    self.reviews_by_agent[reviewer.id]["approved"] += 1
+
+                surviving.append((pending, group))
+
+            pending_reviews = surviving
+
+        # ===== PHASE 5: VERIFICATION =====
+        for pending, group in pending_reviews:
+            artifact = pending.artifact
+            lean_code = artifact.lean_code or ""
 
             # Verify with LEAN
             if self.verifier:
@@ -935,17 +1058,6 @@ class Society:
             # Add to library
             self.library.add(artifact)
 
-            # Add group transcript to textbook
-            transcript = group.get_transcript()
-            self.textbook.add(
-                content=transcript,
-                author=f"group-{group.config.group_id}",
-                generation=generation,
-                topics=[group.config.task_tag, "transcript"],
-                title=f"[GROUP {group.config.group_id}] {group.config.task_name}",
-                entry_type="transcript",
-            )
-
         self.current_generation = generation + 1
 
         result = GenerationResult(
@@ -955,6 +1067,10 @@ class Society:
             artifacts_referenced=artifacts_referenced,
             fresh_creations=fresh_creations,
             tokens_used=generation_tokens,
+            reviews_total=reviews_total,
+            reviews_approved=reviews_approved,
+            reviews_rejected=reviews_rejected,
+            reviews_modified=reviews_modified,
         )
         self.results.append(result)
         return result
