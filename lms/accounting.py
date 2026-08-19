@@ -16,9 +16,11 @@ compatibility but is no longer authoritative. Spend that cannot be attributed
 to any statement accumulates in an explicit overhead bucket
 (`statement_key == OVERHEAD_KEY`) — never silently dropped.
 
-Scope: flat and iterative modes are ledgered. Working-group mode is not (its
-wiring is 26Q3-HARN-12's card); the conservation invariant holds for non-group
-runs.
+Scope: all three modes — flat, iterative, and committee (working-group) — are
+ledgered, and the conservation invariant holds across them. In committee mode a
+group's whole session is attributed to the one statement the group was
+convened to produce; planning-panel spend serves the generation as a whole and
+goes to the overhead bucket.
 """
 
 from __future__ import annotations

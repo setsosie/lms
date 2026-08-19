@@ -49,8 +49,15 @@ gates). The denominator comes from HARN-03/04. This task builds the numerator.
       no novelty labels, so the denominator falls back to the unfiltered
       `verified_lean` count and the report labels it as such
 - [x] Invariant test: `sum(attempt tokens) + overhead == society.total_tokens_used`
-      (holds for flat and iterative modes; working-group mode is not ledgered —
-      its wiring is 26Q3-HARN-12's card)
+      (holds for flat, iterative, and committee modes)
+- [x] Committee mode (HARN-12, now merged and the normal run mode) is ledgered:
+      a group's whole session is attributed to the one statement it was convened
+      to produce (`tag:<task_tag>`), planning-panel spend goes to overhead with
+      outcome `planning`, and review-committee spend to the reviewed statement.
+      Found in the wiring: panel and group `provider.generate` calls dropped
+      their usage entirely — committee spend was invisible even to
+      `society.total_tokens_used` and the `max_tokens` budget check, not merely
+      unattributed
 - [x] Human review minutes ingestible from a separate file
       (`review_log.json`, produced in Phase D) and folded into CVFN. Reported as
       its own cost axis next to tokens and wall-clock — the three have different
@@ -65,7 +72,9 @@ gates). The denominator comes from HARN-03/04. This task builds the numerator.
 |------|--------|---------|
 | `lms/accounting.py` | CREATE | `AttemptRecord`, ledger, `cvfn_report` |
 | `lms/agent.py` | MODIFY | Emit attempt records incl. zero-artifact responses |
-| `lms/society.py` | MODIFY | Wire ledger; wall-clock timing |
+| `lms/society.py` | MODIFY | Wire ledger (all three modes); wall-clock timing |
+| `lms/planning.py` | MODIFY | Panel spend → overhead bucket + society totals |
+| `lms/working_group.py` | MODIFY | Group session spend → the group's statement |
 | `lms/metrics.py` | MODIFY | CVFN alongside existing metrics |
 | `tests/test_accounting.py` | CREATE | Conservation invariant + retry attribution |
 

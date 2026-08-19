@@ -936,22 +936,27 @@ class Society:
                 textbook=self.textbook,
                 foundation_summary=foundation_summary,
                 n_groups=self.n_working_groups,
+                ledger=self.ledger,
             )
             assignments = await panel.run_session(generation)
+            # Panel spend used to be dropped on the floor: not in the ledger,
+            # not in the society totals, not counted against the budget.
+            generation_tokens += panel.tokens_used
+            self.total_tokens_used += panel.tokens_used
         else:
             # Use default assignments without LLM
             available = self.dependency_graph.available_tasks()
             assignments = create_default_assignments(available, self.n_working_groups)
 
         if not assignments:
-            # No tasks available
+            # No tasks available; the planning spend is still real
             result = GenerationResult(
                 generation=generation,
                 artifacts_created=0,
                 artifacts_verified=0,
                 artifacts_referenced=0,
                 fresh_creations=0,
-                tokens_used=0,
+                tokens_used=generation_tokens,
             )
             self.results.append(result)
             return result
@@ -978,11 +983,19 @@ class Society:
                 config=config,
                 provider=self.provider,
                 foundation_summary=foundation_summary,
+                ledger=self.ledger,
+                generation=generation,
             )
             groups.append(group)
 
         # Run all groups in parallel
         group_results = await asyncio.gather(*[g.run_session() for g in groups])
+
+        # Group-session spend used to be dropped like the panel's; it is the
+        # bulk of a committee generation's bill.
+        for group in groups:
+            generation_tokens += group.tokens_used
+            self.total_tokens_used += group.tokens_used
 
         # ===== PHASE 3: BUILD ARTIFACTS =====
         pending_reviews: list[tuple[PendingReview, WorkingGroup]] = []
@@ -1044,15 +1057,15 @@ class Society:
             reviewers = [
                 self.agents[i % len(self.agents)] for i in range(len(pending_reviews))
             ]
-            review_results: list[ReviewResult] = await asyncio.gather(
+            review_results: list[tuple[ReviewResult, float]] = await asyncio.gather(
                 *[
-                    reviewer.review(pending)
+                    self._timed_review(reviewer, pending)
                     for reviewer, (pending, _) in zip(reviewers, pending_reviews)
                 ]
             )
 
             surviving: list[tuple[PendingReview, WorkingGroup]] = []
-            for (pending, group), reviewer, review in zip(
+            for (pending, group), reviewer, (review, review_elapsed) in zip(
                 pending_reviews, reviewers, review_results
             ):
                 reviews_total += 1
@@ -1072,6 +1085,27 @@ class Society:
                     self.tokens_by_agent[reviewer.id] = (
                         self.tokens_by_agent.get(reviewer.id, 0) + tokens
                     )
+
+                # Review spend belongs to the reviewed statement's cost
+                self.ledger.record(
+                    AttemptRecord(
+                        statement_key=statement_key(
+                            pending.artifact.stacks_tag,
+                            pending.artifact.lean_code,
+                            pending.artifact.natural_language,
+                        ),
+                        agent_id=reviewer.id,
+                        generation=generation,
+                        prompt_tokens=review.tokens_used.input_tokens
+                        if review.tokens_used
+                        else 0,
+                        completion_tokens=review.tokens_used.output_tokens
+                        if review.tokens_used
+                        else 0,
+                        wall_clock_s=review_elapsed,
+                        outcome="review",
+                    )
+                )
 
                 if review.decision == "REJECT":
                     reviews_rejected += 1

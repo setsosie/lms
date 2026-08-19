@@ -2,8 +2,8 @@
 
 The invariant that matters: every token the society spends appears in the
 ledger exactly once — attributed to a statement or to the overhead bucket —
-so `sum(attempt tokens) == society.total_tokens_used`. Scope: flat and
-iterative modes (working-group mode is 26Q3-HARN-12's card).
+so `sum(attempt tokens) == society.total_tokens_used`. Holds for all three
+modes: flat, iterative, and committee (working groups).
 """
 
 import json
@@ -306,6 +306,128 @@ class TestRetryAttribution:
         assert ledger.records[0].gate_failed == "lean_verify"
         # The whole chain is on the ledger, not just the success
         assert ledger.total_tokens == response.total_tokens
+
+
+PANEL_RESPONSES = [
+    """<proposal>
+<rationale>One task, one group</rationale>
+<assignments>
+<group id="1" task="T1" priority="1">
+Define the structure per Foundation.lean patterns
+</group>
+</assignments>
+</proposal>""",
+    "APPROVE",
+    "APPROVE",
+    "APPROVE",
+]
+
+GROUP_RESPONSES = [
+    "Let's define Category.",  # chair opening
+    """```lean
+structure Category where
+  Obj : Type
+```""",  # researcher
+    "CONSENSUS REACHED",  # chair summary
+    """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: Category structure
+lean: |
+  structure Category where
+    Obj : Type
+</artifact>""",  # scribe
+]
+
+REVIEW_APPROVE = """<review>
+decision: APPROVE
+reasoning: Signature matches the task
+</review>"""
+
+
+def make_committee_society(tmp_path, responses, use_planning_panel=False):
+    from lms.goals import Goal, StacksDefinition
+
+    goal = Goal(
+        name="Test Goal",
+        description="Test",
+        source="Test",
+        definitions=[
+            StacksDefinition(tag="T1", section="1.1", name="Category", content="..."),
+        ],
+    )
+    society = make_society(
+        n_agents=1,
+        responses=responses,
+        verifier=StubLeanVerifier(),
+        tmp_path=tmp_path,
+        goal=goal,
+    )
+    society.use_working_groups = True
+    society.n_working_groups = 1
+    society.use_planning_panel = use_planning_panel
+    return society
+
+
+class TestConservationCommittee:
+    """Committee mode: panel, group sessions, and reviews all reach the ledger.
+
+    Before this wiring, only the review stage was counted anywhere — the
+    planning panel's and working groups' provider calls dropped their usage
+    entirely, so committee-mode spend was invisible even to
+    `society.total_tokens_used` and the token budget.
+    """
+
+    @pytest.mark.asyncio
+    async def test_conservation_with_panel_groups_and_review(self, tmp_path):
+        society = make_committee_society(
+            tmp_path,
+            PANEL_RESPONSES + GROUP_RESPONSES + [REVIEW_APPROVE],
+            use_planning_panel=True,
+        )
+        result = await society.run_generation(0)
+
+        # 4 panel + 4 group + 1 review calls, 150 tokens each
+        assert society.total_tokens_used == 9 * 150
+        assert society.ledger.total_tokens == society.total_tokens_used
+        assert result.tokens_used == society.total_tokens_used
+        # Planning is the only overhead; everything else has a statement
+        assert society.ledger.overhead_tokens == 4 * 150
+        assert result.wall_clock_s > 0
+
+    @pytest.mark.asyncio
+    async def test_group_and_review_spend_attributed_to_task(self, tmp_path):
+        society = make_committee_society(
+            tmp_path, GROUP_RESPONSES + [REVIEW_APPROVE], use_planning_panel=False
+        )
+        await society.run_generation(0)
+
+        assert society.ledger.total_tokens == society.total_tokens_used == 5 * 150
+        by_outcome: dict[str, set[str]] = {}
+        for r in society.ledger.records:
+            by_outcome.setdefault(r.outcome, set()).add(r.statement_key)
+        # The whole group session and its review are one statement's cost
+        assert by_outcome["group_session"] == {"tag:T1"}
+        assert by_outcome["review"] == {"tag:T1"}
+        cost = society.ledger.per_statement()["tag:T1"]
+        assert cost.tokens == 5 * 150
+        assert cost.attempts == 5
+        assert all(r.wall_clock_s >= 0 for r in society.ledger.records)
+
+    @pytest.mark.asyncio
+    async def test_committee_spend_counts_against_budget(self, tmp_path):
+        """The token budget used to be blind to panel and group spend."""
+        from lms.society import BudgetExceeded
+
+        society = make_committee_society(
+            tmp_path, GROUP_RESPONSES + [REVIEW_APPROVE], use_planning_panel=False
+        )
+        society.max_tokens = 500  # Under one generation's committee spend
+
+        await society.run_generation(0)
+        with pytest.raises(BudgetExceeded):
+            await society.run_generation(1)
 
 
 class TestCVFN:
