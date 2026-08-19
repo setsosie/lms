@@ -674,6 +674,94 @@ that the pipeline is good. Phase C measures the pipeline.
 
 ---
 
+## Step 7 — N1-density measurement (Sprint 3 DoD item 1)
+
+**Prereqs**: PRs #36 (arc statement lists) and #38 (novelty classifier) merged
+to `main`; the box repo on `main` and pulled; Step 2's Mathlib build present —
+the name-grep and `exact?`-probe stages need `.lake/packages/mathlib` and
+report `available=False` without it; outbound HTTPS (loogle and LeanSearch are
+hosted services).
+
+No GPU needed: this is CPU-bound Lean elaboration plus rate-limited HTTP. The
+login node is fine; vLLM does not need to be running.
+
+```bash
+cd ~/lms && git switch main && git pull
+```
+
+```bash
+mkdir -p experiments/n1_density
+```
+
+```bash
+uv run python scripts/measure_n1_density.py data/ant_arcs/core_arc.json --json-out experiments/n1_density/core.json
+```
+
+```bash
+uv run python scripts/measure_n1_density.py data/ant_arcs/ramification_arc.json --json-out experiments/n1_density/ramification.json
+```
+
+Rate limits (loogle 3/30s) put a full ~20-statement arc at roughly 10–25
+minutes. Results are disk-cached by statement hash, so re-runs after signature
+repairs only pay for what changed.
+
+**Expected**: a per-statement N0/N1/INCONCLUSIVE table with confidence and
+evidence; an arc-level N1 density (upper and decisive) with the confidence
+distribution; a D4 review queue. All four search stages should report
+available — if name-grep or the exact-probe say unavailable, stop at this
+step: the classifier isn't finding the Mathlib checkout.
+
+**Also expected — not a failure**: per-statement elaboration errors. All 41
+Lean drafts shipped unvalidated (0/41 type-checked locally; stale olean
+cache), so this run doubles as their elaboration check. Paste the failure
+list; the signatures get repaired in one pass and re-run against the cache.
+
+**Checkpoint 7**: two density numbers recorded. This resolves the
+`calibration-program.md` §4 slice decision (pick the higher-N1 arc) and closes
+Sprint 3 DoD item 1.
+
+---
+
+## Step 8 — the first full committee run
+
+**Prereqs**: PR #35 (committee wiring) merged; #33 strongly recommended first
+(without it the oracle still false-negatives on core-name collisions); #34 and
+#40 if targeting the Stacks kernel goal; vLLM serving and the harness pointed
+at it exactly as Steps 4–5 configured. **Step 6's corpus guard applies
+verbatim here — run it before and after.**
+
+Smoke on the historical goal first, to validate the wiring against a known
+target:
+
+```bash
+uv run python -m lms.run --groups --n-groups 3 --agents 3 --goal stacks-ch4-phase1 --generations 2 --verifier real --provider openai --output experiments/committee_smoke
+```
+
+Then the real target — the shared-kernel fibred-categories track:
+
+```bash
+uv run python -m lms.run --groups --n-groups 3 --agents 3 --goal stacks-kernel-track-b --generations 2 --verifier real --provider openai --output experiments/committee_trackB
+```
+
+**Expected**: `Mode: COMMITTEE (3 groups)` in the banner; each generation the
+three groups attempt three *different* tags (check `artifacts.json` for
+distinct `stacks_tag` values across `group-*` creators — in every earlier run
+N agents were N copies of one agent); possibly `Rejected by review committee`
+entries, which are the review stage working, not a failure. Once, deliberately
+run `--groups` without `--goal` and confirm it errors loudly instead of
+silently degrading to flat mode.
+
+**Checkpoint 8**: `artifacts.json` shows ≥2 distinct tags across groups and
+the run summary shows `reviews_total > 0`.
+
+**What to paste back for Steps 7–8**: both density outputs (or their
+`--json-out` files), the elaboration-failure list, the committee run banner,
+the `artifacts.json` tag/creator/verified summary, every `verification_error`
+and review-rejection string, wall-clock, and `git status --short lean/` after
+the guard's restore.
+
+---
+
 ## What to report back
 
 Paste: checkpoint results 0–6, `wall-clock` for `lake exe cache get` and
