@@ -1068,6 +1068,7 @@ class Society:
                 ),
                 lean_code=lean_code,
                 lean_code_raw=lean_code_raw,
+                references=list(group_result.get("references") or []),
                 # Always the validated assignment tag. The scribe stamps its
                 # own (smoke_c/d wrote "CAT-0013" for task 0013), and goal
                 # progress keys on this field — a decorated tag makes
@@ -1296,6 +1297,14 @@ class Society:
 
             # Add to library
             self.library.add(artifact)
+
+            # Link references so reuse is measurable on committee runs too.
+            # This call existed only on the flat and iterative paths, so
+            # committee_real_b printed "Ratchet failure detected" on a run
+            # whose groups demonstrably built on the foundation.
+            for ref_id in artifact.references:
+                if ref_id in self.library:
+                    self.library.add_reference(artifact.id, ref_id)
 
         self.current_generation = generation + 1
 
