@@ -70,3 +70,6 @@ Thumbs.db
 
 # Local-only planning docs — see claude-skills docs/SPRINT-SCHEMA.md
 docs/planning/retros/
+
+# Novelty-gate cache (machine-generated, per-checkout)
+.novelty_cache/
