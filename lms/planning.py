@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from lms.providers.base import Message
+
 if TYPE_CHECKING:
     from lms.accounting import CostLedger
     from lms.dependency import DependencyGraph, DependencyNode
@@ -297,11 +299,12 @@ class PlanningPanel:
         smeared across whatever tasks happened to be assigned.
         """
         start = time.monotonic()
+        # Message objects, not dicts: OpenAIProvider.generate reads `m.role`
+        # by attribute, so a dict dies with AttributeError before any request
+        # is sent -- a seam the mock-provider tests cannot see.
         response = await self.provider.generate(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ]
+            [Message(role="user", content=prompt)],
+            system_prompt=system_prompt,
         )
         elapsed = time.monotonic() - start
         usage = getattr(response, "usage", None)

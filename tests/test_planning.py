@@ -3,6 +3,7 @@
 import pytest
 
 from lms.dependency import DependencyGraph, DependencyNode, TaskStatus
+from lms.providers.base import GenerationResponse, TokenUsage
 from lms.planning import (
     Vote,
     WorkingGroupAssignment,
@@ -204,7 +205,11 @@ class TestPlanningSession:
     def test_session_with_context(self):
         """Test session with full context."""
         task = DependencyNode(
-            tag="A", name="Task A", chapter=1, section="1.0", status=TaskStatus.AVAILABLE
+            tag="A",
+            name="Task A",
+            chapter=1,
+            section="1.0",
+            status=TaskStatus.AVAILABLE,
         )
         session = PlanningSession(
             generation=1,
@@ -220,9 +225,7 @@ class TestPlanningSession:
 
     def test_to_dict(self):
         """Test serialization to dict."""
-        task = DependencyNode(
-            tag="A", name="Task A", chapter=1, section="1.0"
-        )
+        task = DependencyNode(tag="A", name="Task A", chapter=1, section="1.0")
         session = PlanningSession(
             generation=1,
             chair_id="chair",
@@ -288,7 +291,10 @@ Work on adjoint functors after limits are done.
         proposal = panel._parse_proposal(response, available)
 
         assert len(proposal.assignments) == 2
-        assert proposal.rationale == "We should focus on Limits first because it unlocks more tasks."
+        assert (
+            proposal.rationale
+            == "We should focus on Limits first because it unlocks more tasks."
+        )
 
         a1 = proposal.assignments[0]
         assert a1.group_id == 1
@@ -558,7 +564,9 @@ class TestCreateDefaultAssignments:
     def test_guidance_includes_task_name(self):
         """Test that guidance includes the task name."""
         tasks = [
-            DependencyNode(tag="CH4-LIMITS", name="Limits and Colimits", chapter=4, section="4.4"),
+            DependencyNode(
+                tag="CH4-LIMITS", name="Limits and Colimits", chapter=4, section="4.4"
+            ),
         ]
         assignments = create_default_assignments(tasks, n_groups=1)
 
@@ -580,6 +588,7 @@ class TestPlanningPanelGetRecentFailures:
 
     def test_with_mock_textbook(self):
         """Test with mock textbook entries."""
+
         # Create a simple mock textbook
         class MockEntry:
             def __init__(self, title: str, content: str):
@@ -589,9 +598,16 @@ class TestPlanningPanelGetRecentFailures:
         class MockTextbook:
             def __init__(self):
                 self.entries = [
-                    MockEntry("[SUCCESS] CH4-CAT verified", "Category definition works"),
-                    MockEntry("[FAILED] CH4-LIMITS", "verification_error: universe mismatch at line 42"),
-                    MockEntry("[FAILED] CH4-ADJOINT", "Could not find instance for Group"),
+                    MockEntry(
+                        "[SUCCESS] CH4-CAT verified", "Category definition works"
+                    ),
+                    MockEntry(
+                        "[FAILED] CH4-LIMITS",
+                        "verification_error: universe mismatch at line 42",
+                    ),
+                    MockEntry(
+                        "[FAILED] CH4-ADJOINT", "Could not find instance for Group"
+                    ),
                 ]
 
         panel = PlanningPanel(
@@ -625,16 +641,30 @@ class TestPlanningPanelSystemPrompts:
 
 
 class MockProvider:
-    """Mock provider for async testing."""
+    """Mock provider holding the real `BaseLLMProvider` contract.
+
+    Reads `m.role`/`m.content` by attribute exactly as `OpenAIProvider.generate`
+    does, so passing dicts fails here the way it fails on the box, and returns
+    a `GenerationResponse` with usage so token accounting is exercised. The
+    previous dict-accepting, str-returning mock is what let the committee
+    classes ship an interface the real provider rejects (2026-08-19,
+    committee smoke: every call died and the run reported 0 tokens).
+    """
 
     def __init__(self, responses: list[str]):
         self.responses = responses
         self.call_count = 0
 
-    async def generate(self, messages: list[dict]) -> str:
+    async def generate(self, messages, system_prompt=None, max_tokens=None):
+        for m in messages:
+            assert isinstance(m.role, str) and isinstance(m.content, str)
         response = self.responses[self.call_count % len(self.responses)]
         self.call_count += 1
-        return response
+        return GenerationResponse(
+            content=response,
+            usage=TokenUsage(input_tokens=100, output_tokens=25),
+            provider="mock",
+        )
 
 
 class TestPlanningPanelAsync:
@@ -655,8 +685,9 @@ class TestPlanningPanelAsync:
         )
 
         # Mock responses: chair proposal, 3 approve votes
-        provider = MockProvider([
-            """<proposal>
+        provider = MockProvider(
+            [
+                """<proposal>
 <rationale>Focus on limits</rationale>
 <assignments>
 <group id="1" task="CH4-LIMITS" priority="1">
@@ -664,10 +695,11 @@ Work on limits.
 </group>
 </assignments>
 </proposal>""",
-            "<vote><decision>APPROVE</decision><comment>Good</comment></vote>",
-            "<vote><decision>APPROVE</decision><comment>Agree</comment></vote>",
-            "<vote><decision>APPROVE</decision><comment>Fine</comment></vote>",
-        ])
+                "<vote><decision>APPROVE</decision><comment>Good</comment></vote>",
+                "<vote><decision>APPROVE</decision><comment>Agree</comment></vote>",
+                "<vote><decision>APPROVE</decision><comment>Fine</comment></vote>",
+            ]
+        )
 
         panel = PlanningPanel(provider=provider, graph=graph, n_groups=1)
         assignments = await panel.run_session(generation=1)
@@ -676,6 +708,10 @@ Work on limits.
         assert assignments[0].task_tag == "CH4-LIMITS"
         # Chair + 3 votes = 4 calls
         assert provider.call_count == 4
+        # Usage flows from the provider response into the panel's aggregate.
+        # 0 here is the 2026-08-19 box symptom: every committee run reporting
+        # "0 tokens used" because the calls never survived the provider seam.
+        assert panel.tokens_used == 4 * 125
 
     @pytest.mark.asyncio
     async def test_run_session_rejected_then_revised(self):
@@ -701,26 +737,28 @@ Work on limits.
         )
 
         # Mock responses: chair proposal, 2 rejects + 1 approve, revised proposal
-        provider = MockProvider([
-            # Initial proposal
-            """<proposal>
+        provider = MockProvider(
+            [
+                # Initial proposal
+                """<proposal>
 <rationale>Initial</rationale>
 <assignments>
 <group id="1" task="A" priority="1">Do A.</group>
 </assignments>
 </proposal>""",
-            # Votes (majority reject)
-            "<vote><decision>REJECT</decision><comment>Wrong priority</comment></vote>",
-            "<vote><decision>REJECT</decision><comment>Disagree</comment></vote>",
-            "<vote><decision>APPROVE</decision><comment>OK</comment></vote>",
-            # Revised proposal
-            """<proposal>
+                # Votes (majority reject)
+                "<vote><decision>REJECT</decision><comment>Wrong priority</comment></vote>",
+                "<vote><decision>REJECT</decision><comment>Disagree</comment></vote>",
+                "<vote><decision>APPROVE</decision><comment>OK</comment></vote>",
+                # Revised proposal
+                """<proposal>
 <rationale>Revised based on feedback</rationale>
 <assignments>
 <group id="1" task="B" priority="1">Do B instead.</group>
 </assignments>
 </proposal>""",
-        ])
+            ]
+        )
 
         panel = PlanningPanel(provider=provider, graph=graph, n_groups=1)
         assignments = await panel.run_session(generation=1)

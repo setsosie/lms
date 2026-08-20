@@ -14,6 +14,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from lms.accounting import AttemptRecord, statement_key
+from lms.providers.base import Message
 
 if TYPE_CHECKING:
     from lms.accounting import CostLedger
@@ -413,11 +414,11 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
         is that statement's cost.
         """
         start = time.monotonic()
+        # Message objects, not dicts -- same seam as PlanningPanel._generate:
+        # the real provider reads `m.role` by attribute and dies on a dict.
         response = await self.provider.generate(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ]
+            [Message(role="user", content=prompt)],
+            system_prompt=system_prompt,
         )
         elapsed = time.monotonic() - start
         usage = getattr(response, "usage", None)
