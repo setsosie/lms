@@ -9,7 +9,7 @@ path already does on the same box and model.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔄 IN PROGRESS — PR open |
 | **Branch** | `26Q3-HARN-14-committee-group-lean-feedback-loop` |
 | **Dependencies** | None (HARN-12 merged) |
 | **PR Size Target** | <500 lines (max 1000) |
@@ -79,25 +79,25 @@ grep -n "def repair" lms/working_group.py
 
 #### Acceptance Criteria
 
-- [ ] `WorkingGroup` has a repair turn: given failed code + Lean error, the
+- [x] `WorkingGroup` has a repair turn: given failed code + Lean error, the
       scribe returns a revised artifact dict through the existing
       `_parse_artifact` path:
       `uv run pytest tests/test_working_group.py -k repair -q`
-- [ ] Committee Phase 5 retries a failed verify up to `max_repair_attempts`,
+- [x] Committee Phase 5 retries a failed verify up to `max_repair_attempts`,
       feeding the Lean error back, and a repair that verifies counts as
       verified (foundation, dependency graph, goal progress — same as a
       first-shot success):
-      `uv run pytest tests/test_society.py -k repair_verifies -q`
-- [ ] Repair output is re-cleaned (`_clean_lean_code` — the HARN-02 leak
+      `uv run pytest tests/test_society.py -k repair_attempt_verifies -q`
+- [x] Repair output is re-cleaned (`_clean_lean_code` — the HARN-02 leak
       applies to any scribe payload) and re-checked against the goal's import
       restrictions before Lean sees it:
-      `uv run pytest tests/test_society.py -k repair_recleaned -q`
-- [ ] `max_repair_attempts = 0` reproduces today's one-shot behaviour exactly:
+      `uv run pytest tests/test_society.py -k "repair_output_is_recleaned or recheck_import" -q`
+- [x] `max_repair_attempts = 0` reproduces today's one-shot behaviour exactly:
       `uv run pytest tests/test_society.py -k zero_repair -q`
-- [ ] Repair spend lands in the ledger keyed to the task tag with outcome
+- [x] Repair spend lands in the ledger keyed to the task tag with outcome
       `group_repair` (distinct from `group_session`, so cost analysis can
       separate them):
-      `uv run pytest tests/test_working_group.py -k repair_ledger -q`
+      `uv run pytest tests/test_working_group.py -k repair_spend_recorded -q`
 
 ---
 
@@ -179,7 +179,7 @@ base** — measure discrimination against `origin/main` after committing.
 **Where**: mahpiya (4×H100) — human-run; the box is user-driven.
 **Run**: re-run the `committee_real_a` configuration, e.g.
 ```bash
-uv run python -m lms.run --groups --n-groups 3 --agents 3 --goal stacks-ch4-phase1 --generations 8 --verifier real --provider openai --output experiments/committee_real_b
+uv run python -m lms.run --groups --n-groups 3 --repair-attempts 2 --agents 3 --goal stacks-ch4-phase1 --generations 8 --verifier real --provider openai --output experiments/committee_real_b
 ```
 (then check `experiments/committee_real_b/artifacts.json` for `verified_lean`
 entries created by `group-*`, and the ledger for `group_repair` rows)
@@ -193,9 +193,13 @@ spend on its task tag.
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `scripts/verify/26Q3-01/verify_26Q3-HARN-14.sh` exits 0
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run mypy` clean
+- [x] All acceptance criteria checked off
+- [x] `scripts/verify/26Q3-01/verify_26Q3-HARN-14.sh` exits 0 (and fails at the
+      merge base — discrimination confirmed 2026-08-19)
+- [x] `uv run ruff format`, `uv run ruff check` clean on touched files;
+      `uv run mypy` introduces no new errors (all reported errors are on
+      pre-existing lines: the flat-path result shadow, run.py verifier
+      assignments, dotenv stub)
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
-- [ ] Tests included with implementation
+- [x] Tests included with implementation
 - [ ] Outcome Demo run by a human validator (or the card explicitly says `N/A` and why)
