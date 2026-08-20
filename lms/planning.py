@@ -244,6 +244,7 @@ class PlanningPanel:
 
         # 3. Chair proposes
         proposal = await self._get_chair_proposal(session)
+        proposal = await self._enforce_known_tags(session, proposal)
         session.proposals.append(proposal)
 
         # 4. Members discuss and vote
@@ -260,11 +261,62 @@ class PlanningPanel:
         else:
             # Chair revises based on feedback
             revised = await self._get_revised_proposal(session)
+            revised = await self._enforce_known_tags(session, revised)
             session.proposals.append(revised)
             session.final_assignments = revised.assignments
             session.approved = True  # Chair decides on tie
 
         return session.final_assignments
+
+    async def _enforce_known_tags(
+        self, session: PlanningSession, proposal: PlanningProposal
+    ) -> PlanningProposal:
+        """Force assignments onto tags that exist in the task graph.
+
+        Observed on the box 2026-08-19 (committee smoke): the chair invented
+        tags — LOGIC-001, FOUNDATION_CATEGORY — that exist nowhere in the
+        goal, `_get_task_content`'s fallback quietly turned them into
+        contentless "Define <tag>" tasks, and the groups free-associated far
+        from the goal. An unknown tag is a defect to correct, not a planning
+        choice to respect.
+
+        One corrective re-prompt; assignments still invalid after that are
+        dropped, and if none survive the allocation falls back to the
+        deterministic default so the generation still does real work.
+        """
+        valid = {t.tag for t in session.available_tasks}
+        invalid = sorted(
+            {a.task_tag for a in proposal.assignments if a.task_tag not in valid}
+        )
+        if not invalid:
+            return proposal
+
+        correction = (
+            f"\n\n## Correction Required\n"
+            f"Your previous proposal used task tags that do not exist: {invalid}. "
+            f"Assignments MUST use tags from the Available Tasks list verbatim: "
+            f"{sorted(valid)}. Re-issue the complete proposal in the same format."
+        )
+        content = await self._generate(
+            session.chair_id,
+            PLANNING_CHAIR_SYSTEM_PROMPT,
+            self._build_chair_prompt(session) + correction,
+            session.generation,
+        )
+        retried = self._parse_proposal(content, session.available_tasks)
+        kept = [a for a in retried.assignments if a.task_tag in valid]
+        dropped = sorted(
+            {a.task_tag for a in retried.assignments if a.task_tag not in valid}
+        )
+        if dropped:
+            print(f"  Planning panel: dropped unknown tags after retry: {dropped}")
+        if not kept:
+            print(
+                "  Planning panel: chair produced no valid assignments after "
+                "retry; falling back to default allocation from the graph"
+            )
+            kept = create_default_assignments(session.available_tasks, self.n_groups)
+        return PlanningProposal(assignments=kept, rationale=retried.rationale)
 
     def _get_recent_failures(self) -> list[str]:
         """Get summaries of recent failures from textbook."""

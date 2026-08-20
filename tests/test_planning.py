@@ -780,3 +780,77 @@ Work on limits.
 
         assert assignments == []
         assert provider.call_count == 0
+
+
+class TestTagEnforcement:
+    """Hallucinated task tags are corrected, not silently accepted.
+
+    On the 2026-08-19 committee smoke the chair invented tags (LOGIC-001,
+    FOUNDATION_CATEGORY) and the run built contentless "Define <tag>" tasks
+    from them. Assignments must land on tags that exist in the graph.
+    """
+
+    @staticmethod
+    def _graph(tags):
+        graph = DependencyGraph()
+        for tag in tags:
+            graph.add_node(
+                DependencyNode(
+                    tag=tag,
+                    name=f"Task {tag}",
+                    chapter=1,
+                    section="1.0",
+                    status=TaskStatus.AVAILABLE,
+                )
+            )
+        return graph
+
+    @staticmethod
+    def _proposal(tag):
+        return (
+            "<proposal><rationale>r</rationale><assignments>"
+            f'<group id="1" task="{tag}" priority="1">guidance</group>'
+            "</assignments></proposal>"
+        )
+
+    APPROVE = "<vote><decision>APPROVE</decision><comment>ok</comment></vote>"
+
+    @pytest.mark.asyncio
+    async def test_hallucinated_tag_gets_one_corrective_retry(self):
+        provider = MockProvider(
+            [
+                self._proposal("LOGIC-001"),  # invented tag
+                self._proposal("A"),  # corrected on retry
+                self.APPROVE,
+                self.APPROVE,
+                self.APPROVE,
+            ]
+        )
+        panel = PlanningPanel(
+            provider=provider, graph=self._graph(["A", "B"]), n_groups=1
+        )
+        assignments = await panel.run_session(generation=1)
+
+        assert [a.task_tag for a in assignments] == ["A"]
+        # chair + corrective retry + 3 votes
+        assert provider.call_count == 5
+
+    @pytest.mark.asyncio
+    async def test_unfixable_chair_falls_back_to_default_allocation(self):
+        provider = MockProvider(
+            [
+                self._proposal("LOGIC-001"),
+                self._proposal("FOUNDATION_CATEGORY"),  # still wrong after retry
+                self.APPROVE,
+                self.APPROVE,
+                self.APPROVE,
+            ]
+        )
+        panel = PlanningPanel(
+            provider=provider, graph=self._graph(["A", "B"]), n_groups=1
+        )
+        assignments = await panel.run_session(generation=1)
+
+        # Deterministic default from the graph, never the invented tags
+        assert [a.task_tag for a in assignments] == ["A"]
+        assert provider.call_count == 5

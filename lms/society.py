@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from lms.accounting import AttemptRecord, CostLedger, statement_key
-from lms.agent import Agent, AgentResponse, ReviewResult, IterativeResponse
+from lms.agent import (
+    Agent,
+    AgentResponse,
+    IterativeResponse,
+    ReviewResult,
+    _clean_lean_code,
+)
 from lms.artifacts import (
     ArtifactLibrary,
     ReviewQueue,
@@ -1032,8 +1038,13 @@ class Society:
 
             artifacts_created += 1
 
-            # Extract lean code from group result
-            lean_code = group_result.get("lean", group_result.get("blackboard", ""))
+            # Extract lean code from group result. The scribe's payload can
+            # carry a YAML block-scalar header and per-line indentation (the
+            # HARN-02 leak, seen again on the 2026-08-19 smoke: code starting
+            # with '|\n  import ...'), so clean before Lean ever sees it and
+            # keep the raw capture on the artifact record.
+            lean_code_raw = group_result.get("lean", group_result.get("blackboard", ""))
+            lean_code = _clean_lean_code(lean_code_raw) or ""
             if not lean_code:
                 self.dependency_graph.update_status(
                     group.config.task_tag, TaskStatus.AVAILABLE
@@ -1052,6 +1063,7 @@ class Society:
                     "description", group.config.task_name
                 ),
                 lean_code=lean_code,
+                lean_code_raw=lean_code_raw,
                 stacks_tag=group_result.get("stacks_tag", group.config.task_tag),
                 created_by=f"group-{group.config.group_id}",
                 generation=generation,
@@ -1286,7 +1298,14 @@ class Society:
             if defn.tag == task_tag:
                 return defn.content
 
-        return f"Define {task_tag}"
+        # The silent fallback here ("Define <tag>") is how the 2026-08-19
+        # smoke turned hallucinated panel tags into contentless tasks. The
+        # panel now validates tags against the graph, so reaching this line
+        # means a bypass — fail loudly rather than invent a task.
+        raise ValueError(
+            f"Task tag {task_tag!r} is not in goal '{self.goal.name}'. "
+            "Committee assignments must use tags from the goal's task graph."
+        )
 
     async def run(self, n_generations: int) -> list[GenerationResult]:
         """Run the society for multiple generations.
