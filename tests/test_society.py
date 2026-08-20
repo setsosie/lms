@@ -1322,3 +1322,66 @@ modified_code: |
         society = _committee_society(tmp_path, [], StubLeanVerifier())
         with pytest.raises(ValueError, match="not in goal"):
             society._get_task_content("LOGIC-001")
+
+
+class OrderedVerifier(StubLeanVerifier):
+    """Scripted results in call order: None = success, a string = that error."""
+
+    def __init__(self, script: list) -> None:
+        self.script = list(script)
+        self.calls: list[str] = []
+
+    async def verify(self, code: str) -> VerificationResult:
+        self.calls.append(code)
+        outcome = self.script.pop(0) if self.script else None
+        if outcome is None:
+            return self._result(success=True, code=code)
+        return self._result(success=False, code=code, error=outcome)
+
+
+class TestSameTagFailureAfterVerify:
+    """Several groups can share one tag (the goal graph gates everything
+    behind the first task). A failed artifact processed after the verified
+    one must not re-open the solved task — the next generation would be
+    re-assigned it and fail by redefinition collision."""
+
+    @pytest.mark.asyncio
+    async def test_same_tag_failure_after_verify_leaves_done(self, tmp_path: Path):
+        from lms.planning import WorkingGroupAssignment
+
+        artifact_response = """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: Category structure
+lean: |
+  structure Category where
+    Obj : Type
+</artifact>"""
+        verifier = OrderedVerifier([None, "unknown universe level 'u'"])
+        society = _committee_society(tmp_path, [artifact_response], verifier)
+        society.use_peer_review = False
+        society.max_repair_attempts = 0
+        society.n_working_groups = 2
+        society.use_planning_panel = True
+
+        assignments = [
+            WorkingGroupAssignment(
+                group_id=i,
+                task_tag="T1",
+                task_name="Category",
+                priority=1,
+                guidance="...",
+            )
+            for i in (1, 2)
+        ]
+        panel = mock.Mock()
+        panel.run_session = mock.AsyncMock(return_value=assignments)
+        panel.tokens_used = 0
+        with mock.patch("lms.society.PlanningPanel", return_value=panel):
+            result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 2
+        assert result.artifacts_verified == 1
+        assert society.dependency_graph is not None
+        assert society.dependency_graph.nodes["T1"].status == TaskStatus.DONE

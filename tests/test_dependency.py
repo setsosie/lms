@@ -4,7 +4,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from lms.dependency import (
     DependencyGraph,
@@ -434,9 +433,15 @@ class TestDependencyGraphFromGoal:
             description="...",
             source="...",
             definitions=[
-                StacksDefinition(tag="CH4-A", section="4.1", name="Ch4 A", content="..."),
-                StacksDefinition(tag="CH4-B", section="4.2", name="Ch4 B", content="..."),
-                StacksDefinition(tag="CH5-A", section="5.1", name="Ch5 A", content="..."),
+                StacksDefinition(
+                    tag="CH4-A", section="4.1", name="Ch4 A", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH4-B", section="4.2", name="Ch4 B", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH5-A", section="5.1", name="Ch5 A", content="..."
+                ),
             ],
         )
         graph = DependencyGraph.from_goal(goal)
@@ -457,7 +462,10 @@ class TestDependencyGraphFromGoal:
             artifact_ids=["art-a"],
         )
         defn_b = StacksDefinition(
-            tag="B", section="1.2", name="B", content="..."  # Not done
+            tag="B",
+            section="1.2",
+            name="B",
+            content="...",  # Not done
         )
         goal = Goal(
             name="Test",
@@ -658,11 +666,21 @@ class TestDependencyGraphIntegration:
             description="...",
             source="...",
             definitions=[
-                StacksDefinition(tag="CH4-CAT", section="4.2", name="Category", content="..."),
-                StacksDefinition(tag="CH4-FUNC", section="4.2", name="Functor", content="..."),
-                StacksDefinition(tag="CH4-NAT", section="4.2", name="NatTrans", content="..."),
-                StacksDefinition(tag="CH5-TOP", section="5.1", name="TopSpace", content="..."),
-                StacksDefinition(tag="CH5-CONT", section="5.2", name="Continuous", content="..."),
+                StacksDefinition(
+                    tag="CH4-CAT", section="4.2", name="Category", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH4-FUNC", section="4.2", name="Functor", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH4-NAT", section="4.2", name="NatTrans", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH5-TOP", section="5.1", name="TopSpace", content="..."
+                ),
+                StacksDefinition(
+                    tag="CH5-CONT", section="5.2", name="Continuous", content="..."
+                ),
             ],
         )
 
@@ -690,3 +708,52 @@ class TestDependencyGraphIntegration:
 
         # Progress should be 3/5
         assert graph.progress() == 0.6
+
+
+class TestDoneIsTerminal:
+    """A verified task must stay DONE; demotion needs the explicit path."""
+
+    def _graph(self) -> DependencyGraph:
+        graph = DependencyGraph()
+        graph.add_node(
+            DependencyNode(tag="T1", name="Category", chapter=4, section="4.1")
+        )
+        graph.add_node(
+            DependencyNode(
+                tag="T2", name="Functor", chapter=4, section="4.2", requires=["T1"]
+            )
+        )
+        graph._recalculate_availability()
+        return graph
+
+    def test_done_survives_available_demotion(self):
+        """A same-tag failure processed after the verify must not re-open
+        the task — that re-assigns solved work that can only fail by
+        redefinition collision."""
+        graph = self._graph()
+        graph.update_status("T1", TaskStatus.DONE, "artifact-1")
+        graph.update_status("T1", TaskStatus.AVAILABLE)
+
+        assert graph.nodes["T1"].status == TaskStatus.DONE
+        assert graph.nodes["T1"].artifact_id == "artifact-1"
+        # Dependents stay unlocked
+        assert graph.nodes["T2"].status == TaskStatus.AVAILABLE
+
+    def test_done_survives_in_progress_demotion(self):
+        """Re-assignment must not mark a solved task in-progress either."""
+        graph = self._graph()
+        graph.update_status("T1", TaskStatus.DONE, "artifact-1")
+        graph.update_status("T1", TaskStatus.IN_PROGRESS)
+
+        assert graph.nodes["T1"].status == TaskStatus.DONE
+
+    def test_revert_done_is_the_explicit_path(self):
+        """Rollback (e.g. a foundation entry withdrawn on a broken build)
+        goes through revert_done, and dependents re-lock."""
+        graph = self._graph()
+        graph.update_status("T1", TaskStatus.DONE, "artifact-1")
+        graph.revert_done("T1")
+
+        assert graph.nodes["T1"].status == TaskStatus.AVAILABLE
+        assert graph.nodes["T1"].artifact_id is None
+        assert graph.nodes["T2"].status == TaskStatus.BLOCKED

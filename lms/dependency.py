@@ -89,12 +89,41 @@ class DependencyGraph:
     def update_status(
         self, tag: str, status: TaskStatus, artifact_id: str | None = None
     ) -> None:
-        """Update a node's status and recalculate available tasks."""
-        if tag in self.nodes:
-            self.nodes[tag].status = status
-            if artifact_id is not None:
-                self.nodes[tag].artifact_id = artifact_id
-            self._recalculate_availability()
+        """Update a node's status and recalculate available tasks.
+
+        DONE is terminal here. Several groups can work one tag in a single
+        generation, and a failure processed after the verify used to demote
+        the solved task back to AVAILABLE — the next generation was then
+        re-assigned it and could only fail by redefinition collision
+        (committee_real_b gens 2-3: "`LMS.Foundation.Category` has already
+        been declared"). Rollback goes through `revert_done`, never here.
+        """
+        if tag not in self.nodes:
+            return
+        node = self.nodes[tag]
+        if node.status == TaskStatus.DONE and status != TaskStatus.DONE:
+            print(f"  [graph] {tag} is DONE; refusing demotion to {status.value}")
+            return
+        node.status = status
+        if artifact_id is not None:
+            node.artifact_id = artifact_id
+        self._recalculate_availability()
+
+    def revert_done(self, tag: str) -> None:
+        """Explicitly withdraw a completed task.
+
+        The door `update_status` refuses to be: for when a task's verified
+        artifact is later withdrawn (e.g. its foundation entry rolled back on
+        a broken build). Dependents re-lock via recalculation.
+        """
+        if tag not in self.nodes:
+            return
+        node = self.nodes[tag]
+        if node.status != TaskStatus.DONE:
+            return
+        node.status = TaskStatus.AVAILABLE
+        node.artifact_id = None
+        self._recalculate_availability()
 
     def _recalculate_availability(self) -> None:
         """Recalculate which nodes are available based on dependencies."""
