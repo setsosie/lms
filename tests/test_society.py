@@ -1385,3 +1385,48 @@ lean: |
         assert result.artifacts_verified == 1
         assert society.dependency_graph is not None
         assert society.dependency_graph.nodes["T1"].status == TaskStatus.DONE
+
+
+class TestCommitteeReuse:
+    """Committee artifacts must carry and link references, or reuse rate is
+    0.0% by construction and the ratchet warning fires on every run."""
+
+    @pytest.mark.asyncio
+    async def test_committee_links_references(self, tmp_path: Path):
+        from lms.artifacts import Artifact, ArtifactType
+
+        verifier = RecordingVerifier()
+        citing = """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: Category structure building on the base
+lean: |
+  structure Category where
+    Obj : Type
+references: [Category-base0001]
+</artifact>"""
+        responses = GROUP_SESSION_RESPONSES[:3] + [citing]
+        society = _committee_society(tmp_path, responses, verifier)
+        society.use_peer_review = False
+
+        base = Artifact(
+            id="Category-base0001",
+            type=ArtifactType.DEFINITION,
+            natural_language="Base category",
+            created_by="group-1",
+            generation=0,
+            lean_code="structure Base where\n  Obj : Type",
+        )
+        society.library.add(base)
+
+        await society.run_generation(1)
+
+        (citing_artifact,) = [
+            a for a in society.library.all() if a.id != "Category-base0001"
+        ]
+        assert "Category-base0001" in citing_artifact.references
+        assert society.library.get("Category-base0001").referenced_by == [
+            citing_artifact.id
+        ]
+        assert society.library.reused_artifact_count() == 1

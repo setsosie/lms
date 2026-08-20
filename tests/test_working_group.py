@@ -852,3 +852,50 @@ class TestWorkingGroupRepair:
 
         assert "group_repair" in [r.outcome for r in ledger.records]
         assert ledger.records[-1].statement_key == statement_key(stacks_tag="0013")
+
+
+class TestArtifactReferences:
+    """The scribe cites what the group built on; the parser captures it."""
+
+    def test_scribe_prompt_asks_for_references(self):
+        assert "references" in SCRIBE_SYSTEM_PROMPT
+
+    def test_parse_artifact_captures_references(self):
+        config = WorkingGroupConfig(
+            group_id=1,
+            task_tag="T2",
+            task_name="Functor",
+            task_content="...",
+            guidance="...",
+        )
+        group = WorkingGroup(config=config, provider=None)
+        artifact = group._parse_artifact(
+            """<artifact>
+type: definition
+name: Functor
+stacks_tag: T2
+description: builds on the foundation Category
+lean: |
+  def F := 1
+references: [Category-715b6d9c, base-1]
+notes: |
+  cites the foundation
+</artifact>"""
+        )
+        assert artifact["references"] == ["Category-715b6d9c", "base-1"]
+        assert artifact["lean"] == "def F := 1"
+        assert "cites the foundation" in artifact["notes"]
+
+    def test_parse_artifact_no_references_is_empty(self):
+        config = WorkingGroupConfig(
+            group_id=1,
+            task_tag="T1",
+            task_name="Category",
+            task_content="...",
+            guidance="...",
+        )
+        group = WorkingGroup(config=config, provider=None)
+        artifact = group._parse_artifact(
+            "<artifact>\ntype: definition\nname: X\nlean: |\n  def x := 1\n</artifact>"
+        )
+        assert artifact.get("references", []) == []

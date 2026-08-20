@@ -222,6 +222,8 @@ Your role is to compile the final artifact:
 4. Add notes summarizing the group's key decisions
 5. `stacks_tag` must be the task's tag EXACTLY as assigned — do not decorate
    or rename it
+6. In `references`, cite the ids of prior verified artifacts your code
+   builds on (from the Foundation summary) — leave `[]` if none
 
 The artifact must be ready for LEAN verification.
 
@@ -233,6 +235,7 @@ stacks_tag: TAG
 description: Natural language description
 lean: |
   -- Your LEAN 4 code here
+references: [id-of-artifact-used, another-id]
 notes: |
   Summary of group discussion and key decisions
 </artifact>"""
@@ -405,7 +408,8 @@ You are the SCRIBE. Compile the final artifact:
 
 The artifact MUST be complete and ready for LEAN verification.
 
-Use the <artifact> format with type, name, stacks_tag, description, lean, and notes fields."""
+Use the <artifact> format with type, name, stacks_tag, description, lean,
+references, and notes fields."""
 
         content = await self._generate(scribe_id, SCRIBE_SYSTEM_PROMPT, prompt)
         self.state.add_message(scribe_id, Role.SCRIBE, content)
@@ -452,7 +456,7 @@ The artifact you compiled FAILED Lean verification.
 
 Analyze the error and revise the code. Reply with the corrected artifact in
 the same <artifact> format with type, name, stacks_tag, description, lean,
-and notes fields."""
+references, and notes fields."""
 
         content = await self._generate(
             scribe_id, SCRIBE_SYSTEM_PROMPT, prompt, outcome="group_repair"
@@ -584,6 +588,15 @@ and notes fields."""
                 artifact["lean"] = lean_match.group(1).strip()
             if notes_match:
                 artifact["notes"] = notes_match.group(1).strip()
+
+            refs_match = re.search(r"references:\s*([^\n]+)", content)
+            if refs_match:
+                raw = refs_match.group(1).strip().strip("[]")
+                artifact["references"] = [
+                    r.strip().strip("'\"")
+                    for r in raw.split(",")
+                    if r.strip().strip("'\"")
+                ]
 
         # Fallback: use blackboard as lean code
         if "lean" not in artifact and self.state.blackboard:
