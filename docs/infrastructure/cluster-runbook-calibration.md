@@ -720,6 +720,43 @@ list; the signatures get repaired in one pass and re-run against the cache.
 `calibration-program.md` §4 slice decision (pick the higher-N1 arc) and closes
 Sprint 3 DoD item 1.
 
+## Step 7b — Gate A novelty control (Sprint 3 DoD item 3)
+
+**Run this before trusting Step 7's densities.** The archived
+`stacks_ch4_phase1` artifacts are known Mathlib reimplementations, so the
+classifier must read them ~all N0. The failure mode this catches: search
+queries that never match anything produce all-stages-empty, high-confidence
+N1 verdicts *everywhere* — indistinguishable from a genuinely novel arc until
+a known-N0 corpus goes through the same pipeline.
+
+Clean the historical records first (pre-HARN-02 payloads carry the YAML
+block-scalar leak; searching on `|`-prefixed source tests the leak, not
+Mathlib):
+
+```bash
+uv run python scripts/reextract_lean_code.py experiments/stacks_ch4_phase1
+```
+
+```bash
+uv run python scripts/make_novelty_control.py experiments/stacks_ch4_phase1/artifacts.reextracted.json --out experiments/n1_density/gate_a_control_arc.json
+```
+
+```bash
+uv run python scripts/measure_n1_density.py experiments/n1_density/gate_a_control_arc.json --json-out experiments/n1_density/gate_a_control.json
+```
+
+52 statements against loogle's 3/30s limit is a while, but confident N0 hits
+short-circuit the ladder, so a healthy run is much faster than 52 full
+searches.
+
+**Checkpoint 7b**: N0 accounts for essentially all 52. Some INCONCLUSIVE is
+tolerable (that is the D4 route working); a substantial N1 count is not — it
+means the instrument is broken, **both Step 7 densities are void**, and the
+fix is in the classifier's query construction, not in the arcs. An N1-heavy
+result here specifically suggests name-bias: the artifacts reimplement
+Mathlib under custom names, so only the content-level stages (`exact?` probe,
+semantic search) can catch them.
+
 ---
 
 ## Step 8 — the first full committee run
