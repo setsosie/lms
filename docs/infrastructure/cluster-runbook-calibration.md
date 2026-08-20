@@ -565,6 +565,14 @@ not the bottleneck. (The faster-comms alternative — two TP=2 instances, one
 per pair — needs a request router the harness does not have; card it only on
 evidence.)
 
+**Result, 2026-08-19:** GPU0↔GPU1 and GPU2↔GPU3 are `NV12`; every cross-pair
+path is `SYS` — not merely PCIe but the UPI socket interconnect, since each
+pair sits on its own NUMA node (node 0: CPUs 0–31,64–95; node 1: 32–63,
+96–127). TP=4 comms take the slowest path on the legend; accepted per the
+above. Also recorded: 128 logical CPUs total, so the sbatch's
+`--cpus-per-task=16` has ample room to grow if concurrent Lean elaboration
+becomes the constraint.
+
 Then serve exactly as 4c with two changed values:
 
 ```bash
