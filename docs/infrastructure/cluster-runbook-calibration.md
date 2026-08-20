@@ -583,6 +583,13 @@ Healthy progress is as in 4c but with `world_size=4`. **Record the
 `GPU KV cache size: ... tokens` line** — expected ~2.3M. If it is not roughly
 double 4c's 1,139,984, stop and report rather than continuing.
 
+**Result, 2026-08-19 (first TP=4 serve):** `GPU KV cache size: 2,903,296
+tokens` — 2.55× the TP=2 figure, above prediction because halving the weights
+per GPU (~30.5 → ~15.3 GB) frees budget on all four cards. That is ~22
+full-length sequences at `--max-model-len 131072`; the 9-agent Phase C config
+worst-cases at ~40% of capacity. Checkpoint 4 re-run green: `/v1/models`
+listed `lms-generalist` with `max_model_len: 131072`.
+
 Checkpoint 4 applies verbatim: same curl checks, same
 `"max_model_len":131072`.
 
