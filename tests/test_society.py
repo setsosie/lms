@@ -1115,3 +1115,54 @@ class TestIterativeReuse:
 
         assert society.library.get("base-1").referenced_by == ["derived-1"]
         assert society.library.reused_artifact_count() == 1
+
+
+class TestCommitteeLeanCleaning:
+    """Committee payloads reach Lean cleaned; hallucinated tags fail loudly."""
+
+    @pytest.mark.asyncio
+    async def test_group_lean_payload_is_cleaned_before_verification(
+        self, tmp_path: Path
+    ):
+        """The 2026-08-19 smoke: scribe code arrived as '|\\n  import ...'."""
+        verifier = RecordingVerifier()
+        responses = [
+            "Let's define Category.",
+            "```lean\nstructure Category where\n  Obj : Type\n```",
+            "CONSENSUS REACHED",
+            # The literal leak seen on the box: block-scalar header plus
+            # per-line indentation inside the lean field.
+            """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: Category structure
+lean: |
+  |
+    import Mathlib.CategoryTheory.Category.Basic
+
+    structure Category where
+      Obj : Type
+</artifact>""",
+            """<review>
+decision: APPROVE
+reasoning: fine
+</review>""",
+        ]
+        society = _committee_society(tmp_path, responses, verifier)
+
+        await society.run_generation(0)
+
+        assert len(verifier.calls) == 1
+        code = verifier.calls[0]
+        assert code.startswith("import Mathlib.CategoryTheory.Category.Basic")
+        assert "\nstructure Category where" in code
+        (artifact,) = society.library.all()
+        assert artifact.lean_code == code
+        # The raw capture keeps the leak visible in the record
+        assert artifact.lean_code_raw.startswith("|")
+
+    def test_get_task_content_unknown_tag_raises(self, tmp_path: Path):
+        society = _committee_society(tmp_path, [], StubLeanVerifier())
+        with pytest.raises(ValueError, match="not in goal"):
+            society._get_task_content("LOGIC-001")
