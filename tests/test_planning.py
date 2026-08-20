@@ -854,3 +854,60 @@ class TestTagEnforcement:
         # Deterministic default from the graph, never the invented tags
         assert [a.task_tag for a in assignments] == ["A"]
         assert provider.call_count == 5
+
+
+class TestPlanningTopUp:
+    """Idle groups are refilled from unassigned available tasks.
+
+    committee_yolo_a ran 17 of 100 generations with one working group
+    instead of three: a short or partially-dropped proposal was returned
+    as-is, and surplus groups idled while available tasks went unworked.
+    """
+
+    def _make(self, n_tasks: int, n_groups: int = 3):
+        tasks = [
+            DependencyNode(tag=f"T{i}", name=f"Task {i}", chapter=4, section="4.1")
+            for i in range(n_tasks)
+        ]
+        panel = PlanningPanel(provider=None, graph=None, n_groups=n_groups)
+        session = PlanningSession(
+            generation=1,
+            chair_id="chair",
+            member_ids=["m1", "m2", "m3"],
+            available_tasks=tasks,
+        )
+        return panel, session
+
+    def _assignment(self, group_id: int, tag: str) -> WorkingGroupAssignment:
+        return WorkingGroupAssignment(
+            group_id=group_id,
+            task_tag=tag,
+            task_name=tag,
+            priority=group_id,
+            guidance="",
+        )
+
+    def test_short_assignment_is_topped_up_to_n_groups(self):
+        panel, session = self._make(n_tasks=3)
+        result = panel._top_up([self._assignment(1, "T0")], session)
+        assert len(result) == 3
+        assert {a.task_tag for a in result} == {"T0", "T1", "T2"}
+        assert {a.group_id for a in result} == {1, 2, 3}
+
+    def test_full_assignment_is_untouched(self):
+        panel, session = self._make(n_tasks=3)
+        full = [self._assignment(i + 1, f"T{i}") for i in range(3)]
+        assert panel._top_up(full, session) == full
+
+    def test_top_up_is_bounded_by_available_tasks(self):
+        panel, session = self._make(n_tasks=2)
+        result = panel._top_up([self._assignment(1, "T0")], session)
+        assert len(result) == 2
+        assert {a.task_tag for a in result} == {"T0", "T1"}
+
+    def test_assigned_tag_is_never_duplicated(self):
+        panel, session = self._make(n_tasks=3)
+        result = panel._top_up([self._assignment(2, "T1")], session)
+        tags = [a.task_tag for a in result]
+        assert len(tags) == len(set(tags))
+        assert {a.group_id for a in result} == {1, 2, 3}

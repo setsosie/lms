@@ -438,3 +438,75 @@ class TestGoalFileLoading:
         names = list_goals()
         assert "stacks-kernel-track-b" in names
         assert "stacks-ch4-phase1" in names
+
+
+class TestImportValidationDotAware:
+    """Prefix matching is dot-aware: a module matches itself and its
+    submodules, never a lookalike sharing the prefix string."""
+
+    def test_prefix_requires_dot_boundary(self):
+        valid, error = validate_imports(
+            "import Mathlib.TacticFoo", allowed=["Mathlib.Tactic"]
+        )
+        assert not valid
+        assert "Mathlib.TacticFoo" in (error or "")
+
+    def test_submodule_of_allowed_passes(self):
+        valid, _ = validate_imports(
+            "import Mathlib.Tactic.Ring", allowed=["Mathlib.Tactic"]
+        )
+        assert valid
+
+    def test_forbidden_matches_submodules_not_lookalikes(self):
+        blocked, _ = validate_imports(
+            "import Mathlib.CategoryTheory.NatTrans",
+            forbidden=["Mathlib.CategoryTheory"],
+        )
+        assert not blocked
+        valid, _ = validate_imports(
+            "import Mathlib.CategoryTheoryX",
+            forbidden=["Mathlib.CategoryTheory"],
+        )
+        assert valid
+
+    def test_rejection_message_lists_allowed_imports(self):
+        """The message is fed verbatim to the scribe's repair turn; an agent
+        cannot pick a legal import it has never been shown."""
+        valid, error = validate_imports(
+            "import Mathlib.Data.Equiv.Basic",
+            allowed=["LMS.Foundation", "Mathlib.Logic.Basic"],
+        )
+        assert not valid
+        assert "LMS.Foundation" in (error or "")
+        assert "Mathlib.Logic.Basic" in (error or "")
+
+
+class TestPhase1ImportPolicy:
+    """Phase 1 shipped with no import policy at all, so the Society's
+    pre-verify check was a no-op and hallucinated module paths travelled
+    to Lean to die as "object file does not exist" (committee_yolo_a)."""
+
+    def test_phase_1_declares_a_policy(self):
+        from lms.goals import STACKS_CHAPTER_4_PHASE_1
+
+        assert STACKS_CHAPTER_4_PHASE_1.allowed_imports
+        assert STACKS_CHAPTER_4_PHASE_1.forbidden_imports
+
+    def test_foundation_and_whitelist_pass(self):
+        from lms.goals import STACKS_CHAPTER_4_PHASE_1
+
+        valid, error = STACKS_CHAPTER_4_PHASE_1.validate_code(
+            "import LMS.Foundation\nimport Mathlib.Tactic.Common\n"
+        )
+        assert valid, error
+
+    def test_yolo_a_hallucinated_paths_are_rejected(self):
+        from lms.goals import STACKS_CHAPTER_4_PHASE_1
+
+        for imp in [
+            "Mathlib.Data.Equiv.Basic",
+            "Mathlib.CategoryTheory.NaturalTransformation",
+            "Mathlib.CategoryTheory.NatTrans",
+        ]:
+            valid, _ = STACKS_CHAPTER_4_PHASE_1.validate_code(f"import {imp}\n")
+            assert not valid, imp

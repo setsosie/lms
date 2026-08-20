@@ -43,6 +43,19 @@ FORBIDDEN_IMPORTS = [
     "Mathlib.CategoryTheory",  # All of category theory - defeats the purpose!
 ]
 
+# What Phase 1 agents may import. Phase 1 shipped with no import policy at
+# all, so `Society`'s pre-verify check was a no-op and hallucinated module
+# paths (`Mathlib.Data.Equiv.Basic`, mathlib3's layout) travelled all the way
+# to Lean to die as "object file does not exist" (committee_yolo_a, 6
+# artifacts). The foundation itself, everything the FROM-SCRATCH whitelist
+# grants, plus the two extra modules Foundation.lean's own header imports.
+ALLOWED_IMPORTS_PHASE_1 = [
+    "LMS.Foundation",
+    *ALLOWED_IMPORTS_FOUNDATION,
+    "Mathlib.Data.Nat.Basic",
+    "Mathlib.Algebra.Ring.Basic",
+]
+
 
 def validate_imports(
     code: str, allowed: list[str] | None = None, forbidden: list[str] | None = None
@@ -63,17 +76,29 @@ def validate_imports(
     imports = re.findall(r"^\s*import\s+([A-Za-z][A-Za-z0-9_.]*)", code, re.MULTILINE)
 
     for imp in imports:
-        # Check forbidden first
+        # Check forbidden first. Dot-aware: `Mathlib.CategoryTheory` matches
+        # itself and its submodules, not `Mathlib.CategoryTheoryFoo`.
         if forbidden:
             for f in forbidden:
-                if imp.startswith(f):
-                    return False, f"Forbidden import: {imp} (matches {f})"
+                if imp == f or imp.startswith(f + "."):
+                    return False, (
+                        f"Forbidden import: {imp} (matches {f}). This goal "
+                        f"requires building these concepts from scratch — "
+                        f"use the verified LMS.Foundation entries instead."
+                    )
 
-        # Check allowed (if specified)
+        # Check allowed (if specified). The message carries the whole list:
+        # it is fed back verbatim to the scribe's repair turn, and an agent
+        # cannot pick a legal import it has never been shown
+        # (committee_yolo_a lost 6 artifacts to hallucinated module paths).
         if allowed is not None:
-            is_allowed = any(imp.startswith(a) or imp == a for a in allowed)
+            is_allowed = any(imp == a or imp.startswith(a + ".") for a in allowed)
             if not is_allowed:
-                return False, f"Import not in allowed list: {imp}"
+                return False, (
+                    f"Import not in allowed list: {imp}. The ONLY legal "
+                    f"imports are: {', '.join(allowed)}. Do not guess other "
+                    f"module paths — they do not exist."
+                )
 
     return True, None
 
@@ -235,9 +260,14 @@ STACKS_CHAPTER_4_PHASE_1 = Goal(
     name="Stacks Project Chapter 4: Categories (Phase 1)",
     description=(
         "Formalize basic category theory from The Stacks Project. "
-        "You have definitions and milestone targets. Figure out how to express them in LEAN 4."
+        "You have definitions and milestone targets. Figure out how to express them in LEAN 4. "
+        "Import policy: `import LMS.Foundation` plus basic Mathlib logic/tactic modules only. "
+        "Mathlib.CategoryTheory is FORBIDDEN — define categorical structures yourself, "
+        "building on the verified Foundation. Never guess module paths."
     ),
     source="The Stacks Project, Chapter 4: Categories (https://stacks.math.columbia.edu/tag/0011)",
+    allowed_imports=ALLOWED_IMPORTS_PHASE_1,
+    forbidden_imports=FORBIDDEN_IMPORTS,
     definitions=[
         # === DEFINITIONS (the mathematical content to formalize) ===
         StacksDefinition(

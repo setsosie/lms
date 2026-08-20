@@ -918,6 +918,14 @@ Create foundational definitions that future generations can build upon.
             f"write `{self.NAMESPACE}.Category` in full; a bare `Category` is "
             f"an unknown identifier.",
             "",
+            "⚠ Even when a name below matches a Mathlib concept, Mathlib's "
+            "API for it does NOT exist here. The ONLY fields and constants "
+            "available are the ones printed below. Anything else — class-"
+            "style `Category C`, `.Hom`, `𝟙`, `.obj` — is an unknown "
+            "identifier. Writing Mathlib's API against these definitions is "
+            "the single most common verification failure. Read the field "
+            "names below and use exactly those.",
+            "",
         ]
 
         # Group entries by generation for clarity

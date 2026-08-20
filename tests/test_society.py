@@ -1430,3 +1430,143 @@ references: [Category-base0001]
             citing_artifact.id
         ]
         assert society.library.reused_artifact_count() == 1
+
+
+class TestMechanicalReferenceDerivation:
+    """References are derived from the code, not trusted to the scribe.
+
+    committee_yolo_a ran all 100 generations with the citation prompt live
+    and 0 of 266 artifacts carried a reference — while ~97 failures were
+    reuse *attempts* and one verified artifact demonstrably built on
+    another. Self-report is a supplement, not a measurement.
+    """
+
+    def _society_with_foundation_entry(self, tmp_path: Path) -> Society:
+        from lms.artifacts import Artifact, ArtifactType
+
+        society = _committee_society(tmp_path, [], RecordingVerifier())
+        base = Artifact(
+            id="art-0013",
+            type=ArtifactType.DEFINITION,
+            natural_language="Definition of a category",
+            lean_code=(
+                "structure Category where\n  Ob : Type\n  Mor : Ob → Ob → Type\n"
+            ),
+            status=VerificationStatus.VERIFIED_LEAN,
+            created_by="group-1",
+            generation=8,
+        )
+        society.foundation.add_artifact(base)
+        return society
+
+    def test_usage_of_foundation_name_is_derived(self, tmp_path: Path):
+        society = self._society_with_foundation_entry(tmp_path)
+        code = "structure Functor (C D : Category) where\n  objMap : C.Ob → D.Ob\n"
+        assert society._derive_references(code) == {"art-0013"}
+
+    def test_self_definition_is_not_a_reference(self, tmp_path: Path):
+        society = self._society_with_foundation_entry(tmp_path)
+        code = "structure Category where\n  Ob : Type\n"
+        assert society._derive_references(code) == set()
+
+    def test_comment_mention_is_not_a_reference(self, tmp_path: Path):
+        society = self._society_with_foundation_entry(tmp_path)
+        code = "-- unlike Category in Mathlib\ndef f : Nat := 1\n/- a Category -/\n"
+        assert society._derive_references(code) == set()
+
+    def test_partial_identifier_does_not_match(self, tmp_path: Path):
+        society = self._society_with_foundation_entry(tmp_path)
+        code = "structure CategoryTheory where\n  x : Nat\n"
+        assert society._derive_references(code) == set()
+
+    @pytest.mark.asyncio
+    async def test_uncited_reuse_is_linked_end_to_end(self, tmp_path: Path):
+        """A scribe that cites nothing still gets its reuse recorded."""
+        from lms.artifacts import Artifact, ArtifactType
+
+        uncited = """<artifact>
+type: definition
+name: Functor
+stacks_tag: T1
+description: builds on Category without citing it
+lean: |
+  structure Functor (C : Category) where
+    objMap : C.Ob → C.Ob
+</artifact>"""
+        responses = GROUP_SESSION_RESPONSES[:3] + [uncited]
+        society = _committee_society(tmp_path, responses, RecordingVerifier())
+        society.use_peer_review = False
+
+        base = Artifact(
+            id="art-0013",
+            type=ArtifactType.DEFINITION,
+            natural_language="Definition of a category",
+            lean_code="structure Category where\n  Ob : Type\n",
+            status=VerificationStatus.VERIFIED_LEAN,
+            created_by="group-1",
+            generation=0,
+        )
+        society.library.add(base)
+        society.foundation.add_artifact(base)
+
+        await society.run_generation(1)
+
+        (functor,) = [a for a in society.library.all() if a.id != "art-0013"]
+        assert "art-0013" in functor.references
+        assert society.library.reused_artifact_count() == 1
+
+
+class TestInitialImportViolationRepair:
+    """An import violation in the first draft gets repair turns, exactly
+    like a compile error. The previous hard-fail spent zero repair turns on
+    the one error class whose message names the exact fix."""
+
+    OFFENDING = """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: first draft with a forbidden import
+lean: |
+  import Mathlib.Tactic
+
+  structure Category where
+    Obj : Type
+</artifact>"""
+
+    @pytest.mark.asyncio
+    async def test_initial_violation_is_repaired(self, tmp_path: Path):
+        verifier = RecordingVerifier()
+        responses = GROUP_SESSION_RESPONSES[:3] + [self.OFFENDING, REPAIR_RESPONSE]
+        society = _committee_society(tmp_path, responses, verifier)
+        society.use_peer_review = False
+        assert society.goal is not None
+        society.goal.forbidden_imports = ["Mathlib.Tactic"]
+
+        result = await society.run_generation(0)
+
+        # The offending draft never reached Lean; the repair did and passed.
+        assert len(verifier.calls) == 1
+        assert "Mathlib.Tactic" not in verifier.calls[0]
+        assert result.artifacts_verified == 1
+
+    @pytest.mark.asyncio
+    async def test_unrepaired_violation_fails_with_restriction_error(
+        self, tmp_path: Path
+    ):
+        verifier = RecordingVerifier()
+        responses = GROUP_SESSION_RESPONSES[:3] + [self.OFFENDING]
+        society = _committee_society(tmp_path, responses, verifier)
+        society.use_peer_review = False
+        society.max_repair_attempts = 0
+        assert society.goal is not None
+        society.goal.forbidden_imports = ["Mathlib.Tactic"]
+
+        result = await society.run_generation(0)
+
+        assert verifier.calls == []
+        assert result.artifacts_verified == 0
+        (artifact,) = society.library.all()
+        assert artifact.status is VerificationStatus.FAILED
+        assert "Import restriction" in (artifact.verification_error or "")
+        assert society.dependency_graph is not None
+        assert society.dependency_graph.nodes["T1"].status == TaskStatus.AVAILABLE
