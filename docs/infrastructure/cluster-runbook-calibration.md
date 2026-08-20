@@ -480,7 +480,8 @@ simultaneously, so a 1-agent Gate B run uses roughly 11% of KV capacity.
 **Phase C sizing follows from this**: there is headroom for substantially more
 concurrent agents on GPUs 0–1, or for BFS-Prover-V1-7B on GPUs 2–3, without
 revisiting `--gpu-memory-utilization` (left at its 0.9 default) or
-`--max-model-len`.
+`--max-model-len`. *(Superseded 2026-08-19: Step 8 and Phase C serve on all
+four GPUs instead — see 4d.)*
 
 If you already ran `uv pip install vllm` against the project, `cd ~/code/lms &&
 uv sync` prunes vLLM and torch back out of `.venv` and restores the pinned
@@ -534,6 +535,59 @@ succeeded — it is the field that would otherwise 400 every agent request. Want
 **Result, 2026-08-10:** ✅ both. `/v1/models` reported `lms-generalist`
 (root `Qwen/Qwen3-Coder-30B-A3B-Instruct`) with `max_model_len: 131072`, and the
 completion returned `ok` in 2 tokens.
+
+### 4d — Serve on all four GPUs (go-forward, decided 2026-08-19)
+
+4c's TP=2 serve stays above as the recorded 2026-08-10 result; from Step 8
+onward, serve on all four. Two reasons, one caution:
+
+- **KV headroom is the point.** At TP=2 the cache is 1,139,984 tokens and the
+  Phase C 9-agent config can ask for 9 × 131,072 = 1,179,648 — slightly over.
+  Near the ceiling vLLM preempts and recomputes sequences, degrading exactly
+  the config the population hypothesis leans on. TP=4 roughly doubles the
+  cache (weights per GPU halve to ~15 GB), so expect ~2.3M tokens.
+- **Speed is not the point.** Decode was never the bottleneck — Lean
+  elaboration is — so do not read a faster run into this change.
+- **This claims the whole box.** Check the GPUs are idle before loading
+  (`nvidia-smi`), the same check the sbatch preflight enforces.
+
+Record the topology once — it is the fact that would justify two TP=2
+instances over one TP=4 later, if serving evidence ever demands that:
+
+```bash
+nvidia-smi topo -m
+```
+
+H100 NVL cards are NVLink-bridged in pairs: expect `NV#` between GPUs 0–1 and
+between 2–3, and PCIe (`PIX`/`PHB`/`SYS`) across the pairs. TP=4 then crosses
+PCIe on the all-reduce, which is acceptable here precisely because decode is
+not the bottleneck. (The faster-comms alternative — two TP=2 instances, one
+per pair — needs a request router the harness does not have; card it only on
+evidence.)
+
+Then serve exactly as 4c with two changed values:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 "$SCRATCH/vllm-env/bin/vllm" serve Qwen/Qwen3-Coder-30B-A3B-Instruct --port 8000 --tensor-parallel-size 4 --max-model-len 131072 --served-model-name lms-generalist 2>&1 | tee "$SCRATCH/vllm.log"
+```
+
+Healthy progress is as in 4c but with `world_size=4`. **Record the
+`GPU KV cache size: ... tokens` line** — expected ~2.3M. If it is not roughly
+double 4c's 1,139,984, stop and report rather than continuing.
+
+Checkpoint 4 applies verbatim: same curl checks, same
+`"max_model_len":131072`.
+
+Bookkeeping consequences:
+
+- **GPU-hours for CVFN are now 4 × wall-clock**, not 2 ×. The cost model
+  charges the allocation, not the utilization.
+- BFS-Prover-V1-7B co-residency on GPUs 2–3 (the option 4c noted) is off the
+  table while TP=4 holds the box. It was a post-CVFN idea anyway.
+
+`scripts/slurm/lms_run.sbatch` defaults now match (`--gres=gpu:h100:4`,
+`TP_SIZE=4`, 8 h walltime). To hand half the box back on a day it is shared:
+`sbatch --gres=gpu:h100:2 --time=04:00:00 --export=ALL,TP_SIZE=2 scripts/slurm/lms_run.sbatch`
 
 ---
 
@@ -727,7 +781,8 @@ Sprint 3 DoD item 1.
 **Prereqs**: PR #35 (committee wiring) merged; #33 strongly recommended first
 (without it the oracle still false-negatives on core-name collisions); #34 and
 #40 if targeting the Stacks kernel goal; vLLM serving and the harness pointed
-at it exactly as Steps 4–5 configured. **Step 6's corpus guard applies
+at it exactly as Steps 4–5 configured — **serve per 4d (all four GPUs)** from
+here on. **Step 6's corpus guard applies
 verbatim here — run it before and after.**
 
 Smoke on the historical goal first, to validate the wiring against a known
