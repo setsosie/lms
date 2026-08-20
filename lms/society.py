@@ -166,6 +166,10 @@ class Society:
         self.use_working_groups: bool = False  # Enable working group mode
         self.n_working_groups: int = 3  # Number of parallel groups
         self.max_turns_per_group: int = 5  # Max turns per group
+        # Scribe repair turns after a failed verify. 2, not 5: every error
+        # class in committee_real_a was single-retry-fixable, and the group
+        # already spent a whole session converging on the approach.
+        self.max_repair_attempts: int = 2
         self.use_planning_panel: bool = True  # Use planning panel for allocation
         self.dependency_graph: DependencyGraph | None = None  # Task dependencies
 
@@ -1197,6 +1201,53 @@ class Society:
                         continue
 
                 verify_result = await self.verifier.verify(lean_code)
+
+                # A failed verify goes back to the group's scribe with the
+                # Lean error, up to max_repair_attempts times. One-shot
+                # committee groups burned a whole ~30K-token session per
+                # failure while the iterative path fixed the same error
+                # classes with a single feedback turn (committee_real_a).
+                repair_tokens_before = group.tokens_used
+                attempts_used = 0
+                last_error = verify_result.error
+                while (
+                    not verify_result.success
+                    and attempts_used < self.max_repair_attempts
+                ):
+                    attempts_used += 1
+                    repaired = await group.repair(
+                        lean_code, last_error or "unknown error"
+                    )
+                    new_code = _clean_lean_code((repaired or {}).get("lean", "")) or ""
+                    # The artifact parser falls back to the blackboard, which
+                    # can hand back the code that just failed — stop rather
+                    # than re-verify it.
+                    if not new_code or new_code == lean_code:
+                        break
+                    if self.goal and (
+                        self.goal.allowed_imports or self.goal.forbidden_imports
+                    ):
+                        valid, error = self.goal.validate_code(new_code)
+                        if not valid:
+                            # Burns an attempt; the restriction is the error
+                            # the next repair turn sees. The offending code is
+                            # never adopted and never reaches Lean.
+                            last_error = f"Import restriction: {error}"
+                            continue
+                    lean_code = new_code
+                    artifact.lean_code = new_code
+                    artifact.notes = (
+                        artifact.notes or ""
+                    ) + f"\n[Repaired by scribe, attempt {attempts_used}]"
+                    verify_result = await self.verifier.verify(lean_code)
+                    last_error = verify_result.error
+
+                # Phase 2 summed session spend before repairs existed; the
+                # repair delta would otherwise vanish from the totals.
+                repair_tokens = group.tokens_used - repair_tokens_before
+                generation_tokens += repair_tokens
+                self.total_tokens_used += repair_tokens
+
                 artifact.status = verify_result.status
                 await self._apply_gates(artifact)
 

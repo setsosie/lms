@@ -946,6 +946,129 @@ def _committee_society(
     return society
 
 
+class ScriptedVerifier(StubLeanVerifier):
+    """Fails with scripted errors until the script runs out, then accepts.
+
+    Records every code string it was asked to verify, like RecordingVerifier.
+    """
+
+    def __init__(self, errors: list[str]) -> None:
+        self.errors = list(errors)
+        self.calls: list[str] = []
+
+    async def verify(self, code: str) -> VerificationResult:
+        self.calls.append(code)
+        if self.errors:
+            return self._result(success=False, code=code, error=self.errors.pop(0))
+        return self._result(success=True, code=code)
+
+
+# The scribe's answer to a repair turn: universe error fixed.
+REPAIR_RESPONSE = """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: Category structure, universe fixed
+lean: |
+  universe u
+
+  structure Category where
+    Obj : Type u
+</artifact>"""
+
+
+class TestCommitteeRepairLoop:
+    """A failed verify goes back to the group's scribe with the Lean error."""
+
+    @pytest.mark.asyncio
+    async def test_repair_attempt_verifies_and_counts(self, tmp_path: Path):
+        """A repaired artifact that verifies counts like a first-shot success."""
+        verifier = ScriptedVerifier(["unknown universe level 'u'"])
+        responses = GROUP_SESSION_RESPONSES + [REPAIR_RESPONSE]
+        society = _committee_society(tmp_path, responses, verifier)
+        society.use_peer_review = False
+
+        result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 2
+        assert "Type u" in verifier.calls[1]
+        assert result.artifacts_verified == 1
+        assert society.dependency_graph is not None
+        assert society.dependency_graph.nodes["T1"].status == TaskStatus.DONE
+        (artifact,) = society.library.all()
+        assert artifact.lean_code == verifier.calls[1]
+        assert "Repaired by scribe" in (artifact.notes or "")
+
+    @pytest.mark.asyncio
+    async def test_repair_output_is_recleaned(self, tmp_path: Path):
+        """Repair output goes through the same cleaning as the first shot —
+        the block-scalar leak applies to any scribe payload."""
+        verifier = ScriptedVerifier(["unexpected token"])
+        leaked = """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: repaired with leak
+lean: |
+  |
+    import Mathlib.CategoryTheory.Category.Basic
+
+    structure Category where
+      Obj : Type
+</artifact>"""
+        responses = GROUP_SESSION_RESPONSES + [leaked]
+        society = _committee_society(tmp_path, responses, verifier)
+        society.use_peer_review = False
+
+        await society.run_generation(0)
+
+        assert len(verifier.calls) == 2
+        assert verifier.calls[1].startswith("import Mathlib")
+
+    @pytest.mark.asyncio
+    async def test_repaired_code_recheck_import_restrictions(self, tmp_path: Path):
+        """A repair that violates the goal's import rules never reaches Lean;
+        the restriction error is fed back like a verify failure."""
+        verifier = ScriptedVerifier(["unknown identifier 'CategoryTheory'"])
+        forbidden = """<artifact>
+type: definition
+name: Category
+stacks_tag: T1
+description: repaired with a forbidden import
+lean: |
+  import Mathlib.Tactic
+
+  structure Category where
+    Obj : Type
+</artifact>"""
+        responses = GROUP_SESSION_RESPONSES + [forbidden, REPAIR_RESPONSE]
+        society = _committee_society(tmp_path, responses, verifier)
+        society.use_peer_review = False
+        assert society.goal is not None
+        society.goal.forbidden_imports = ["Mathlib.Tactic"]
+
+        result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 2
+        assert "Mathlib.Tactic" not in verifier.calls[1]
+        assert result.artifacts_verified == 1
+
+    @pytest.mark.asyncio
+    async def test_zero_repair_attempts_is_one_shot(self, tmp_path: Path):
+        """max_repair_attempts=0 reproduces the one-shot behaviour exactly."""
+        verifier = ScriptedVerifier(["error one", "error two", "error three"])
+        society = _committee_society(tmp_path, list(GROUP_SESSION_RESPONSES), verifier)
+        society.use_peer_review = False
+        society.max_repair_attempts = 0
+
+        result = await society.run_generation(0)
+
+        assert len(verifier.calls) == 1
+        assert result.artifacts_verified == 0
+        assert society.dependency_graph is not None
+        assert society.dependency_graph.nodes["T1"].status == TaskStatus.AVAILABLE
+
+
 class TestCommitteeMode:
     """run_generation dispatch and the review committee stage."""
 

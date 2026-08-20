@@ -420,12 +420,59 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
                 return member_id
         return None
 
-    async def _generate(self, member_id: str, system_prompt: str, prompt: str) -> str:
+    async def repair(self, failed_code: str, error: str) -> dict[str, Any] | None:
+        """One scribe turn: failed code + verifier error → revised artifact.
+
+        The session's whole context is already in the transcript, and every
+        error class observed on the box (committee_real_a: guessed imports,
+        mid-file syntax, universe mismatches) is fixable by one model reading
+        the error — so this deliberately does NOT re-enter the discussion.
+        Mirrors the iterative agent's feedback message, error cap included.
+        """
+        scribe_id = self._get_member_by_role(Role.SCRIBE)
+        if not scribe_id:
+            return None
+
+        context = self._build_context()
+
+        prompt = f"""{context}
+
+## Your Turn (Repair)
+The artifact you compiled FAILED Lean verification.
+
+### Failed code
+```lean
+{failed_code}
+```
+
+### Verifier error
+```
+{error[:500]}
+```
+
+Analyze the error and revise the code. Reply with the corrected artifact in
+the same <artifact> format with type, name, stacks_tag, description, lean,
+and notes fields."""
+
+        content = await self._generate(
+            scribe_id, SCRIBE_SYSTEM_PROMPT, prompt, outcome="group_repair"
+        )
+        self.state.add_message(scribe_id, Role.SCRIBE, content)
+        return self._parse_artifact(content)
+
+    async def _generate(
+        self,
+        member_id: str,
+        system_prompt: str,
+        prompt: str,
+        outcome: str = "group_session",
+    ) -> str:
         """One group call, with its spend attributed to the group's task.
 
         A group exists to produce exactly one statement (`config.task_tag`),
         so its whole session — chair turns and scribe compilation included —
-        is that statement's cost.
+        is that statement's cost. Repair turns carry their own outcome so
+        cost analysis can separate first-shot spend from feedback spend.
         """
         start = time.monotonic()
         # Message objects, not dicts -- same seam as PlanningPanel._generate:
@@ -447,7 +494,7 @@ Use the <artifact> format with type, name, stacks_tag, description, lean, and no
                     prompt_tokens=usage.input_tokens if usage else 0,
                     completion_tokens=usage.output_tokens if usage else 0,
                     wall_clock_s=elapsed,
-                    outcome="group_session",
+                    outcome=outcome,
                 )
             )
         return self._extract_content(response)
