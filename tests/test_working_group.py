@@ -782,3 +782,73 @@ structure MyStruct where
         # Should have exited after consensus, not run all 10 turns
         # Chair opening + 1 round (researcher + chair summary) + scribe = ~4 calls
         assert call_count < 10
+
+
+class RecordingProvider(MockProvider):
+    """MockProvider that also captures every prompt it is sent."""
+
+    def __init__(self, responses: list[str]):
+        super().__init__(responses)
+        self.prompts: list[str] = []
+
+    async def generate(self, messages, system_prompt=None, max_tokens=None):
+        self.prompts.append("\n".join(m.content for m in messages))
+        return await super().generate(messages, system_prompt, max_tokens)
+
+
+REPAIRED_ARTIFACT = """<artifact>
+type: definition
+name: test
+stacks_tag: 0013
+description: repaired definition
+lean: |
+  universe u
+  def test := 42
+notes: fixed the universe error
+</artifact>"""
+
+
+class TestWorkingGroupRepair:
+    """A verify failure comes back to the group as a scribe repair turn."""
+
+    def _group(self, provider, ledger=None):
+        config = WorkingGroupConfig(
+            group_id=1,
+            task_tag="0013",
+            task_name="Category",
+            task_content="Define Category",
+            guidance="...",
+            members_per_role={Role.CHAIR: 1, Role.SCRIBE: 1, Role.RESEARCHER: 1},
+        )
+        return WorkingGroup(config=config, provider=provider, ledger=ledger)
+
+    @pytest.mark.asyncio
+    async def test_repair_returns_revised_artifact(self):
+        """The scribe sees the failed code and the verifier's error, and the
+        revised code comes back through the artifact parser."""
+        provider = RecordingProvider([REPAIRED_ARTIFACT])
+        group = self._group(provider)
+
+        failed_code = "def test := Type u"
+        error = "unknown universe level 'u'"
+        artifact = await group.repair(failed_code, error)
+
+        assert artifact is not None
+        assert "universe u" in artifact["lean"]
+        # The repair prompt must carry both halves of the feedback loop
+        assert failed_code in provider.prompts[-1]
+        assert error in provider.prompts[-1]
+
+    @pytest.mark.asyncio
+    async def test_repair_spend_recorded_as_group_repair(self):
+        """Repair spend lands on the task's statement key with its own
+        outcome, so cost analysis can separate it from session spend."""
+        from lms.accounting import CostLedger, statement_key
+
+        ledger = CostLedger()
+        group = self._group(RecordingProvider([REPAIRED_ARTIFACT]), ledger=ledger)
+
+        await group.repair("def broken :=", "unexpected end of input")
+
+        assert "group_repair" in [r.outcome for r in ledger.records]
+        assert ledger.records[-1].statement_key == statement_key(stacks_tag="0013")
