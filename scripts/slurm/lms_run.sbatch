@@ -17,8 +17,12 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --gres=gpu:h100:2
-#SBATCH --time=04:00:00
+# All four GPUs by default (decided 2026-08-19; runbook 4d) — the 9-agent
+# config slightly exceeds TP=2's 1,139,984-token KV cache. Walltime sized for
+# a 2M-token budget run (est. up to ~6 h for the 1-agent config). On a shared
+# day: sbatch --gres=gpu:h100:2 --time=04:00:00 --export=ALL,TP_SIZE=2 ...
+#SBATCH --gres=gpu:h100:4
+#SBATCH --time=08:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
@@ -36,7 +40,7 @@ MODEL_REPO="${MODEL_REPO:-Qwen/Qwen3-Coder-30B-A3B-Instruct}"
 SERVED_NAME="${SERVED_NAME:-lms-generalist}"
 PORT="${PORT:-8000}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-131072}"
-TP_SIZE="${TP_SIZE:-2}"
+TP_SIZE="${TP_SIZE:-4}"
 
 # --- Scratch routing --------------------------------------------------------
 # A batch job does NOT source ~/.bashrc, so nothing exported interactively in
@@ -122,12 +126,12 @@ fi
 # Absolute path into vLLM's OWN venv. Never `uv run vllm`: uv re-syncs uv.lock,
 # which downgrades the openai package the harness needs.
 #
-# Do NOT hardcode CUDA_VISIBLE_DEVICES=0,1 here. Under --gres=gpu:2 Slurm has
-# already set it to the GPUs it allocated, which may be 2,3 -- overriding it
-# would reach outside the allocation and collide with another job. Only pick
-# devices when running this script outside Slurm.
+# Do NOT hardcode CUDA_VISIBLE_DEVICES here. Under --gres Slurm has already
+# set it to the GPUs it allocated -- overriding it would reach outside the
+# allocation and collide with another job. Only pick devices when running this
+# script outside Slurm.
 if [ -z "${SLURM_JOB_ID:-}" ]; then
-  export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
+  export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
 fi
 echo "--- starting vLLM on GPUs ${CUDA_VISIBLE_DEVICES:-all} (log: $VLLM_LOG) ---"
 "$SCRATCH/vllm-env/bin/vllm" serve "$MODEL_REPO" \
@@ -138,7 +142,7 @@ echo "--- starting vLLM on GPUs ${CUDA_VISIBLE_DEVICES:-all} (log: $VLLM_LOG) --
   > "$VLLM_LOG" 2>&1 &
 VLLM_PID=$!
 
-# Kill the server on any exit path, or a failed job strands two H100s until the
+# Kill the server on any exit path, or a failed job strands the H100s until the
 # walltime expires.
 cleanup() {
   echo "--- tearing down vLLM (pid $VLLM_PID) ---"
