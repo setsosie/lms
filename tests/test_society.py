@@ -1570,3 +1570,58 @@ lean: |
         assert "Import restriction" in (artifact.verification_error or "")
         assert society.dependency_graph is not None
         assert society.dependency_graph.nodes["T1"].status == TaskStatus.AVAILABLE
+
+
+class TestCommitteeCastScaling:
+    """`--agents` was inert in committee mode: 6 agents produced the same
+    cast and byte-similar token spend as 3 (committee_6x10, 2026-08-20).
+    Researchers now scale with the society; chair and scribe stay fixed."""
+
+    def _society(self, tmp_path: Path, n_agents: int, n_groups: int) -> Society:
+        society = _committee_society(tmp_path, [], RecordingVerifier())
+        society.n_agents = n_agents
+        society.n_working_groups = n_groups
+        return society
+
+    def test_three_agents_three_groups_is_the_old_cast(self, tmp_path: Path):
+        from lms.working_group import Role
+
+        cast = self._society(tmp_path, 3, 3)._committee_members_per_role()
+        assert cast == {Role.CHAIR: 1, Role.SCRIBE: 1, Role.RESEARCHER: 1}
+
+    def test_six_agents_three_groups_seats_two_researchers(self, tmp_path: Path):
+        from lms.working_group import Role
+
+        cast = self._society(tmp_path, 6, 3)._committee_members_per_role()
+        assert cast[Role.RESEARCHER] == 2
+        assert cast[Role.CHAIR] == 1
+        assert cast[Role.SCRIBE] == 1
+
+    def test_researchers_never_drop_below_one(self, tmp_path: Path):
+        from lms.working_group import Role
+
+        cast = self._society(tmp_path, 2, 3)._committee_members_per_role()
+        assert cast[Role.RESEARCHER] == 1
+
+    @pytest.mark.asyncio
+    async def test_scaled_cast_reaches_the_group_session(self, tmp_path: Path):
+        """Two researchers both speak: the session consumes one more
+        provider turn than the single-researcher script."""
+        two_researcher_session = [
+            "Let's define Category.",
+            "```lean\nstructure Category where\n  Obj : Type\n```",
+            "I agree with the current proposal.",
+            "CONSENSUS REACHED",
+            GROUP_SESSION_RESPONSES[3],
+        ]
+        verifier = RecordingVerifier()
+        society = _committee_society(tmp_path, two_researcher_session, verifier)
+        society.use_peer_review = False
+        society.n_agents = 2
+        society.n_working_groups = 1
+
+        result = await society.run_generation(0)
+
+        assert result.artifacts_created == 1
+        provider = society.provider
+        assert provider.call_count == 5
