@@ -861,6 +861,37 @@ silently degrading to flat mode.
 **Checkpoint 8**: `artifacts.json` shows ≥2 distinct tags across groups and
 the run summary shows `reviews_total > 0`.
 
+> **Criterion amended 2026-08-20**: for `stacks-ch4-phase1` the dependency
+> graph gates every task behind `0013`, so `available_tasks()` at gen 0 is
+> exactly `['0013']` and distinct tags are unsatisfiable *by construction* —
+> all groups on the sole available tag is the graph working, not the panel
+> failing. The criterion is: every artifact's tag is a **real goal tag** that
+> was available when assigned, and `reviews_total > 0`.
+
+**Result, 2026-08-19/20 (five smoke runs, four harness fixes):** Checkpoint 8
+**green** on `committee_smoke_e` under the amended criterion. The road there —
+each run's failure became a merged fix (#44, #45, #46):
+
+1. `committee_smoke` (run 1): every LLM call died — committee classes passed
+   dicts where the provider reads `m.role` by attribute; summary printed
+   "0 tokens used". → #44.
+2. `committee_smoke_b`: 111,389 tokens, pipeline executed end to end, review
+   REJECT worked — but the chair invented tags (`LOGIC-001`), the
+   `Define <tag>` fallback masked it, and payloads carried the YAML
+   block-scalar leak. → #45 (tag enforcement + creation-site cleaning).
+3. `committee_smoke_c`: accidental clean replication of run 2's defects (ran
+   on pre-#45 code — **always verify `git log` after pulling**).
+4. `committee_smoke_d`: leak survived #45 — the review prompt requests
+   `modified_code: |` and a MODIFY overwrote cleaned code with the uncleaned
+   capture (5/6 artifacts). Scribes decorated tags (`CAT-0013`). → #46.
+5. `committee_smoke_e`: 6/6 artifacts on real tag `0013`, clean code, real
+   imports (5/6), and **every failure is mathematics**: 3× `unknown universe
+   level u`, one genuine type error, one syntax slip, one guessed Mathlib
+   module. 0 verified — the known structural gap: groups get one shot with no
+   Lean feedback (the iterative agent loop gets 5 attempts with error
+   feedback; committee groups get none). That is the next card, not a
+   wiring defect.
+
 **What to paste back for Steps 7–8**: both density outputs (or their
 `--json-out` files), the elaboration-failure list, the committee run banner,
 the `artifacts.json` tag/creator/verified summary, every `verification_error`
