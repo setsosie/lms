@@ -39,7 +39,7 @@ from lms.planning import PlanningPanel, create_default_assignments
 from lms.providers.base import BaseLLMProvider
 from lms.textbook import Textbook
 from lms.traces import TraceStore
-from lms.working_group import WorkingGroup, WorkingGroupConfig
+from lms.working_group import Role, WorkingGroup, WorkingGroupConfig
 
 if TYPE_CHECKING:
     from lms.goals import Goal
@@ -1023,6 +1023,7 @@ class Society:
                 task_content=task_content,
                 guidance=assignment.guidance,
                 max_turns=self.max_turns_per_group,
+                members_per_role=self._committee_members_per_role(),
             )
             group = WorkingGroup(
                 config=config,
@@ -1341,6 +1342,20 @@ class Society:
         )
         self.results.append(result)
         return result
+
+    def _committee_members_per_role(self) -> dict[Role, int]:
+        """Working-group cast scaled by society size.
+
+        committee_6x10 (2026-08-20): `--agents 6` produced the same cast
+        and token spend as `--agents 3` — every group seated a fixed
+        chair + scribe + one researcher, and society agents only ever
+        reviewed. Researchers now scale with the society: floor
+        (n_agents / n_groups) per group, never below one, so 6 agents
+        over 3 groups seat 2 researchers each and 3 agents reproduce the
+        old cast exactly. Chair and scribe stay fixed overhead.
+        """
+        researchers = max(1, self.n_agents // max(1, self.n_working_groups))
+        return {Role.CHAIR: 1, Role.SCRIBE: 1, Role.RESEARCHER: researchers}
 
     def _import_violation(self, code: str) -> str | None:
         """The goal's import-restriction message for `code`, or None if legal.
