@@ -1064,7 +1064,11 @@ class Society:
                 ),
                 lean_code=lean_code,
                 lean_code_raw=lean_code_raw,
-                stacks_tag=group_result.get("stacks_tag", group.config.task_tag),
+                # Always the validated assignment tag. The scribe stamps its
+                # own (smoke_c/d wrote "CAT-0013" for task 0013), and goal
+                # progress keys on this field — a decorated tag makes
+                # mark_formalized silently no-op.
+                stacks_tag=group.config.task_tag,
                 created_by=f"group-{group.config.group_id}",
                 generation=generation,
                 notes=group_result.get("notes"),

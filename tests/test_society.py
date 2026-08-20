@@ -1149,6 +1149,9 @@ decision: APPROVE
 reasoning: fine
 </review>""",
         ]
+        # The scribe block above stamps a decorated tag; smoke_c/d wrote
+        # CAT-0013 for task 0013 the same way.
+        responses[3] = responses[3].replace("stacks_tag: T1", "stacks_tag: CAT-T1")
         society = _committee_society(tmp_path, responses, verifier)
 
         await society.run_generation(0)
@@ -1161,6 +1164,36 @@ reasoning: fine
         assert artifact.lean_code == code
         # The raw capture keeps the leak visible in the record
         assert artifact.lean_code_raw.startswith("|")
+        # Scribe decoration is overridden by the validated assignment tag
+        assert artifact.stacks_tag == "T1"
+
+    @pytest.mark.asyncio
+    async def test_reviewer_modified_code_is_cleaned(self, tmp_path: Path):
+        """The review prompt requests `modified_code: |`, so a MODIFY capture
+        starts at the block-scalar header. Uncleaned, it overwrites the
+        already-cleaned artifact code — smoke_d's payloads reached Lean as
+        '|\\n  import ...' through exactly this path."""
+        verifier = RecordingVerifier()
+        responses = GROUP_SESSION_RESPONSES + [
+            """<review>
+decision: MODIFY
+reasoning: Needs an import
+modified_code: |
+  import Mathlib.CategoryTheory.Category.Basic
+
+  structure Category where
+    Obj : Type u
+</review>"""
+        ]
+        society = _committee_society(tmp_path, responses, verifier)
+
+        result = await society.run_generation(0)
+
+        assert result.reviews_modified == 1
+        assert len(verifier.calls) == 1
+        code = verifier.calls[0]
+        assert code.startswith("import Mathlib.CategoryTheory.Category.Basic")
+        assert "\nstructure Category where\n  Obj : Type u" in code
 
     def test_get_task_content_unknown_tag_raises(self, tmp_path: Path):
         society = _committee_society(tmp_path, [], StubLeanVerifier())
