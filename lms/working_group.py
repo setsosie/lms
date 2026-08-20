@@ -197,6 +197,15 @@ When you propose code, wrap it in ```lean code blocks.
 
 Do NOT use `sorry`. Only propose complete, verifiable code.
 
+Import rules (violations fail verification immediately):
+- Lean 4 + Mathlib ONLY. Never Lean 3 style (`import logic.basic`,
+  `import category_theory.category`, `import tactic` do not exist here).
+- Verified prior work lives in `LMS.Foundation` — to build on it put BOTH
+  `import LMS.Foundation` and `open LMS.Foundation` at the top. There is no
+  module named `Foundation`; `import Foundation.*` fails.
+- Import only Mathlib modules you are certain exist
+  (e.g. `Mathlib.CategoryTheory.Category.Basic`).
+
 If you agree with the current blackboard draft, say "I agree with the current proposal."
 If you have changes, provide the updated code."""
 
@@ -206,8 +215,13 @@ SCRIBE_SYSTEM_PROMPT = """You are the SCRIBE of an LMS Working Group.
 Your role is to compile the final artifact:
 1. Take the agreed-upon code from the discussion
 2. Format it as a proper <artifact> block
-3. Ensure imports and namespace are correct
+3. Ensure imports and namespace are correct: Lean 4 + Mathlib only, never
+   Lean 3 module names; prior verified work requires BOTH
+   `import LMS.Foundation` and `open LMS.Foundation` (there is no module
+   named `Foundation`)
 4. Add notes summarizing the group's key decisions
+5. `stacks_tag` must be the task's tag EXACTLY as assigned — do not decorate
+   or rename it
 
 The artifact must be ready for LEAN verification.
 

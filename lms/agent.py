@@ -754,7 +754,13 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             reasoning = match.group("reasoning").strip()
             modified_code = match.group("modified_code")
             if modified_code:
-                modified_code = modified_code.strip()
+                # The review prompt asks for `modified_code: |`, so the capture
+                # starts at the block-scalar header. A MODIFY overwrites
+                # already-cleaned artifact code, so an uncleaned capture here
+                # re-introduces the leak downstream of every other cleaning
+                # site — seen on the 2026-08-19 committee smokes, where
+                # reviewer-modified artifacts reached Lean as '|\n  import ...'.
+                modified_code = _clean_lean_code(modified_code)
 
             # Normalize decision
             if decision not in ("APPROVE", "REJECT", "MODIFY"):
