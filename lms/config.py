@@ -42,6 +42,7 @@ class Config:
     n_working_groups: int = 3  # Number of parallel groups per generation
     group_size: int = 3  # Members per group (1 chair + 1 scribe + N-2 researchers)
     max_turns_per_group: int = 5  # Max conversation turns per group
+    max_repair_attempts: int = 2  # Scribe repair turns after a failed verify
     use_planning_panel: bool = True  # Use planning panel for task allocation
 
     @classmethod

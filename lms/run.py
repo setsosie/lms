@@ -135,6 +135,7 @@ async def run_experiment(
     checkpoint_interval: int = 10,
     use_working_groups: bool = False,
     n_working_groups: int = 3,
+    max_repair_attempts: int = 2,
 ) -> None:
     """Run an LMS experiment.
 
@@ -155,6 +156,8 @@ async def run_experiment(
         use_working_groups: If True, run committee mode (planning panel →
             working groups → review committee → verify). Requires a goal.
         n_working_groups: Number of parallel working groups in committee mode
+        max_repair_attempts: Scribe repair turns after a failed verify in
+            committee mode (0 = one-shot)
     """
     print("\nStarting LMS Experiment")
     print(f"  Agents: {n_agents}")
@@ -228,6 +231,7 @@ async def run_experiment(
     if use_working_groups:
         society.use_working_groups = True
         society.n_working_groups = n_working_groups
+        society.max_repair_attempts = max_repair_attempts
 
     # Clear the shared foundation before generation 1 proposes anything.
     # It lives inside the Lean project (imports must resolve through Lake), so
@@ -448,6 +452,7 @@ async def resume_experiment(
     checkpoint_interval: int = 10,
     use_working_groups: bool = False,
     n_working_groups: int = 3,
+    max_repair_attempts: int = 2,
 ) -> None:
     """Resume an experiment from a checkpoint.
 
@@ -464,6 +469,8 @@ async def resume_experiment(
         use_working_groups: If True, run committee mode; the checkpoint must
             carry a goal for the planning panel to allocate from
         n_working_groups: Number of parallel working groups in committee mode
+        max_repair_attempts: Scribe repair turns after a failed verify in
+            committee mode (0 = one-shot)
     """
     # Load metadata to get provider info
     metadata = json.loads((checkpoint_dir / "metadata.json").read_text())
@@ -540,6 +547,7 @@ async def resume_experiment(
             return
         society.use_working_groups = True
         society.n_working_groups = n_working_groups
+        society.max_repair_attempts = max_repair_attempts
 
     # Setup signal handlers for graceful shutdown
     setup_signal_handlers(society, checkpoint_dir, society.goal)
@@ -759,6 +767,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of parallel working groups in committee mode",
     )
 
+    parser.add_argument(
+        "--repair-attempts",
+        type=int,
+        default=2,
+        help="Committee mode: scribe repair turns after a failed verify, with "
+        "the Lean error fed back (0 = one-shot, default: 2)",
+    )
+
     return parser
 
 
@@ -813,6 +829,7 @@ def main() -> None:
                 checkpoint_interval=args.checkpoint_interval,
                 use_working_groups=args.groups,
                 n_working_groups=args.n_groups,
+                max_repair_attempts=args.repair_attempts,
             )
         )
         return
@@ -877,6 +894,7 @@ def main() -> None:
             checkpoint_interval=args.checkpoint_interval,
             use_working_groups=args.groups,
             n_working_groups=args.n_groups,
+            max_repair_attempts=args.repair_attempts,
         )
     )
 
