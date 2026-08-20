@@ -2,6 +2,7 @@
 
 import pytest
 
+from lms.providers.base import GenerationResponse, TokenUsage
 from lms.working_group import (
     Role,
     GroupStatus,
@@ -351,7 +352,9 @@ This should work with our Foundation."""
 
     def test_has_consensus_true(self, group):
         """Test consensus detection when present."""
-        group.state.add_message("chair", Role.CHAIR, "CONSENSUS REACHED. Let's finalize.")
+        group.state.add_message(
+            "chair", Role.CHAIR, "CONSENSUS REACHED. Let's finalize."
+        )
         assert group._has_consensus() is True
 
     def test_has_consensus_false(self, group):
@@ -605,7 +608,10 @@ class TestSystemPrompts:
         assert "CHAIR" in CHAIR_SYSTEM_PROMPT
         assert "FACILITATE" in CHAIR_SYSTEM_PROMPT
         assert "CONSENSUS REACHED" in CHAIR_SYSTEM_PROMPT
-        assert "do not" in CHAIR_SYSTEM_PROMPT.lower() or "not to write code" in CHAIR_SYSTEM_PROMPT.lower()
+        assert (
+            "do not" in CHAIR_SYSTEM_PROMPT.lower()
+            or "not to write code" in CHAIR_SYSTEM_PROMPT.lower()
+        )
 
     def test_researcher_prompt_content(self):
         """Test researcher prompt has expected content."""
@@ -622,16 +628,30 @@ class TestSystemPrompts:
 
 
 class MockProvider:
-    """Mock provider for async testing."""
+    """Mock provider holding the real `BaseLLMProvider` contract.
+
+    Reads `m.role`/`m.content` by attribute exactly as `OpenAIProvider.generate`
+    does, so passing dicts fails here the way it fails on the box, and returns
+    a `GenerationResponse` with usage so token accounting is exercised. The
+    previous dict-accepting, str-returning mock is what let the committee
+    classes ship an interface the real provider rejects (2026-08-19,
+    committee smoke: every call died and the run reported 0 tokens).
+    """
 
     def __init__(self, responses: list[str]):
         self.responses = responses
         self.call_count = 0
 
-    async def generate(self, messages: list[dict]) -> str:
+    async def generate(self, messages, system_prompt=None, max_tokens=None):
+        for m in messages:
+            assert isinstance(m.role, str) and isinstance(m.content, str)
         response = self.responses[self.call_count % len(self.responses)]
         self.call_count += 1
-        return response
+        return GenerationResponse(
+            content=response,
+            usage=TokenUsage(input_tokens=100, output_tokens=25),
+            provider="mock",
+        )
 
 
 class TestWorkingGroupAsync:
@@ -651,18 +671,19 @@ class TestWorkingGroupAsync:
         )
 
         # Mock responses for each turn
-        provider = MockProvider([
-            # Chair opening
-            "Let's discuss the test task. What approaches should we consider?",
-            # Researcher turn 1
-            """I propose this code:
+        provider = MockProvider(
+            [
+                # Chair opening
+                "Let's discuss the test task. What approaches should we consider?",
+                # Researcher turn 1
+                """I propose this code:
 ```lean
 def test := 42
 ```""",
-            # Chair summary turn 1
-            "CONSENSUS REACHED. We agree on the simple definition.",
-            # Scribe finalize
-            """<artifact>
+                # Chair summary turn 1
+                "CONSENSUS REACHED. We agree on the simple definition.",
+                # Scribe finalize
+                """<artifact>
 type: definition
 name: test
 stacks_tag: TEST
@@ -672,7 +693,8 @@ lean: |
 notes: |
   Simple consensus reached
 </artifact>""",
-        ])
+            ]
+        )
 
         group = WorkingGroup(config=config, provider=provider)
         artifact = await group.run_session()
@@ -682,6 +704,10 @@ notes: |
         assert group.state.status == GroupStatus.COMPLETE
         # Should have called provider multiple times
         assert provider.call_count >= 3
+        # Usage flows from the provider response into the group's aggregate.
+        # 0 here is the 2026-08-19 box symptom: every committee run reporting
+        # "0 tokens used" because the calls never survived the provider seam.
+        assert group.tokens_used == provider.call_count * 125
 
     @pytest.mark.asyncio
     async def test_run_session_updates_blackboard(self):
@@ -696,15 +722,17 @@ notes: |
             members_per_role={Role.CHAIR: 1, Role.SCRIBE: 1, Role.RESEARCHER: 1},
         )
 
-        provider = MockProvider([
-            "Let's begin.",  # Chair
-            """```lean
+        provider = MockProvider(
+            [
+                "Let's begin.",  # Chair
+                """```lean
 structure MyStruct where
   field : Nat
 ```""",  # Researcher with code
-            "Good discussion.",  # Chair summary
-            "Final artifact",  # Scribe
-        ])
+                "Good discussion.",  # Chair summary
+                "Final artifact",  # Scribe
+            ]
+        )
 
         group = WorkingGroup(config=config, provider=provider)
         await group.run_session()
@@ -731,16 +759,21 @@ structure MyStruct where
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return "Opening statement"
+                content = "Opening statement"
             elif call_count == 2:
-                return "```lean\ncode\n```"
+                content = "```lean\ncode\n```"
             elif call_count == 3:
-                return "CONSENSUS REACHED"  # Early consensus
+                content = "CONSENSUS REACHED"  # Early consensus
             else:
-                return "Final artifact"
+                content = "Final artifact"
+            return GenerationResponse(
+                content=content,
+                usage=TokenUsage(input_tokens=10, output_tokens=5),
+                provider="mock",
+            )
 
         class CountingProvider:
-            async def generate(self, messages):
+            async def generate(self, messages, system_prompt=None, max_tokens=None):
                 return await mock_generate(messages)
 
         group = WorkingGroup(config=config, provider=CountingProvider())
