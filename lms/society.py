@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import random
+import re
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -48,6 +49,17 @@ if TYPE_CHECKING:
 DEFAULT_FOUNDATION_PATH = (
     Path(__file__).parent.parent / "lean" / "LMS" / "Foundation.lean"
 )
+
+# For `_derive_references`: top-level names a piece of Lean code declares,
+# and the comment forms to strip before scanning it for foundation names.
+_DECL_NAME_RE = re.compile(
+    r"^\s*(?:noncomputable\s+)?(?:private\s+|protected\s+)?"
+    r"(?:structure|def|theorem|lemma|class|inductive|abbrev|instance)\s+"
+    r"([A-Za-z_][A-Za-z0-9_.']*)",
+    re.MULTILINE,
+)
+_LINE_COMMENT_RE = re.compile(r"--.*$", re.MULTILINE)
+_BLOCK_COMMENT_RE = re.compile(r"/-.*?-/", re.DOTALL)
 
 
 class BudgetExceeded(Exception):
@@ -1187,21 +1199,15 @@ class Society:
 
             # Verify with LEAN
             if self.verifier:
-                # Check import restrictions first
-                if self.goal and (
-                    self.goal.allowed_imports or self.goal.forbidden_imports
-                ):
-                    valid, error = self.goal.validate_code(lean_code)
-                    if not valid:
-                        artifact.status = VerificationStatus.FAILED
-                        artifact.verification_error = f"Import restriction: {error}"
-                        self.library.add(artifact)
-                        self.dependency_graph.update_status(
-                            group.config.task_tag, TaskStatus.AVAILABLE
-                        )
-                        continue
-
-                verify_result = await self.verifier.verify(lean_code)
+                # An import violation never reaches Lean, but it enters the
+                # same repair loop a compile error does. The previous
+                # hard-fail spent zero repair turns on the one error class
+                # whose message names the exact fix.
+                verify_result: VerificationResult | None = None
+                last_error = self._import_violation(lean_code)
+                if last_error is None:
+                    verify_result = await self.verifier.verify(lean_code)
+                    last_error = verify_result.error
 
                 # A failed verify goes back to the group's scribe with the
                 # Lean error, up to max_repair_attempts times. One-shot
@@ -1210,11 +1216,9 @@ class Society:
                 # classes with a single feedback turn (committee_real_a).
                 repair_tokens_before = group.tokens_used
                 attempts_used = 0
-                last_error = verify_result.error
                 while (
-                    not verify_result.success
-                    and attempts_used < self.max_repair_attempts
-                ):
+                    verify_result is None or not verify_result.success
+                ) and attempts_used < self.max_repair_attempts:
                     attempts_used += 1
                     repaired = await group.repair(
                         lean_code, last_error or "unknown error"
@@ -1225,16 +1229,13 @@ class Society:
                     # than re-verify it.
                     if not new_code or new_code == lean_code:
                         break
-                    if self.goal and (
-                        self.goal.allowed_imports or self.goal.forbidden_imports
-                    ):
-                        valid, error = self.goal.validate_code(new_code)
-                        if not valid:
-                            # Burns an attempt; the restriction is the error
-                            # the next repair turn sees. The offending code is
-                            # never adopted and never reaches Lean.
-                            last_error = f"Import restriction: {error}"
-                            continue
+                    blocked = self._import_violation(new_code)
+                    if blocked is not None:
+                        # Burns an attempt; the restriction is the error
+                        # the next repair turn sees. The offending code is
+                        # never adopted and never reaches Lean.
+                        last_error = blocked
+                        continue
                     lean_code = new_code
                     artifact.lean_code = new_code
                     artifact.notes = (
@@ -1249,10 +1250,17 @@ class Society:
                 generation_tokens += repair_tokens
                 self.total_tokens_used += repair_tokens
 
-                artifact.status = verify_result.status
+                # verify_result stays None when every draft was blocked on
+                # imports — Lean never ran, and the artifact fails with the
+                # restriction message as its error.
+                artifact.status = (
+                    verify_result.status
+                    if verify_result is not None
+                    else VerificationStatus.FAILED
+                )
                 await self._apply_gates(artifact)
 
-                if verify_result.success:
+                if verify_result is not None and verify_result.success:
                     artifacts_verified += 1
 
                     # Add to foundation
@@ -1280,14 +1288,14 @@ class Society:
                         entry_type="success",
                     )
                 else:
-                    artifact.verification_error = verify_result.error
+                    artifact.verification_error = last_error
                     self.dependency_graph.update_status(
                         group.config.task_tag, TaskStatus.AVAILABLE
                     )
 
                     # Add failure to textbook for learning
                     self.textbook.add(
-                        content=f"Failed: {artifact.natural_language}\n\nError: {verify_result.error}",
+                        content=f"Failed: {artifact.natural_language}\n\nError: {last_error}",
                         author=artifact.created_by,
                         generation=generation,
                         topics=[group.config.task_tag, "error"],
@@ -1297,6 +1305,17 @@ class Society:
 
             # Add to library
             self.library.add(artifact)
+
+            # References are derived from the code, not trusted to the
+            # scribe. committee_yolo_a ran with the citation prompt live for
+            # all 100 generations and 0 of 266 artifacts carried one — while
+            # ~97 failures were reuse *attempts* and one verified artifact
+            # (0014) demonstrably built on another (0013). Self-report only
+            # ever adds to what the code already proves.
+            derived = self._derive_references(artifact.lean_code or "")
+            merged = set(artifact.references) | derived
+            merged.discard(artifact.id)
+            artifact.references = sorted(merged)
 
             # Link references so reuse is measurable on committee runs too.
             # This call existed only on the flat and iterative paths, so
@@ -1322,6 +1341,41 @@ class Society:
         )
         self.results.append(result)
         return result
+
+    def _import_violation(self, code: str) -> str | None:
+        """The goal's import-restriction message for `code`, or None if legal.
+
+        One decision for both the first draft and every repair; the two call
+        sites previously duplicated the condition and could drift.
+        """
+        if self.goal and (self.goal.allowed_imports or self.goal.forbidden_imports):
+            valid, error = self.goal.validate_code(code)
+            if not valid:
+                return f"Import restriction: {error}"
+        return None
+
+    def _derive_references(self, lean_code: str) -> set[str]:
+        """Artifact ids of foundation entries whose names this code uses.
+
+        Comments are stripped first: "-- unlike Category in Mathlib" is
+        prose, not reuse. A name the code *declares itself* is excluded —
+        redefining `Category` is what T2.duplicate exists to flag, not a
+        citation of the entry it shadows.
+        """
+        if not self.foundation or not lean_code:
+            return set()
+        code = _BLOCK_COMMENT_RE.sub("", lean_code)
+        code = _LINE_COMMENT_RE.sub("", code)
+        own = set(_DECL_NAME_RE.findall(code))
+        refs: set[str] = set()
+        for entry in self.foundation.entries:
+            name = entry.name
+            if not name or name in own:
+                continue
+            pattern = rf"(?<![A-Za-z0-9_']){re.escape(name)}(?![A-Za-z0-9_'])"
+            if re.search(pattern, code):
+                refs.add(entry.artifact_id)
+        return refs
 
     def _get_foundation_summary(self) -> str:
         """Get a summary of what's in Foundation.lean, for committee prompts.

@@ -202,3 +202,33 @@ def test_raw_capture_is_retained_for_diagnosis() -> None:
     assert proposed[0].lean_code == "theorem t : True := trivial"
     assert proposed[0].lean_code_raw is not None
     assert proposed[0].lean_code_raw.startswith("|")
+
+
+class TestFoundationImportRewrite:
+    """`import LMS.Foundation.X` names a module that cannot exist — the
+    foundation is one file — so Lean dies at line 1 with "object file does
+    not exist" before the code's content is judged (committee_yolo_a). The
+    cleaner rewrites such imports to the umbrella module."""
+
+    def test_submodule_import_is_rewritten(self) -> None:
+        cleaned = _clean_lean_code(
+            "import LMS.Foundation.Category\n\nstructure F where\n  x : Nat"
+        )
+        assert cleaned is not None
+        assert cleaned.splitlines()[0] == "import LMS.Foundation"
+        assert "LMS.Foundation.Category" not in cleaned
+
+    def test_rewrite_dedupes_against_existing_umbrella(self) -> None:
+        cleaned = _clean_lean_code(
+            "import LMS.Foundation\nimport LMS.Foundation.Category\n\ndef f : Nat := 1"
+        )
+        assert cleaned is not None
+        assert cleaned.count("import LMS.Foundation") == 1
+
+    def test_qualified_identifier_in_body_is_untouched(self) -> None:
+        code = "import LMS.Foundation\n\ndef f (c : LMS.Foundation.Category) := c"
+        assert _clean_lean_code(code) == code
+
+    def test_mathlib_imports_are_not_rewritten(self) -> None:
+        code = "import Mathlib.Data.Equiv.Basic\n\ndef f : Nat := 1"
+        assert _clean_lean_code(code) == code

@@ -113,6 +113,40 @@ _FENCED_BLOCK = re.compile(r"```[^\n`]*\n(?P<body>.*?)\n?[ \t]*```", re.DOTALL)
 # An opening fence whose closing partner never arrived - a truncated generation.
 _OPEN_FENCE = re.compile(r"\A[ \t]*```[^\n`]*[ \t]*\n")
 
+# An import of a Foundation *submodule*. The foundation is a single file, so
+# every such module name maps to an .olean that cannot exist.
+_FOUNDATION_SUBMODULE_IMPORT = re.compile(
+    r"^([ \t]*)import[ \t]+LMS\.Foundation\.\S+[ \t]*$", re.MULTILINE
+)
+
+
+def _rewrite_foundation_imports(text: str) -> str:
+    """Rewrite imports of Foundation submodules to the umbrella module.
+
+    committee_yolo_a: an agent wrote `import LMS.Foundation.Category` and Lean
+    died at line 1 with "object file ... does not exist" — before the code's
+    content was ever judged. The umbrella import is always what was meant.
+    Only import lines are touched; `LMS.Foundation.Category` as a qualified
+    identifier in the body is legitimate and stays.
+    """
+    if "LMS.Foundation." not in text:
+        return text
+    rewritten = _FOUNDATION_SUBMODULE_IMPORT.sub(r"\1import LMS.Foundation", text)
+    if rewritten == text:
+        return text
+    # The rewrite can produce the same import twice; Lean tolerates that, but
+    # a deduped header is what a scribe would have written.
+    seen: set[str] = set()
+    lines: list[str] = []
+    for line in rewritten.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("import "):
+            if stripped in seen:
+                continue
+            seen.add(stripped)
+        lines.append(line)
+    return "\n".join(lines)
+
 
 def _clean_lean_code(raw: str | None) -> str | None:
     """Recover the Lean source an agent meant to send from how it packaged it.
@@ -149,7 +183,10 @@ def _clean_lean_code(raw: str | None) -> str | None:
 
     # Fenced bodies carry their own indentation when the fence was itself
     # nested inside a block scalar, so dedent again after unwrapping.
-    return textwrap.dedent(text).strip() or None
+    text = textwrap.dedent(text).strip()
+    if not text:
+        return None
+    return _rewrite_foundation_imports(text)
 
 
 class Agent:

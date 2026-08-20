@@ -266,7 +266,48 @@ class PlanningPanel:
             session.final_assignments = revised.assignments
             session.approved = True  # Chair decides on tie
 
+        session.final_assignments = self._top_up(session.final_assignments, session)
         return session.final_assignments
+
+    def _top_up(
+        self,
+        assignments: list[WorkingGroupAssignment],
+        session: PlanningSession,
+    ) -> list[WorkingGroupAssignment]:
+        """Fill idle groups with available tasks the chair left unassigned.
+
+        committee_yolo_a ran 17 of 100 generations with one working group
+        instead of three (~13% of run capacity): whenever the chair proposed
+        fewer valid assignments than there are groups — after invalid-tag
+        drops or just a short proposal the panel approved — the surplus
+        groups sat idle even while available tasks went unworked. Only the
+        zero-survivors case fell back to the default allocation.
+        """
+        if len(assignments) >= self.n_groups:
+            return assignments
+        assigned_tags = {a.task_tag for a in assignments}
+        used_groups = {a.group_id for a in assignments}
+        spare = [t for t in session.available_tasks if t.tag not in assigned_tags]
+        free_ids = [g for g in range(1, self.n_groups + 1) if g not in used_groups]
+        added = [
+            WorkingGroupAssignment(
+                group_id=group_id,
+                task_tag=task.tag,
+                task_name=task.name,
+                priority=group_id,
+                guidance=(
+                    f"Focus on {task.name}. Use existing Foundation.lean definitions."
+                ),
+                backup_task=None,
+            )
+            for group_id, task in zip(free_ids, spare)
+        ]
+        if added:
+            print(
+                f"  Planning panel: topped up {len(added)} idle group(s) "
+                f"with unassigned available tasks"
+            )
+        return assignments + added
 
     async def _enforce_known_tags(
         self, session: PlanningSession, proposal: PlanningProposal
