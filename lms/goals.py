@@ -126,6 +126,29 @@ class Goal:
     allowed_imports: list[str] | None = None  # None = allow all
     forbidden_imports: list[str] | None = None  # Imports that are forbidden
     preamble: str | None = None  # Required code preamble (imports, etc.)
+    #: Name of the generation-0 seed (`lms/seed/<name>.lean`) this goal starts
+    #: from. `None` uses the shipped default; `""` means a bare foundation,
+    #: which is what a bootstrapping experiment wants (26Q3-HARN-23).
+    seed: str | None = None
+    #: Tags the seed already satisfies. Marked formalized before generation 1
+    #: so the planner allocates straight to unsolved work instead of asking an
+    #: agent to redefine what the axiom layer already provides.
+    seeded_tags: list[str] = field(default_factory=list)
+
+    def mark_seeded(self) -> list[str]:
+        """Mark `seeded_tags` formalized; return the tags actually marked.
+
+        Reported as given, not earned: `progress()` counts them, so a run's
+        headline percentage must be read against `seeded_tags` to know how
+        much of it the collective did.
+        """
+        marked = []
+        for definition in self.definitions:
+            if definition.tag in self.seeded_tags and not definition.formalized:
+                definition.formalized = True
+                definition.artifact_ids.append("seed")
+                marked.append(definition.tag)
+        return marked
 
     def progress(self) -> float:
         """Return progress as a fraction (0.0 to 1.0)."""
@@ -268,6 +291,12 @@ STACKS_CHAPTER_4_PHASE_1 = Goal(
     source="The Stacks Project, Chapter 4: Categories (https://stacks.math.columbia.edu/tag/0011)",
     allowed_imports=ALLOWED_IMPORTS_PHASE_1,
     forbidden_imports=FORBIDDEN_IMPORTS,
+    # The axiom layer is given, not derived (26Q3-HARN-23). `Category` is the
+    # single most load-bearing declaration in the run, and leaving its shape to
+    # whichever agent submitted first is what produced five straight
+    # generations of `invalid binder annotation` in `committee_fix_c`.
+    seed="category",
+    seeded_tags=["0013"],
     definitions=[
         # === DEFINITIONS (the mathematical content to formalize) ===
         StacksDefinition(
