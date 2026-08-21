@@ -16,6 +16,7 @@ __all__ = [
     "LeanDeclaration",
     "TheoremSignature",
     "extract_declarations",
+    "named_declarations",
     "parse_theorem_signature",
     "strip_comments",
 ]
@@ -142,6 +143,25 @@ def extract_declarations(code: str) -> list[LeanDeclaration]:
             )
         )
     return decls
+
+
+def named_declarations(code: str) -> list[LeanDeclaration]:
+    """Declarations that introduce a name a later artifact could cite.
+
+    `axiom` is excluded: it names something, but asserting it is exactly what
+    T4 exists to reject, so it must never count as content. `example` is
+    already anonymous by the time `extract_declarations` returns.
+
+    Shared by T2's named-declaration sub-check and by the pre-verification
+    admissibility check in `Society`, which must agree on what "introduces
+    nothing" means or an artifact could be admitted and then gate-failed on
+    the same property.
+    """
+    return [
+        d
+        for d in extract_declarations(code)
+        if d.name is not None and d.keyword != "axiom"
+    ]
 
 
 @dataclass(frozen=True)
