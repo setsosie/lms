@@ -54,7 +54,11 @@ Qwen's foundation after ten generations: 4 structures, no theorems.
 
 ## Harness defects found (fix these regardless of model)
 
-### 1. The verifier is stricter than the foundation it writes into
+### 1. The verifier is stricter than the foundation it writes into ✅ FIXED
+
+> **Fixed in `26Q3-HARN-21` (PR #54).** Confirmed empirically, not only by unit
+> test: with the fix, the generation-3 artifact compiles *unmodified* — zero
+> universe declarations — against real Lean 4 + Mathlib.
 
 `Foundation.lean` declares `universe u v w` (line 15) *above* `namespace
 LMS.Foundation` (line 24). `foundation.py` strips `universe` lines out of
