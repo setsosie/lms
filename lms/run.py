@@ -168,7 +168,10 @@ async def run_experiment(
     lean_project_dir = Path(__file__).parent.parent / "lean"
 
     if use_real_verifier or verifier_type == "real":
-        verifier = RealLeanVerifier(project_dir=lean_project_dir)
+        verifier = RealLeanVerifier(
+            project_dir=lean_project_dir,
+            timeout=RealLeanVerifier.RUN_TIMEOUT_S,
+        )
         verifier_name = "LEAN 4 (direct)"
     elif verifier_type == "mcp":
         verifier = MCPLeanVerifier()
@@ -507,7 +510,10 @@ async def resume_experiment(
     lean_project_dir = Path(__file__).parent.parent / "lean"
 
     if use_real_verifier or verifier_type == "real":
-        verifier = RealLeanVerifier(project_dir=lean_project_dir)
+        verifier = RealLeanVerifier(
+            project_dir=lean_project_dir,
+            timeout=RealLeanVerifier.RUN_TIMEOUT_S,
+        )
     elif verifier_type == "mcp":
         verifier = MCPLeanVerifier()
     else:
