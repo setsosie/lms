@@ -56,6 +56,30 @@ def declared_universe_names(lines: Iterable[str]) -> set[str]:
     return names
 
 
+def strip_header_universes(lines: Iterable[str]) -> list[str]:
+    """Drop universe names the foundation header already binds.
+
+    Inlined text sits below `universe u v w`, so repeating any of those names
+    is `error: a universe level named 'u' has already been declared`. A line
+    binding names the header does *not* cover keeps exactly those, so a seed
+    or artifact using an exotic level still works.
+    """
+    out: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("universe "):
+            out.append(line)
+            continue
+        kept = [
+            name
+            for name in stripped[len("universe ") :].split()
+            if name not in FOUNDATION_UNIVERSES
+        ]
+        if kept:
+            out.append(f"universe {' '.join(kept)}")
+    return out
+
+
 def split_imports(code: str) -> tuple[list[str], list[str]]:
     """Partition Lean source lines into `import` lines and everything else.
 
@@ -639,6 +663,14 @@ end {FOUNDATION_NAMESPACE}
             path: Path to the Foundation.lean file
         """
         self.path = Path(path)
+        #: Hand-written generation-0 Lean, written verbatim below the header
+        #: and above every agent entry (26Q3-HARN-23). Verbatim rather than
+        #: parsed into entries because `save()` only writes entry bodies, and
+        #: the seed's `scoped notation` lines are not declarations -- routing
+        #: them through `_extract_entries` would silently drop `⟶`, `𝟙`, `≫`.
+        self.seed_source: str = ""
+        #: The seed's declarations, for agent context and name-claiming only.
+        self.seed_entries: list[FoundationEntry] = []
         self.entries: list[FoundationEntry] = []
         self._artifact_ids: set[str] = set()  # Track added artifacts
         self._definition_names: set[str] = (
@@ -651,6 +683,33 @@ end {FOUNDATION_NAMESPACE}
     def __len__(self) -> int:
         """Return number of entries in foundation."""
         return len(self.entries)
+
+    def set_seed(self, source: str) -> list[str]:
+        """Install the generation-0 axiom layer; return the names it claims.
+
+        The seed is the one part of the foundation no agent wrote. Its names
+        are registered in `_definition_names` so an agent redefining `Category`
+        contributes nothing rather than shadowing the layer everything else is
+        built on -- which is how `committee_fix_c` ended up with four mutually
+        incompatible `Functor`s.
+        """
+        # The seed is written below the header's `universe u v w`, so any
+        # header name it rebinds is a duplicate-declaration error. It keeps
+        # its own `universe` line so the file stands alone for review and
+        # standalone compilation; that line is normalised away on install.
+        _, body = split_imports(source.strip())
+        self.seed_source = "\n".join(strip_header_universes(body)).strip()
+        self.seed_entries = self._extract_entries(
+            self.seed_source, artifact_id="seed", generation=0, author="seed"
+        )
+        for entry in self.seed_entries:
+            self._definition_names.add(entry.name)
+            if (
+                entry.entry_type in ("structure", "class")
+                and entry.name in self.CORE_CONCEPTS
+            ):
+                self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
+        return [entry.name for entry in self.seed_entries]
 
     def snapshot(self) -> FoundationSnapshot:
         """Capture the current state so a bad generation can be undone."""
@@ -958,6 +1017,27 @@ end {FOUNDATION_NAMESPACE}
             return entry.statement_lines()
         return []
 
+    def _seed_context_lines(self) -> list[str]:
+        """Render the generation-0 axiom layer, verbatim, above agent entries.
+
+        Verbatim and unabridged on purpose. This is the layer every later
+        artifact is typed against, and a truncated or paraphrased rendering of
+        it is exactly what produced five generations of `invalid binder
+        annotation` -- agents were shown a signature line and guessed the rest
+        from their Mathlib prior.
+        """
+        return [
+            "── GENERATION-0 SEED (hand-written; NEVER redefine these) ──",
+            "",
+            *self.seed_source.split("\n"),
+            "",
+            "The seed is already compiled and imported. Use it directly:",
+            "  `[Category C]` as an instance binder, `X ⟶ Y` for morphisms,",
+            "  `𝟙 X` for identities, `f ≫ g` for diagrammatic composition.",
+            "Redefining any seed name contributes nothing and will be dropped.",
+            "",
+        ]
+
     def get_context_for_agent(self, max_entries: int | None = None) -> str:
         """Get full context string for agent prompts.
 
@@ -973,7 +1053,7 @@ end {FOUNDATION_NAMESPACE}
         Returns:
             Context string to include in agent prompts
         """
-        if not self.entries:
+        if not self.entries and not self.seed_entries:
             return """═══════════════════════════════════════════════════════════════════════════════
                             FOUNDATION: EMPTY
 ═══════════════════════════════════════════════════════════════════════════════
@@ -998,15 +1078,17 @@ Create foundational definitions that future generations can build upon.
             f"write `{self.NAMESPACE}.Category` in full; a bare `Category` is "
             f"an unknown identifier.",
             "",
-            "⚠ Even when a name below matches a Mathlib concept, Mathlib's "
-            "API for it does NOT exist here. The ONLY fields and constants "
-            "available are the ones printed below. Anything else — class-"
-            "style `Category C`, `.Hom`, `𝟙`, `.obj` — is an unknown "
-            "identifier. Writing Mathlib's API against these definitions is "
-            "the single most common verification failure. Read the field "
-            "names below and use exactly those.",
+            "⚠ Mathlib's own category API does NOT exist here — no "
+            "`Mathlib.CategoryTheory` import, and none of its lemmas. The "
+            "ONLY fields and constants available are the ones printed below. "
+            "Writing Mathlib lemma names against these definitions is the "
+            "single most common verification failure. Read the declarations "
+            "below and use exactly those.",
             "",
         ]
+
+        if self.seed_entries:
+            lines.extend(self._seed_context_lines())
 
         # Group entries by generation for clarity
         by_gen: dict[int, list[FoundationEntry]] = {}
@@ -1084,6 +1166,15 @@ Create foundational definitions that future generations can build upon.
         # Build Lean file content
         lean_content = self.FOUNDATION_HEADER
 
+        # The seed goes verbatim, above every agent entry: later entries are
+        # written in insertion order and may depend on it.
+        if self.seed_source:
+            lean_content += (
+                "-- ===== Generation-0 seed (hand-written, not agent output) =====\n"
+                f"{self.seed_source}\n"
+                "-- ===== End seed =====\n"
+            )
+
         # Write each unique entry's code
         # Group by artifact but only write code for unique definitions
         seen_artifacts: set[str] = set()
@@ -1112,6 +1203,9 @@ Create foundational definitions that future generations can build upon.
         metadata = {
             "entries": [e.to_dict() for e in self.entries],
             "artifact_ids": list(self._artifact_ids),
+            # Persisted so a resumed run rebuilds the same axiom layer rather
+            # than silently dropping it and letting agents redefine `Category`.
+            "seed_source": self.seed_source,
         }
         metadata_path = self.path.with_suffix(".json")
         metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -1141,5 +1235,10 @@ Create foundational definitions that future generations can build upon.
             for entry in foundation.entries:
                 if entry.entry_type == "structure" and entry.name in cls.CORE_CONCEPTS:
                     foundation._claimed_concepts.add(cls.CORE_CONCEPTS[entry.name])
+            # Reinstall the seed last: it claims its own names on top of the
+            # rebuilt sets, so a resumed run protects the axiom layer exactly
+            # as the original run did.
+            if metadata.get("seed_source"):
+                foundation.set_seed(metadata["seed_source"])
 
         return foundation

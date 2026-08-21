@@ -37,6 +37,7 @@ from lms.lean.interface import (
 )
 from lms.planning import PlanningPanel, create_default_assignments
 from lms.providers.base import BaseLLMProvider
+from lms.seed import load_seed
 from lms.textbook import Textbook
 from lms.traces import TraceStore
 from lms.working_group import Role, WorkingGroup, WorkingGroupConfig
@@ -132,6 +133,7 @@ class Society:
         providers: list[BaseLLMProvider] | None = None,
         goal: Goal | None = None,
         foundation_path: Path | None = None,
+        seed_source: str | None = None,
     ) -> None:
         """Initialize the society.
 
@@ -143,6 +145,10 @@ class Society:
             providers: List of providers, one per agent (for heterogeneous societies)
             goal: Optional goal to work towards (enables goal-directed mode)
             foundation_path: Path to Foundation.lean for accumulated definitions
+            seed_source: Generation-0 axiom layer. `None` uses the shipped
+                default; pass `""` for a genuinely bare foundation, which is
+                the pre-26Q3-HARN-23 behaviour and what a bootstrapping
+                experiment wants.
         """
         self.n_agents = n_agents
         self.verifier = verifier
@@ -176,6 +182,16 @@ class Society:
         # Last foundation state that compiled, to roll back to when a
         # generation's additions break the merged module (26Q3-HARN-22).
         self._last_good_foundation: FoundationSnapshot | None = None
+        # Generation-0 axiom layer, installed by `reset_foundation`
+        # (26Q3-HARN-23). Explicit argument wins; then the goal's choice; then
+        # the shipped default. A goal setting `seed=""` gets a bare foundation,
+        # which is what a bootstrapping experiment wants.
+        if seed_source is not None:
+            self.seed_source: str = seed_source
+        elif goal is not None and goal.seed is not None:
+            self.seed_source = load_seed(goal.seed) if goal.seed else ""
+        else:
+            self.seed_source = load_seed()
 
         # Working Group settings
         self.use_working_groups: bool = False  # Enable working group mode
@@ -293,9 +309,26 @@ class Society:
         LMS.Foundation` resolving from the first generation; an empty module is
         valid, a missing one is not.
 
+        "Empty" now means "seed only" (26Q3-HARN-23). The generation-0 axiom
+        layer is hand-written, so the single most load-bearing decision in a
+        run -- how `Category` is represented -- is made once by a human rather
+        than by whichever agent happens to submit first. In
+        `committee_fix_c` that decision landed on a parameterized `structure`,
+        and every generation from 5 on died writing `[C : Category]` against
+        it.
+
         Returns:
-            True if the empty foundation is on disk and compiled.
+            True if the seeded foundation is on disk and compiled.
         """
+        if self.seed_source:
+            claimed = self.foundation.set_seed(self.seed_source)
+            print(f"  Seeded foundation: {', '.join(claimed) or '(no declarations)'}")
+            if self.goal is not None:
+                seeded = self.goal.mark_seeded()
+                if seeded:
+                    # Say it out loud: these count toward `progress()` and were
+                    # not earned by the collective.
+                    print(f"  Tags given by the seed (not earned): {', '.join(seeded)}")
         return await self._write_and_build_foundation()
 
     async def _write_and_build_foundation(self) -> bool:
