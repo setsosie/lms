@@ -28,7 +28,7 @@ from lms.artifacts import (
     ArtifactType,
 )
 from lms.dependency import DependencyGraph, TaskStatus
-from lms.foundation import FoundationFile
+from lms.foundation import FoundationFile, FoundationSnapshot
 from lms.gates import default_gate_runner
 from lms.lean.interface import (
     LeanVerifier,
@@ -173,6 +173,9 @@ class Society:
         # T4/T2 machine gates (faithfulness protocol §4), run after
         # verification on every successfully verified artifact.
         self.gate_runner = default_gate_runner(verifier)
+        # Last foundation state that compiled, to roll back to when a
+        # generation's additions break the merged module (26Q3-HARN-22).
+        self._last_good_foundation: FoundationSnapshot | None = None
 
         # Working Group settings
         self.use_working_groups: bool = False  # Enable working group mode
@@ -296,7 +299,23 @@ class Society:
         return await self._write_and_build_foundation()
 
     async def _write_and_build_foundation(self) -> bool:
-        """Write the foundation and recompile so imports see current contents."""
+        """Write the foundation and recompile so imports see current contents.
+
+        On a failed build the additions since the last good state are rolled
+        back and the foundation is rebuilt from that state (26Q3-HARN-22).
+
+        Every artifact here already passed the verifier *individually*. The
+        merged module can still fail: two entries that each compile alone can
+        collide, shadow a name, or depend on an ordering the merge does not
+        preserve. Left in place, a broken `LMS.Foundation` fails every
+        subsequent generation's `import` -- one bad artifact ends the run,
+        and the errors point at the importer rather than the cause.
+
+        Rolling back the whole generation is deliberately blunt. Bisecting to
+        the single offending entry costs one `lake build` per artifact and is
+        worth doing only once there is evidence that partial generations are
+        common; the run surviving at all is the point here.
+        """
         self.foundation.save()
 
         # MockLeanVerifier has no project; nothing to compile against.
@@ -304,7 +323,27 @@ class Society:
         if project is None:
             return True
 
-        return await project.rebuild_changed_sources()
+        if await project.rebuild_changed_sources():
+            self._last_good_foundation = self.foundation.snapshot()
+            return True
+
+        if self._last_good_foundation is None:
+            # Nothing known-good to return to -- the very first build failed,
+            # which for `reset_foundation` means an empty module did not
+            # compile. That is an environment fault, not a bad artifact.
+            print("  [foundation] build FAILED and there is no good state to restore")
+            return False
+
+        dropped = self.foundation.restore(self._last_good_foundation)
+        self.foundation.save()
+        restored = await project.rebuild_changed_sources()
+        print(
+            f"  [foundation] build FAILED; rolled back {len(dropped)} "
+            f"entr{'y' if len(dropped) == 1 else 'ies'}: {', '.join(dropped) or '(none)'}"
+        )
+        if not restored:
+            print("  [foundation] WARNING: rebuild after rollback also failed")
+        return False
 
     async def _run_generation_impl(self, generation: int) -> GenerationResult:
         """Run a single generation of the society using three phases.
