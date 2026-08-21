@@ -2,8 +2,13 @@
 
 Gate 2 (T4, axiom/sorry audit): `lms.gates.axioms`
 Gate 3 (T2, non-vacuity): `lms.gates.vacuity`
-Gate 4 (novelty N0/N1): `lms.gates.novelty` — 26Q3-HARN-04, not part of
-`default_gate_runner`; import `apply_novelty_gate` directly.
+Gate 4 (novelty N0/N1): `lms.gates.novelty` — kept out of this package's
+namespace *and* out of `default_gate_runner`. It imports `lms.artifacts` (to
+stamp the verdict on the artifact), and `lms.artifacts` imports this package
+for `GateResult`, so re-exporting it here is a circular import. Import
+`apply_novelty_gate` / `default_novelty_classifier` from `lms.gates.novelty`
+directly. It is also synchronous and network-bound, so `Society` runs it off
+the event loop rather than inside the gate runner.
 """
 
 from lms.gates.axioms import AxiomGate, AxiomProber
