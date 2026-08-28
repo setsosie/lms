@@ -65,7 +65,7 @@ class Config:
         if anthropic_key:
             config.anthropic = ProviderConfig(
                 api_key=anthropic_key,
-                model=os.getenv("LMS_ANTHROPIC_MODEL") or "claude-sonnet-4-5-20250514",
+                model=os.getenv("LMS_ANTHROPIC_MODEL") or "claude-opus-4-5-20251101",
             )
 
         # Load OpenAI config
