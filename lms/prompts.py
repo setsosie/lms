@@ -2,9 +2,19 @@
 
 All prompts are versioned for reproducibility. When running experiments,
 the prompt version is recorded alongside results.
+
+Prompts can be overridden for a single run (`26Q4-EVO-01`): a JSON file
+mapping prompt name to replacement content is applied over `CURRENT_PROMPTS`
+before the run starts. This is the injection point the promptbreeder loop
+uses to evaluate a bred genome — and it is deliberately the *only* one, so
+every prompt an agent ever sees is either a named version in this file or an
+override recorded in the run's metadata.
 """
 
+import hashlib
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -594,3 +604,91 @@ def get_all_versions() -> dict[str, str]:
         Dict mapping prompt name to version string
     """
     return {name: prompt.version for name, prompt in CURRENT_PROMPTS.items()}
+
+
+# ---------------------------------------------------------------------------
+# Per-run prompt overrides (26Q4-EVO-01)
+
+#: Base registry, kept so overrides are reversible and the base version each
+#: override was applied on top of is known. Captured at import time, before
+#: any override can run.
+_BASE_PROMPTS = dict(CURRENT_PROMPTS)
+
+#: Provenance of the currently applied overrides, or None when none are.
+_ACTIVE_OVERRIDES: dict | None = None
+
+
+def apply_prompt_overrides(overrides: dict[str, str], source: str = "<memory>") -> None:
+    """Replace prompt contents in `CURRENT_PROMPTS` for this process.
+
+    Each override becomes a `PromptVersion` whose version string names the
+    base it was applied over plus a content hash
+    (e.g. ``2.6.0+override.3f9a2c1d``), so `get_all_versions()` — and with it
+    the run metadata — records exactly which bred prompt ran without any
+    caller having to remember to.
+
+    Args:
+        overrides: Prompt name → replacement content. Names must exist in
+            `CURRENT_PROMPTS`; contents must be non-empty strings.
+        source: Where the overrides came from (a file path, "<memory>"), for
+            provenance.
+
+    Raises:
+        ValueError: On an unknown prompt name or non-string/empty content —
+            loudly, at apply time, not as a KeyError mid-generation.
+    """
+    global _ACTIVE_OVERRIDES
+
+    unknown = sorted(set(overrides) - set(_BASE_PROMPTS))
+    if unknown:
+        raise ValueError(
+            f"Unknown prompt name(s) {unknown}; valid names: {sorted(_BASE_PROMPTS)}"
+        )
+    for name, content in overrides.items():
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError(f"Override for {name!r} must be a non-empty string")
+
+    applied: dict[str, str] = {}
+    for name, content in overrides.items():
+        base = _BASE_PROMPTS[name]
+        digest = hashlib.sha256(content.encode()).hexdigest()[:8]
+        version = f"{base.version}+override.{digest}"
+        CURRENT_PROMPTS[name] = PromptVersion(
+            version=version, name=name, content=content
+        )
+        applied[name] = version
+
+    _ACTIVE_OVERRIDES = {"source": source, "versions": applied}
+
+
+def load_prompt_overrides(path: Path) -> dict[str, str]:
+    """Read a prompt-override file: a JSON object of name → content.
+
+    Raises:
+        ValueError: If the file is not a JSON object of string values.
+    """
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Prompt-override file {path} is not valid JSON: {e}") from e
+    if not isinstance(data, dict) or not all(
+        isinstance(v, str) for v in data.values()
+    ):
+        raise ValueError(
+            f"Prompt-override file {path} must be a JSON object mapping "
+            "prompt names to replacement content strings"
+        )
+    return data
+
+
+def active_overrides() -> dict | None:
+    """Provenance of the applied overrides ({source, versions}), or None."""
+    return _ACTIVE_OVERRIDES
+
+
+def clear_prompt_overrides() -> None:
+    """Restore the base prompts. Exists for tests and in-process breeders."""
+    global _ACTIVE_OVERRIDES
+    CURRENT_PROMPTS.clear()
+    CURRENT_PROMPTS.update(_BASE_PROMPTS)
+    _ACTIVE_OVERRIDES = None

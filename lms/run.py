@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import math
+import os
 import signal
 import sys
 from datetime import datetime
@@ -18,7 +19,12 @@ from lms.lean.mock import MockLeanVerifier
 from lms.lean.mcp import MCPLeanVerifier
 from lms.lean.real import RealLeanVerifier
 from lms.metrics import analyze_library, print_analysis
-from lms.prompts import get_all_versions
+from lms.prompts import (
+    active_overrides,
+    apply_prompt_overrides,
+    get_all_versions,
+    load_prompt_overrides,
+)
 from lms.providers import create_provider
 from lms.society import Society, BudgetExceeded
 
@@ -384,6 +390,9 @@ async def run_experiment(
         "generations_completed": society.current_generation,
         "provider": provider_name,
         "prompt_versions": get_all_versions(),
+        # None unless --prompt-file / LMS_PROMPT_FILE was applied; then the
+        # source path and the exact override versions that ran (26Q4-EVO-01).
+        "prompt_overrides": active_overrides(),
         "total_tokens_used": society.total_tokens_used,
         "max_tokens": max_tokens,
         # Which machinery produced this run's results. Without it, a mock run
@@ -624,6 +633,10 @@ async def resume_experiment(
     metadata["timestamp"] = datetime.now().isoformat()
     metadata["generations_completed"] = society.current_generation
     metadata["total_tokens_used"] = society.total_tokens_used
+    # A resume can run under different prompts than the original process;
+    # record that under its own key so the original provenance stays intact.
+    if active_overrides() is not None:
+        metadata["prompt_overrides_resume"] = active_overrides()
     metadata["analysis"] = {
         "total_artifacts": analysis.total_artifacts,
         "verified_artifacts": analysis.verified_artifacts,
@@ -778,6 +791,15 @@ def build_parser() -> argparse.ArgumentParser:
         "the Lean error fed back (0 = one-shot, default: 2)",
     )
 
+    parser.add_argument(
+        "--prompt-file",
+        type=str,
+        default=None,
+        help="JSON file of prompt-name -> content overrides applied over the "
+        "built-in prompts for this run (26Q4-EVO-01). Applied versions are "
+        "recorded in metadata.json. Falls back to $LMS_PROMPT_FILE",
+    )
+
     return parser
 
 
@@ -811,6 +833,22 @@ def main() -> None:
 
     # Load config
     config = Config.from_env(Path(args.env) if args.env else None)
+
+    # Prompt overrides apply to new runs and resumes alike: the process is
+    # what carries prompts, so whichever path runs next uses them.
+    prompt_file = args.prompt_file or os.getenv("LMS_PROMPT_FILE") or None
+    if prompt_file:
+        override_path = Path(prompt_file)
+        if not override_path.exists():
+            print(f"Error: Prompt-override file not found: {override_path}")
+            return
+        try:
+            overrides = load_prompt_overrides(override_path)
+            apply_prompt_overrides(overrides, source=str(override_path))
+        except ValueError as e:
+            print(f"Error: {e}")
+            return
+        print(f"Prompt overrides applied from {override_path}: {sorted(overrides)}")
 
     # Resume from checkpoint?
     if args.resume:
