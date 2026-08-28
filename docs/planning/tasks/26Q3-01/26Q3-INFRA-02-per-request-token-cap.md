@@ -15,8 +15,8 @@ ask a 65k-context server for 64k completion tokens on every call.
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
-| **Branch** | `26Q3-INFRA-02-per-request-token-cap` |
+| **Status** | ✅ DONE (2026-08-28) |
+| **Branch** | `claude/repo-improvements-experiments-2e96q8` |
 | **Dependencies** | 26Q3-INFRA-01 (merged, #18) |
 | **PR Size Target** | <150 lines |
 
@@ -49,20 +49,20 @@ and [[local-first-llm-policy]] makes self-hosted the default path.
 
 #### Acceptance Criteria
 
-- [ ] `Config.from_env` reads `LMS_OPENAI_MAX_TOKENS` (and the Anthropic/Google
+- [x] `Config.from_env` reads `LMS_OPENAI_MAX_TOKENS` (and the Anthropic/Google
       equivalents) onto `ProviderConfig.max_tokens`; blank is treated as unset,
       matching the `or`-not-default convention already used in that function
-- [ ] `DEFAULT_MAX_TOKENS` keeps its current value so hosted-provider behavior is
+- [x] `DEFAULT_MAX_TOKENS` keeps its current value so hosted-provider behavior is
       unchanged when the var is absent
-- [ ] The comment on `DEFAULT_MAX_TOKENS` stops asserting a Claude limit as if it
+- [x] The comment on `DEFAULT_MAX_TOKENS` stops asserting a Claude limit as if it
       were a global one
-- [ ] A non-integer or non-positive value fails loudly at config load, not at the
+- [x] A non-integer or non-positive value fails loudly at config load, not at the
       first generation
-- [ ] Tests: env → `ProviderConfig.max_tokens`; unset keeps the default; the
+- [x] Tests: env → `ProviderConfig.max_tokens`; unset keeps the default; the
       value reaches `max_completion_tokens` in the request payload (extend the
       `_StubEndpoint` in `tests/test_local_serving.py`, which already captures
       request payloads)
-- [ ] `docs/infrastructure/cluster-runbook-calibration.md` Step 5 sets
+- [x] `docs/infrastructure/cluster-runbook-calibration.md` Step 5 sets
       `LMS_OPENAI_MAX_TOKENS`, and Step 4's `--max-model-len` note is reduced to
       a sizing guideline rather than a workaround
 
@@ -92,6 +92,6 @@ and [[local-first-llm-policy]] makes self-hosted the default path.
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `scripts/verify/26Q3-01/verify_26Q3-INFRA-02.sh` exits 0
-- [ ] `uv run pytest`, `uv run ruff check`, `uv run mypy` clean
+- [x] All acceptance criteria checked off
+- [x] `scripts/verify/26Q3-01/verify_26Q3-INFRA-02.sh` exits 0
+- [x] `uv run pytest`, `uv run ruff check`, `uv run mypy` clean
