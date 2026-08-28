@@ -117,23 +117,30 @@ class LeanProject:
         Returns:
             True if build succeeded, False otherwise
         """
-        if clean:
-            clean_proc = await asyncio.create_subprocess_exec(
+        # A box without a Lean toolchain has no `lake` on PATH, and
+        # create_subprocess_exec then raises instead of returning a status.
+        # That is a failed build, not a crash worth taking the harness down.
+        try:
+            if clean:
+                clean_proc = await asyncio.create_subprocess_exec(
+                    "lake",
+                    "clean",
+                    cwd=self.project_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await clean_proc.communicate()
+
+            proc = await asyncio.create_subprocess_exec(
                 "lake",
-                "clean",
+                "build",
                 cwd=self.project_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await clean_proc.communicate()
-
-        proc = await asyncio.create_subprocess_exec(
-            "lake",
-            "build",
-            cwd=self.project_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        except FileNotFoundError:
+            print("Lake build warning: `lake` not found on PATH")
+            return False
 
         stdout, stderr = await proc.communicate()
 

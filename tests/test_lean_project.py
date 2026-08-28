@@ -175,3 +175,21 @@ class TestLeanProjectAsync:
             # Result depends on whether lake is installed
             # Either way, it shouldn't crash
             assert isinstance(result, bool)
+
+    @pytest.mark.asyncio
+    async def test_build_returns_false_when_lake_is_absent(self, monkeypatch):
+        """A box with no Lean toolchain gets a failed build, not a crash.
+
+        Regression guard: `create_subprocess_exec("lake", ...)` raises
+        `FileNotFoundError` when `lake` is not on PATH, which used to escape
+        `build()` — so the whole suite crashed on any machine without Lean
+        installed, CI included.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            empty_path = Path(tmpdir) / "empty-path"
+            empty_path.mkdir()
+            monkeypatch.setenv("PATH", str(empty_path))
+
+            project = LeanProject(tmpdir)
+            assert await project.build() is False
+            assert await project.build(clean=True) is False
