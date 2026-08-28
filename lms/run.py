@@ -13,6 +13,7 @@ from lms.agent import Agent
 from lms.config import Config
 from lms.crash_log import CrashRecoveryLog
 from lms.goals import get_goal, list_goals, Goal
+from lms.lean.interface import LeanVerifier
 from lms.lean.mock import MockLeanVerifier
 from lms.lean.mcp import MCPLeanVerifier
 from lms.lean.real import RealLeanVerifier
@@ -167,6 +168,7 @@ async def run_experiment(
     # Path to the Lean project for auto-rebuild on new imports
     lean_project_dir = Path(__file__).parent.parent / "lean"
 
+    verifier: LeanVerifier
     if use_real_verifier or verifier_type == "real":
         verifier = RealLeanVerifier(project_dir=lean_project_dir)
         verifier_name = "LEAN 4 (direct)"
@@ -506,6 +508,7 @@ async def resume_experiment(
     # Choose verifier
     lean_project_dir = Path(__file__).parent.parent / "lean"
 
+    verifier: LeanVerifier
     if use_real_verifier or verifier_type == "real":
         verifier = RealLeanVerifier(project_dir=lean_project_dir)
     elif verifier_type == "mcp":

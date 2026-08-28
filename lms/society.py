@@ -449,15 +449,15 @@ class Society:
                 )
 
                 # Process review results
-                for (agent, pending), (result, review_elapsed) in zip(
+                for (agent, pending), (review_result, review_elapsed) in zip(
                     review_assignments, review_results
                 ):
                     reviews_total += 1
                     self.reviews_by_agent[agent.id]["given"] += 1
 
                     # Track tokens from review
-                    if result.tokens_used:
-                        tokens = result.tokens_used.total_tokens
+                    if review_result.tokens_used:
+                        tokens = review_result.tokens_used.total_tokens
                         generation_tokens += tokens
                         self.total_tokens_used += tokens
                         self.tokens_by_agent[agent.id] += tokens
@@ -472,11 +472,11 @@ class Society:
                             ),
                             agent_id=agent.id,
                             generation=generation,
-                            prompt_tokens=result.tokens_used.input_tokens
-                            if result.tokens_used
+                            prompt_tokens=review_result.tokens_used.input_tokens
+                            if review_result.tokens_used
                             else 0,
-                            completion_tokens=result.tokens_used.output_tokens
-                            if result.tokens_used
+                            completion_tokens=review_result.tokens_used.output_tokens
+                            if review_result.tokens_used
                             else 0,
                             wall_clock_s=review_elapsed,
                             outcome="review",
@@ -484,22 +484,22 @@ class Society:
                     )
 
                     # Mark as reviewed
-                    approved = result.decision in ("APPROVE", "MODIFY")
+                    approved = review_result.decision in ("APPROVE", "MODIFY")
                     review_queue.mark_reviewed(
                         pending=pending,
                         reviewer=agent.id,
                         approved=approved,
-                        notes=result.reasoning,
-                        modified_code=result.modified_code,
-                        tokens_used=result.tokens_used.total_tokens
-                        if result.tokens_used
+                        notes=review_result.reasoning,
+                        modified_code=review_result.modified_code,
+                        tokens_used=review_result.tokens_used.total_tokens
+                        if review_result.tokens_used
                         else 0,
                     )
 
-                    if result.decision == "APPROVE":
+                    if review_result.decision == "APPROVE":
                         reviews_approved += 1
                         self.reviews_by_agent[agent.id]["approved"] += 1
-                    elif result.decision == "MODIFY":
+                    elif review_result.decision == "MODIFY":
                         reviews_modified += 1
                         self.reviews_by_agent[agent.id]["modified"] += 1
                     else:
