@@ -4,7 +4,7 @@ Provides an append-only JSONL log for post-mortem analysis of experiment runs.
 """
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any

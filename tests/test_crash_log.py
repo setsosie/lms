@@ -1,7 +1,5 @@
 """Tests for crash recovery logging."""
 
-import json
-import tempfile
 from pathlib import Path
 
 from lms.crash_log import CrashRecoveryLog
