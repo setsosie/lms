@@ -209,6 +209,15 @@ Deferred branches, unchanged and still queued behind a green calibration:
 - Genome arm `SPG-01/02/03` — pushed to Q4. Its fitness function *is* proof
   success; evolving against a signal that is ~0 for every genome is a flat
   landscape by construction.
+  **Update 2026-08-28**: the evolution arm now starts in *text space* —
+  `26Q4-EVO-01/02/03` (prompt override hook: landed; fitness harness;
+  promptbreeder loop with a strong breeder model, one LMS run per
+  evaluation). Rationale: no serving-side work, works against any provider,
+  genomes are readable, and an LLM mutation operator is far more
+  sample-efficient per (expensive) evaluation than Gaussian noise on a
+  simplex. SPG stays queued behind it as the continuous-genome successor;
+  the flat-landscape caveat applies to both, which is why EVO-02's fitness
+  carries partial credit and EVO-03 has an explicit stop-and-report gate.
 
 ## Bottom line — ⚠️ REPLACED 2026-07-24
 

@@ -101,9 +101,9 @@ Sprint 4 as an explicit decision, not as a row that was sitting there.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q3-HARN-13: Verify an artifact in the namespace it will be stored in | 2 | HIGH | HARN | 🔲 PENDING | card in #30, no impl | **Do this first.** `real.py:194` verifies at top level; `foundation.py:138` stores inside `namespace LMS.Foundation`. A false negative in the oracle — it suppresses the CVFN numerator directly, and it is the cheapest thing on the board |
-| 26Q3-HARN-04: Novelty classifier (N0 / N1) | 5 | CRITICAL | HARN | 🔲 PENDING | — | Gate 4. Mathlib name search + `exact?`/`loogle` via lean-lsp MCP. **Every artifact produced to date is N0.** Its acceptance test is DoD item 1 — the classifier must run on the box over both candidate arcs, not just pass unit tests |
-| 26Q3-HARN-05: Per-statement cost accounting | 3 | HIGH | HARN | 🔲 PENDING | — | Tokens + wall-clock per statement including failed attempts. **This is the CVFN denominator**, and it is what makes the Sprint 4 calibration run interpretable. Fixes `society.py:356` counting `len(response.attempts)` as artifacts created |
+| 26Q3-HARN-13: Verify an artifact in the namespace it will be stored in | 2 | HIGH | HARN | ✅ DONE | #33, merged 2026-08-19 | Was "do this first", and it was: the oracle now wraps the temp file in `LMS.Foundation` before verifying, via a single shared `FOUNDATION_NAMESPACE` constant |
+| 26Q3-HARN-04: Novelty classifier (N0 / N1) | 5 | CRITICAL | HARN | ✅ DONE (code) | #38, merged 2026-08-19 | Four-stage Mathlib search (name-grep, `exact?` probe, loogle, LeanSearch) with confidence + D4 routing. **The acceptance test — the run on the box over both arcs — is runbook Step 7 and has no recorded result yet**; DoD item 1 is still open |
+| 26Q3-HARN-05: Per-statement cost accounting | 3 | HIGH | HARN | ✅ DONE | #37, merged 2026-08-19 | Tokens + wall-clock per statement including failed attempts — the CVFN denominator. Also fixed `len(response.attempts)` being counted as artifacts created |
 
 ## Definition of Done
 
@@ -158,14 +158,30 @@ Decide that at Sprint 4 planning with Sprint 3's N1 numbers in hand.
 
 | Task | Points | Why |
 |------|--------|-----|
-| 26Q3-HARN-03: T2 / T4 machine gates | 5 | Moved to Sprint 4 with Gate B. Cut to fit the 10-pt ceiling |
-| 26Q3-HARN-12: committee architecture reachable + review stage | 3 | Real (iterative mode has no peer-review phase at all), but it does not block CVFN. Card and verify script sit uncommitted in the working tree |
-| 26Q3-INFRA-02: per-request token cap configurable | 2 | Issue #17. Worked around in the runbook; revisit if Phase C hits it |
+| 26Q3-HARN-03: T2 / T4 machine gates | 5 | Moved to Sprint 4 with Gate B. Cut to fit the 10-pt ceiling. *Landed anyway 2026-08-19 (#39) in the found-work burst* |
+| 26Q3-HARN-12: committee architecture reachable + review stage | 3 | Real (iterative mode has no peer-review phase at all), but it does not block CVFN. Card and verify script sit uncommitted in the working tree. *Landed 2026-08-19 (#35)* |
+| 26Q3-INFRA-02: per-request token cap configurable | 2 | Issue #17. Worked around in the runbook; revisit if Phase C hits it. *Landed 2026-08-28: `LMS_<PROVIDER>_MAX_TOKENS` → `ProviderConfig.max_tokens`, runbook Steps 4–5 updated* |
 | 26Q3-HARN-08: agents emit Lean 3, not Lean 4 | 2 | **Re-evidence or close.** `shakedown_3x3_d` showed zero Lean 3 syntax across 4/4 artifacts — the card may describe a defect that no longer exists |
 | 26Q3-HARN-06: D4 side-by-side review view | 3 | Needed before Phase D (2026-09-21 under the revised calendar). Sprint 4 |
 | 26Q3-CAL-01: select the ANT slice | 3 | **Absorbed into this sprint's DoD item 1.** The card is unnecessary — it was always `-04`'s acceptance test |
 
 ## Sync Log
+
+- **2026-08-28** — Status sync against `main` (the doc had not been touched
+  since opening day; sixteen days and 21 PRs had passed). All 10 committed
+  points landed in the 2026-08-19/20 burst: `-13` (#33), `-05` (#37), `-04`
+  (#38). The found-work rule did not hold: Sprint 4's `26Q3-HARN-03` was pulled
+  forward (#39), `26Q3-HARN-12` landed (#35), and the first committee runs
+  spawned six new cards, all landed same-burst — `-14` (#48) through `-19`
+  (#53) — plus TP=4 serving (#42) and the Gate A control runner (#43).
+  **What is still open is exactly the DoD's server half**: runbook Steps 7/7b
+  (both arc densities + the Gate A control) have no recorded results, so DoD
+  items 1 and 3 — the sprint goal — remain unclosed with 7 days left in the
+  window. Step 8's smoke (Checkpoint 8, committee_smoke_e) is green (#47).
+  Also this sync: issue #16 fixed (config suite hermetic, Anthropic default
+  settled on `claude-opus-4-5-20251101`), `LeanProject.build` no longer
+  crashes on a box without `lake`, and deferred `26Q3-INFRA-02` delivered
+  (issue #17) — the per-request cap now follows the endpoint.
 
 - **2026-08-12 (second entry)** — Sprint 3 rescoped after a capacity review.
   Window extended 2026-08-21 → **2026-09-04**; committed points cut 15 → **10**;
@@ -190,4 +206,4 @@ Decide that at Sprint 4 planning with Sprint 3's N1 numbers in hand.
 
 ---
 
-*Last Updated: 2026-08-12*
+*Last Updated: 2026-08-28*

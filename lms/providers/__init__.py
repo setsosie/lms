@@ -1,5 +1,7 @@
 """LLM Provider abstraction for LMS."""
 
+from typing import Callable
+
 from lms.config import ProviderConfig
 from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
 from lms.providers.anthropic import AnthropicProvider
@@ -31,7 +33,10 @@ def create_provider(name: str, config: ProviderConfig) -> BaseLLMProvider:
     Raises:
         ValueError: If provider name is unknown
     """
-    providers = {
+    # Typed as constructors rather than classes: the abstract base cannot be
+    # instantiated, and a `type[BaseLLMProvider]` value would let mypy think
+    # that is what happens here.
+    providers: dict[str, Callable[[ProviderConfig], BaseLLMProvider]] = {
         "anthropic": AnthropicProvider,
         "openai": OpenAIProvider,
         "google": GoogleProvider,
