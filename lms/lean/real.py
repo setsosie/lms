@@ -7,7 +7,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from lms.foundation import FOUNDATION_NAMESPACE, split_imports
+from lms.foundation import (
+    FOUNDATION_NAMESPACE,
+    FOUNDATION_UNIVERSES,
+    declared_universe_names,
+    split_imports,
+)
 from lms.lean.interface import LeanVerifier, VerificationResult, VerifierKind
 from lms.lean.project import LeanProject
 
@@ -176,11 +181,26 @@ class RealLeanVerifier(LeanVerifier):
         Imports are hoisted above the wrapper: Lean rejects an `import` inside
         a `namespace`. Code carrying its own `namespace Foo ... end Foo` nests
         inside the wrapper, which is legal.
+
+        The foundation's universe names are bound here too (26Q3-HARN-21).
+        `FoundationFile.add_artifact` strips an entry's own `universe` lines
+        because the header already binds them -- so a candidate that writes
+        `Category.{u,v}` without declaring `u v` compiles once stored but was
+        rejected at verification with `unknown universe level 'v'`. The
+        verifier was strictly stricter than the destination, and the gap cost
+        correct work. Only the names the candidate has *not* declared are
+        added; declaring one twice is an error in the other direction.
         """
         imports, body = split_imports(code)
+        missing = [
+            u for u in FOUNDATION_UNIVERSES if u not in declared_universe_names(body)
+        ]
         pieces: list[str] = []
         if imports:
             pieces.extend(imports)
+            pieces.append("")
+        if missing:
+            pieces.append(f"universe {' '.join(missing)}")
             pieces.append("")
         pieces.append(f"namespace {FOUNDATION_NAMESPACE}")
         pieces.append("")

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -30,6 +31,29 @@ _BY_TAIL = re.compile(r"\bby$")
 #: literals that had to agree is how the verify/store asymmetry arose
 #: (26Q3-HARN-13).
 FOUNDATION_NAMESPACE = "LMS.Foundation"
+
+#: Universe names the foundation header binds, above its `namespace` line.
+#: `FoundationFile.add_artifact` strips an entry's own `universe` lines on the
+#: grounds that these are already in scope at the destination -- so the
+#: verifier has to put them in scope too, or it rejects code that would
+#: compile once stored (26Q3-HARN-21).
+FOUNDATION_UNIVERSES: tuple[str, ...] = ("u", "v", "w")
+
+
+def declared_universe_names(lines: Iterable[str]) -> set[str]:
+    """Universe names that a `universe ...` line in `lines` already binds.
+
+    The verifier adds only the header universes a candidate has *not* declared
+    for itself: adding one twice is `error: a universe level named 'u' has
+    already been declared`, which is the same class of failure in the opposite
+    direction.
+    """
+    names: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("universe "):
+            names.update(stripped[len("universe ") :].split())
+    return names
 
 
 def split_imports(code: str) -> tuple[list[str], list[str]]:
@@ -575,7 +599,7 @@ import Mathlib.Logic.Function.Basic
 import Mathlib.Data.Nat.Basic
 import Mathlib.Algebra.Ring.Basic
 
-universe u v w
+universe {" ".join(FOUNDATION_UNIVERSES)}
 
 -- Matches the flags RealLeanVerifier passes to `lean` (STRICTNESS_FLAGS).
 -- An entry is verified standalone and then recompiled here as part of the
