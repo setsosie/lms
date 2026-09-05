@@ -63,6 +63,11 @@ as available-on-demand for hard sub-tasks, not date-triggered.
 **This is your pre-commitment to change, not mine.** Recorded here as an open
 decision; nothing has been edited in `calibration-program.md`.
 
+> **Resolved 2026-09-04** — `decisions/0001-phase-c-model-harness-control.md`.
+> The checkpoint is re-pointed as a *control*, not a swap: Phase C runs the
+> local model and one frontier model on the same slice and harness, and the
+> $300 pays for the frontier arm. `calibration-program.md` §3 is amended.
+
 ## Sprint 2 close-out (26Q3-01) — 19/41 pts, goal not met
 
 | Metric | Value |
@@ -142,17 +147,29 @@ this sprint could not fit.
 - `26Q3-HARN-03` (5) — T2/T4 machine gates, carried from Sprint 3's scope cut.
   Gate B cannot go green without it.
 - **Gate B** — one artifact through all five machine gates, end-to-end on the box.
-- **Phase C** — the slice chosen by Sprint 3's measured N1 density, run at
-  **1, 3 and 9 agents**, same slice, same per-config token budget, same model.
-  2M tokens per config, 6M total, hard-capped. This is the first direct test of
-  the project's core hypothesis that population size matters.
+- **Phase C** — the slice chosen by Sprint 3's measured N1 density, run as
+  two arms on one frozen harness (ADR 0001, 2026-09-04): Qwen at **1 and 9
+  agents**, 2M tokens each, hard-capped; one frontier control at 9 (then 1 if
+  budget remains), capped at $300. ~~1, 3 and 9 agents on one model~~. This is
+  the first direct test of the project's core hypothesis that population size
+  matters, with the model-vs-harness attribution the single-model design
+  could not give.
 - **Gate C** — ≥1 statement clears all five machine gates in at least one config.
-  Zero across all three is a legitimate, publishable go/no-go outcome.
+  Zero across all configs is a legitimate, publishable go/no-go outcome.
+- `26Q3-HARN-25` (5) — proof sketches: open child lemmas become leaves in the
+  task graph. Candidate; does not gate Phase C (harness frozen 2026-09-07).
+- **The DAG phase** (`docs/planning/dag-phase.md`, 2026-09-05): `26Q3-HARN-27`
+  (3, source-anchored dependency edges — **decide before 2026-09-07** whether
+  it enters the frozen baseline; every goal's graph is a chain today),
+  `26Q3-HARN-28` (5, theorem cards + statement pinning + ANT arc → goal
+  converter), `26Q3-HARN-26` (5, closing leaves, Part 2 of `-25`). `-28`/`-26`
+  are the post-freeze harness variant, run on the same slice and budget after
+  the two frozen arms.
 
-Sizing note: Phase C at three configs plus `-03` plus Gate B is more than a
-lighter-sprint budget holds. Expect to cut — the likeliest cut is the 3-agent
-config, keeping 1 and 9 to test the hypothesis at its extremes for 4M tokens.
-Decide that at Sprint 4 planning with Sprint 3's N1 numbers in hand.
+Sizing note: `-03` plus Gate B plus Phase C already fills a normal sprint; the
+DAG-phase cards are 13 points on top and will not all fit. The 3-agent config
+was cut by ADR 0001. Decide the rest at Sprint 4 planning with Sprint 3's N1
+numbers in hand.
 
 ## Deferred — not this sprint
 
@@ -166,6 +183,31 @@ Decide that at Sprint 4 planning with Sprint 3's N1 numbers in hand.
 | 26Q3-CAL-01: select the ANT slice | 3 | **Absorbed into this sprint's DoD item 1.** The card is unnecessary — it was always `-04`'s acceptance test |
 
 ## Sync Log
+
+- **2026-09-05** — **The DAG phase** designed (`docs/planning/dag-phase.md`)
+  as the harness-side response to Prove2Me and the Stacks dependency
+  structure. Finding while designing it: `DependencyGraph.from_goal` infers a
+  total order, so every registered goal has exactly **one** AVAILABLE task at
+  any time — no committee run has ever allocated two distinct statements in a
+  generation, and "N agents converge on one tag" was the graph, not the
+  agents. The Stacks source's `\ref` cross-references give the real edges
+  (Track B and A go from 1 root to 18 and 16). Three cards: `26Q3-HARN-27`
+  (edges, 3), `26Q3-HARN-28` (theorem cards + pinning + arc → goal converter,
+  5), `26Q3-HARN-26` (closing leaves, 5, Part 2 of `-25`). Sprint 4 pre-lock
+  above amended to ADR 0001's two-arm design. **Open for the user**: whether
+  `-27` lands before the 2026-09-07 harness freeze. Sprint 3 not closed in
+  this entry.
+
+- **2026-09-04** — Response to Anthropic's FLT formalization post (2026-09-03)
+  and the Prove2Me paper. Two decision records opened in
+  `docs/planning/decisions/`: **0001** (Accepted) re-points the 2026-08-21
+  checkpoint as a model × harness control — Phase C becomes Qwen at {1, 9} plus
+  one frontier arm at {9, then 1}, the $300 funds the control, Sep 30 stands;
+  **0002** (Proposed) restates the research question as measurement on open
+  models and drops the three-text program as a production target. README and
+  CLAUDE.md reframed accordingly. New card `26Q3-HARN-25` (proof sketches, 5
+  pts) added to the Sprint 4 pre-lock as a candidate. Sprint 3 not closed in
+  this entry.
 
 - **2026-08-12 (second entry)** — Sprint 3 rescoped after a capacity review.
   Window extended 2026-08-21 → **2026-09-04**; committed points cut 15 → **10**;
