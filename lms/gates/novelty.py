@@ -10,11 +10,48 @@ review, because a wrong novelty label is worse than no label.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from lms.artifacts import Artifact
+from lms.lean.interface import LEAN_GRADE_KINDS, LeanVerifier
 from lms.novelty import NoveltyClassifier, NoveltyLevel, NoveltyResult
+from lms.novelty.mathlib_search import (
+    DiskCache,
+    default_backends,
+    detect_mathlib_rev,
+)
 
-__all__ = ["NoveltyGateDecision", "apply_novelty_gate"]
+__all__ = [
+    "NoveltyGateDecision",
+    "apply_novelty_gate",
+    "default_novelty_classifier",
+]
+
+
+def default_novelty_classifier(
+    verifier: LeanVerifier | None,
+) -> NoveltyClassifier | None:
+    """Build the production search ladder from a lean-grade verifier, else None.
+
+    Mirrors `LeanProbeRunner.from_verifier`: without a real Lean project there
+    is no local Mathlib to search and no revision to pin a verdict to, so the
+    honest answer is "this gate cannot run" rather than a classifier whose
+    stages all report unavailable.
+
+    The disk cache lives beside the Lean project so repeated runs on the same
+    box stop re-querying Loogle for statements they have already classified.
+    """
+    if verifier is None or verifier.verifier_kind not in LEAN_GRADE_KINDS:
+        return None
+    project = getattr(verifier, "project", None)
+    project_dir = getattr(project, "project_dir", None)
+    if project_dir is None:
+        return None
+    return NoveltyClassifier(
+        default_backends(project_dir),
+        cache=DiskCache(Path(project_dir) / ".lake" / "novelty-cache"),
+        mathlib_rev=detect_mathlib_rev(project_dir),
+    )
 
 
 @dataclass
