@@ -52,8 +52,20 @@ class TestWrapShape:
         )
 
     def test_no_imports_means_no_leading_blank_block(self):
+        """No imports must not leave an empty line at the top of the file.
+
+        The wrapper now also binds the foundation's universes (26Q3-HARN-21),
+        so the namespace is no longer the first line -- but the invariant this
+        test exists for, that an absent import block leaves no blank gap, is
+        unchanged.
+        """
         wrapped = RealLeanVerifier._wrap_in_storage_namespace("def d : Nat := 1")
-        assert wrapped.startswith(f"namespace {FOUNDATION_NAMESPACE}")
+        assert not wrapped.startswith("\n")
+        lines = wrapped.split("\n")
+        assert lines[0].startswith("universe ")
+        assert lines.index(f"namespace {FOUNDATION_NAMESPACE}") < lines.index(
+            "def d : Nat := 1"
+        )
 
     def test_verifier_and_store_share_one_constant(self):
         """AC-4: header, footer, and verifier all derive from one constant."""
