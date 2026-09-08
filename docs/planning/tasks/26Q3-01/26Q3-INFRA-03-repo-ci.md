@@ -12,7 +12,7 @@ want the suite to run on a clean machine for every pull request, so that
 
 | Field | Value |
 |-------|-------|
-| **Story Points** | 2 |
+| **Story Points** | 3 |
 | **Priority** | HIGH |
 | **Status** | 🔲 PENDING |
 | **Branch** | `26Q3-INFRA-03-repo-ci` |
@@ -85,8 +85,11 @@ never been executed anywhere but one developer's machine:
       with the Lean-dependent modules reported as skipped rather than passed
 - [ ] The workflow fails if the suite writes into the tracked Lean corpus,
       making the `conftest.py` guard against issue #19 a checked property
-- [ ] The `test_from_env_uses_default_models` deselect carries a comment naming
-      what removes it
+- [ ] No deselect remains in the workflow: the config-hermeticity work has
+      landed, and the suite is hermetic on a clean checkout without it
+- [ ] A `lint` job runs `ruff check` and `mypy lms/`, and `pytest` declares
+      `needs: lint`, so a lint failure skips the suite rather than paying for
+      it. Both are scoped to what is already clean, so the gate starts green
 - [ ] `LeanProject.build()` returns `False` when `lake` is not on `PATH` rather
       than raising, with a regression test that forces the error so the contract
       stays checkable on machines that *do* have a toolchain
@@ -100,4 +103,17 @@ never been executed anywhere but one developer's machine:
   track record.
 - Fixing the Anthropic default model string; the in-flight config-hermeticity
   PR owns that.
-- Coverage reporting, lint, or type checking. Get one honest gate first.
+- Coverage reporting.
+- `mypy tests/` (16 pre-existing errors in 12 files) and
+  `ruff format --check` (9 files would be reformatted). The lint gate covers
+  only what is already clean; widening it is its own chore, so that this PR
+  does not arrive carrying a backlog.
+- A lint gate on `lean.yml`. It is path-scoped to `lean/**`, and Python lint
+  has no bearing on whether the corpus builds — gating it would block a
+  pure-Lean PR on unrelated Python.
+
+> **Scope amended 2026-09-08** at the user's request: lint and type checking
+> were originally deferred here ("get one honest gate first"). They came back
+> in once `main` was found carrying five undefined names for eighteen days —
+> `ruff` reports that class of defect in 14 seconds, which is a strong argument
+> for not deferring it.
