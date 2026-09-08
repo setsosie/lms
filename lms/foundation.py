@@ -74,6 +74,22 @@ def split_imports(code: str) -> tuple[list[str], list[str]]:
     return import_lines, body_lines
 
 
+@dataclass(frozen=True)
+class FoundationSnapshot:
+    """The foundation's full mutable state at a point in time.
+
+    Taken after every successful build so a generation whose additions break
+    the merged module can be undone (26Q3-HARN-22). Every set is copied on
+    capture and on restore: sharing them would let a later `add_artifact`
+    mutate the snapshot that is supposed to be the way back.
+    """
+
+    entries: tuple[FoundationEntry, ...]
+    artifact_ids: frozenset[str]
+    definition_names: frozenset[str]
+    claimed_concepts: frozenset[str]
+
+
 @dataclass
 class FoundationEntry:
     """A single definition/theorem in the foundation file.
@@ -623,6 +639,14 @@ end {FOUNDATION_NAMESPACE}
             path: Path to the Foundation.lean file
         """
         self.path = Path(path)
+        #: Hand-written generation-0 Lean, written verbatim below the header
+        #: and above every agent entry (26Q3-HARN-23). Verbatim rather than
+        #: parsed into entries because `save()` only writes entry bodies, and
+        #: the seed's `scoped notation` lines are not declarations -- routing
+        #: them through `_extract_entries` would silently drop `⟶`, `𝟙`, `≫`.
+        self.seed_source: str = ""
+        #: The seed's declarations, for agent context and name-claiming only.
+        self.seed_entries: list[FoundationEntry] = []
         self.entries: list[FoundationEntry] = []
         self._artifact_ids: set[str] = set()  # Track added artifacts
         self._definition_names: set[str] = (
@@ -636,11 +660,50 @@ end {FOUNDATION_NAMESPACE}
         """Return number of entries in foundation."""
         return len(self.entries)
 
-    def add_artifact(self, artifact: Artifact) -> None:
+    def snapshot(self) -> FoundationSnapshot:
+        """Capture the current state so a bad generation can be undone."""
+        return FoundationSnapshot(
+            entries=tuple(self.entries),
+            artifact_ids=frozenset(self._artifact_ids),
+            definition_names=frozenset(self._definition_names),
+            claimed_concepts=frozenset(self._claimed_concepts),
+        )
+
+    def restore(self, snapshot: FoundationSnapshot) -> list[str]:
+        """Roll back to `snapshot`; return the names of the dropped entries.
+
+        The names are returned rather than logged so the caller can report
+        exactly what a failed build cost -- a rollback that silently discards a
+        generation's verified work is the kind of thing that makes a run's
+        numbers untraceable afterwards.
+
+        `_artifact_ids` is restored too, so a dropped artifact is genuinely
+        forgotten: leaving its id behind would make `add_artifact` skip it as a
+        duplicate if a later generation resubmitted the same work.
+        """
+        kept = {id(entry) for entry in snapshot.entries}
+        dropped = [entry.name for entry in self.entries if id(entry) not in kept]
+        self.entries = list(snapshot.entries)
+        self._artifact_ids = set(snapshot.artifact_ids)
+        self._definition_names = set(snapshot.definition_names)
+        self._claimed_concepts = set(snapshot.claimed_concepts)
+        return dropped
+
+    def add_artifact(self, artifact: Artifact) -> bool:
         """Add a verified artifact to the foundation.
 
         Args:
             artifact: The artifact to add (must be verified with Lean code)
+
+        Returns:
+            True if this call contributed at least one new entry. False means
+            the artifact was silently absorbed -- an id already seen, a
+            conflicting core concept, or every declaration in it duplicating a
+            name already present.
+
+            Returning nothing made those three outcomes indistinguishable from
+            success at the call site, so a caller reported a promotion while
+            the foundation gained nothing (26Q3-HARN-22).
 
         Raises:
             ValueError: If artifact is not verified or has no Lean code
@@ -652,7 +715,7 @@ end {FOUNDATION_NAMESPACE}
 
         # Skip duplicates
         if artifact.id in self._artifact_ids:
-            return
+            return False
 
         # Clean the lean code (remove YAML multiline markers and embedded imports)
         clean_code = artifact.lean_code
@@ -710,7 +773,7 @@ end {FOUNDATION_NAMESPACE}
                         self._artifact_ids.add(
                             artifact.id
                         )  # Mark as seen to prevent retry
-                        return
+                        return False
                     # If same name, it's just a duplicate - will be skipped below
 
         # Filter and add entries
@@ -729,6 +792,7 @@ end {FOUNDATION_NAMESPACE}
 
         self.entries.extend(unique_entries)
         self._artifact_ids.add(artifact.id)
+        return bool(unique_entries)
 
     # Pattern to match block comments /- ... -/
     BLOCK_COMMENT_PATTERN = re.compile(r"/-.*?-/", re.DOTALL)
@@ -902,6 +966,27 @@ end {FOUNDATION_NAMESPACE}
             return entry.statement_lines()
         return []
 
+    def _seed_context_lines(self) -> list[str]:
+        """Render the generation-0 axiom layer, verbatim, above agent entries.
+
+        Verbatim and unabridged on purpose. This is the layer every later
+        artifact is typed against, and a truncated or paraphrased rendering of
+        it is exactly what produced five generations of `invalid binder
+        annotation` -- agents were shown a signature line and guessed the rest
+        from their Mathlib prior.
+        """
+        return [
+            "── GENERATION-0 SEED (hand-written; NEVER redefine these) ──",
+            "",
+            *self.seed_source.split("\n"),
+            "",
+            "The seed is already compiled and imported. Use it directly:",
+            "  `[Category C]` as an instance binder, `X ⟶ Y` for morphisms,",
+            "  `𝟙 X` for identities, `f ≫ g` for diagrammatic composition.",
+            "Redefining any seed name contributes nothing and will be dropped.",
+            "",
+        ]
+
     def get_context_for_agent(self, max_entries: int | None = None) -> str:
         """Get full context string for agent prompts.
 
@@ -917,7 +1002,7 @@ end {FOUNDATION_NAMESPACE}
         Returns:
             Context string to include in agent prompts
         """
-        if not self.entries:
+        if not self.entries and not self.seed_entries:
             return """═══════════════════════════════════════════════════════════════════════════════
                             FOUNDATION: EMPTY
 ═══════════════════════════════════════════════════════════════════════════════
@@ -942,15 +1027,17 @@ Create foundational definitions that future generations can build upon.
             f"write `{self.NAMESPACE}.Category` in full; a bare `Category` is "
             f"an unknown identifier.",
             "",
-            "⚠ Even when a name below matches a Mathlib concept, Mathlib's "
-            "API for it does NOT exist here. The ONLY fields and constants "
-            "available are the ones printed below. Anything else — class-"
-            "style `Category C`, `.Hom`, `𝟙`, `.obj` — is an unknown "
-            "identifier. Writing Mathlib's API against these definitions is "
-            "the single most common verification failure. Read the field "
-            "names below and use exactly those.",
+            "⚠ Mathlib's own category API does NOT exist here — no "
+            "`Mathlib.CategoryTheory` import, and none of its lemmas. The "
+            "ONLY fields and constants available are the ones printed below. "
+            "Writing Mathlib lemma names against these definitions is the "
+            "single most common verification failure. Read the declarations "
+            "below and use exactly those.",
             "",
         ]
+
+        if self.seed_entries:
+            lines.extend(self._seed_context_lines())
 
         # Group entries by generation for clarity
         by_gen: dict[int, list[FoundationEntry]] = {}
@@ -1028,6 +1115,15 @@ Create foundational definitions that future generations can build upon.
         # Build Lean file content
         lean_content = self.FOUNDATION_HEADER
 
+        # The seed goes verbatim, above every agent entry: later entries are
+        # written in insertion order and may depend on it.
+        if self.seed_source:
+            lean_content += (
+                "-- ===== Generation-0 seed (hand-written, not agent output) =====\n"
+                f"{self.seed_source}\n"
+                "-- ===== End seed =====\n"
+            )
+
         # Write each unique entry's code
         # Group by artifact but only write code for unique definitions
         seen_artifacts: set[str] = set()
@@ -1056,6 +1152,9 @@ Create foundational definitions that future generations can build upon.
         metadata = {
             "entries": [e.to_dict() for e in self.entries],
             "artifact_ids": list(self._artifact_ids),
+            # Persisted so a resumed run rebuilds the same axiom layer rather
+            # than silently dropping it and letting agents redefine `Category`.
+            "seed_source": self.seed_source,
         }
         metadata_path = self.path.with_suffix(".json")
         metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -1085,5 +1184,10 @@ Create foundational definitions that future generations can build upon.
             for entry in foundation.entries:
                 if entry.entry_type == "structure" and entry.name in cls.CORE_CONCEPTS:
                     foundation._claimed_concepts.add(cls.CORE_CONCEPTS[entry.name])
+            # Reinstall the seed last: it claims its own names on top of the
+            # rebuilt sets, so a resumed run protects the axiom layer exactly
+            # as the original run did.
+            if metadata.get("seed_source"):
+                foundation.set_seed(metadata["seed_source"])
 
         return foundation
