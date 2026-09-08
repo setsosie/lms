@@ -56,6 +56,16 @@ never been executed anywhere but one developer's machine:
    in-flight config-hermeticity PR. Deselected here with a pointer, not fixed —
    fixing it twice would collide with that PR.
 
+3. **`LeanProject.build()` raises when `lake` is absent.** Surfaced by the
+   first CI run this card produced. `build()` calls
+   `asyncio.create_subprocess_exec("lake", ...)` unguarded, so on a machine with
+   no toolchain it raises `FileNotFoundError` instead of returning a bool.
+   `test_build_returns_false_on_missing_project` was written to catch exactly
+   this — its comment reads "Either way, it shouldn't crash" — but it could only
+   ever observe the failure on a machine without Lean, so it passed for the life
+   of the repository. The same box-provisioning window that defect 1 describes
+   reaches this one too.
+
 ---
 
 #### Acceptance Criteria
@@ -77,6 +87,9 @@ never been executed anywhere but one developer's machine:
       making the `conftest.py` guard against issue #19 a checked property
 - [ ] The `test_from_env_uses_default_models` deselect carries a comment naming
       what removes it
+- [ ] `LeanProject.build()` returns `False` when `lake` is not on `PATH` rather
+      than raising, with a regression test that forces the error so the contract
+      stays checkable on machines that *do* have a toolchain
 
 ---
 

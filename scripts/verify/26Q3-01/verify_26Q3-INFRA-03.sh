@@ -77,6 +77,11 @@ check "full suite passes" \
   "uv run pytest -q"
 check "Lean-dependent modules skip rather than fail when Lean is unusable" \
   "test -n \"\$(uv run pytest tests/test_lean_real.py -q --no-header 2>&1 | grep -E 'skipped|passed')\""
+check "build() degrades instead of raising when lake is absent" \
+  "uv run pytest tests/test_lean_project.py::TestBuildWithoutToolchain -q"
+check "build() guards the subprocess launch" \
+  "grep -q 'except FileNotFoundError' lms/lean/project.py"
+
 check "the suite leaves the tracked Lean corpus untouched" \
   "test -z \"\$(git status --porcelain lean/LMS/)\""
 

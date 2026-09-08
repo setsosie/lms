@@ -1,5 +1,6 @@
 """Tests for the LeanProject class."""
 
+import asyncio
 import tempfile
 from pathlib import Path
 
@@ -175,3 +176,32 @@ class TestLeanProjectAsync:
             # Result depends on whether lake is installed
             # Either way, it shouldn't crash
             assert isinstance(result, bool)
+
+
+class TestBuildWithoutToolchain:
+    """`lake` absent from PATH must degrade, not raise.
+
+    The pre-existing `test_build_returns_false_on_missing_project` asserts this
+    ("Either way, it shouldn't crash") but can only observe it on a machine with
+    no Lean toolchain, so it passed for the whole life of the repo while
+    `build()` raised `FileNotFoundError`. Forcing the error makes the contract
+    checkable everywhere.
+    """
+
+    @pytest.mark.asyncio
+    async def test_build_returns_false_when_lake_is_absent(self, monkeypatch):
+        async def _no_lake(*args, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", "lake")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", _no_lake)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            assert await LeanProject(tmpdir).build() is False
+
+    @pytest.mark.asyncio
+    async def test_clean_build_returns_false_when_lake_is_absent(self, monkeypatch):
+        async def _no_lake(*args, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", "lake")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", _no_lake)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            assert await LeanProject(tmpdir).build(clean=True) is False
