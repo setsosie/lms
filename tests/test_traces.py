@@ -1,12 +1,9 @@
 """Tests for conversation logging and reasoning traces."""
 
-import json
 from pathlib import Path
 
-import pytest
 
 from lms.traces import (
-    ConversationTurn,
     ConversationLog,
     ReasoningTrace,
     TraceStore,

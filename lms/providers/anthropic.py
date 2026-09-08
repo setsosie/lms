@@ -1,7 +1,10 @@
 """Anthropic Claude provider."""
 
+from typing import cast
+
 import httpx
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, omit
+from anthropic.types import MessageParam
 
 from lms.config import ProviderConfig
 from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
@@ -45,24 +48,23 @@ class AnthropicProvider(BaseLLMProvider):
         Returns:
             GenerationResponse with content and token usage
         """
-        api_messages = [{"role": m.role, "content": m.content} for m in messages]
+        api_messages = cast(
+            "list[MessageParam]",
+            [{"role": m.role, "content": m.content} for m in messages],
+        )
         effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
-
-        kwargs = {
-            "model": self.config.model,
-            "messages": api_messages,
-            "max_tokens": effective_max_tokens,
-        }
-
-        if system_prompt:
-            kwargs["system"] = system_prompt
 
         # Use async streaming for proper concurrency
         content_parts = []
         input_tokens = 0
         output_tokens = 0
 
-        async with self.client.messages.stream(**kwargs) as stream:
+        async with self.client.messages.stream(
+            model=self.config.model,
+            messages=api_messages,
+            max_tokens=effective_max_tokens,
+            system=system_prompt if system_prompt else omit,
+        ) as stream:
             async for text in stream.text_stream:
                 content_parts.append(text)
             # Get final message for usage stats

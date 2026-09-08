@@ -89,13 +89,10 @@ check "tests/test_local_serving.py passes (incl. end-to-end vs a stub /v1)" \
 check "provider suite still passes" \
   "uv run pytest tests/test_providers.py -q"
 
-# test_from_env_uses_default_models is deselected: it asserts a default model
-# string that only matches when a developer's private .env supplies it, so it
-# fails on any clean checkout (CI, the cluster). Pre-existing on main and
-# unrelated to this change — tracked separately.
-check "config suite still passes (minus the known .env-dependent test)" \
-  "uv run pytest tests/test_config.py -q \
-     --deselect tests/test_config.py::TestConfig::test_from_env_uses_default_models"
+# The deselect that used to sit here is gone: issue #16 is fixed, the config
+# suite is hermetic on a clean checkout.
+check "config suite still passes" \
+  "uv run pytest tests/test_config.py -q"
 
 printf '\n'
 if [ "$fail" -eq 0 ]; then

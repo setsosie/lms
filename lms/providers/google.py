@@ -1,5 +1,7 @@
 """Google Gemini provider."""
 
+from typing import Any, cast
+
 import google.generativeai as genai
 from google.generativeai.types import RequestOptions
 
@@ -57,7 +59,9 @@ class GoogleProvider(BaseLLMProvider):
             contents,
             generation_config=genai.types.GenerationConfig(max_output_tokens=effective_max_tokens),
             request_options=RequestOptions(timeout=self.timeout),
-            tool_config={"function_calling_config": {"mode": "NONE"}},  # Disable function calling
+            # Disable function calling. The SDK's ToolConfigDict wants its own
+            # enum for mode, but accepts the string form at runtime.
+            tool_config=cast(Any, {"function_calling_config": {"mode": "NONE"}}),
         )
 
         # Extract token counts from Gemini response

@@ -1,7 +1,10 @@
 """OpenAI GPT provider."""
 
+from typing import cast
+
 import httpx
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 from lms.config import ProviderConfig
 from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
@@ -52,12 +55,13 @@ class OpenAIProvider(BaseLLMProvider):
             max_tokens if max_tokens is not None else self.config.max_tokens
         )
 
-        api_messages = []
+        raw_messages: list[dict[str, str]] = []
 
         if system_prompt:
-            api_messages.append({"role": "system", "content": system_prompt})
+            raw_messages.append({"role": "system", "content": system_prompt})
 
-        api_messages.extend([{"role": m.role, "content": m.content} for m in messages])
+        raw_messages.extend([{"role": m.role, "content": m.content} for m in messages])
+        api_messages = cast("list[ChatCompletionMessageParam]", raw_messages)
 
         response = await self.client.chat.completions.create(
             model=self.config.model,
@@ -84,7 +88,9 @@ class OpenAIProvider(BaseLLMProvider):
         self._track_usage(usage)
 
         return GenerationResponse(
-            content=response.choices[0].message.content,
+            # None happens on refusals and tool-only turns; the harness treats
+            # content as text everywhere, so empty is the faithful mapping.
+            content=response.choices[0].message.content or "",
             usage=usage,
             provider=self.name,
         )
