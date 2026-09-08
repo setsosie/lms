@@ -82,6 +82,10 @@ Rationale: the go/no-go date is worth more than the execution-environment policy
 and Phase A's `base_url` work makes the swap a config change. This is a
 pre-commitment, not a decision to make in the moment.
 
+> **Resolved 2026-09-04 (`decisions/0001-phase-c-model-harness-control.md`).**
+> The cluster was serving; the fallback did not fire as a swap. The $300 now
+> funds the **control arm** of Phase C below.
+
 ### Phase C — The calibration run (Aug 24 – Sep 11)
 
 **One fixed slice, three population sizes, identical budget.**
@@ -90,11 +94,18 @@ pre-commitment, not a decision to make in the moment.
   Phase A by running the novelty classifier over candidates and picking the one
   with the **highest N1 density**. See §4 — the currently-decided core arc is
   probably the wrong choice for this purpose.
-- **Configs**: 1 agent, 3 agents, 9 agents. Same slice, same per-config token
-  budget, same model. This yields CVFN *and* the population-size comparison from
-  the same spend.
-- **Budget**: 2M tokens per config, 6M total, hard-capped. If a config exhausts
-  its budget at zero verified statements, that is a result — record and stop.
+- **Configs (amended 2026-09-04, ADR 0001)**: two arms on the same slice, the
+  same harness (frozen at the 2026-09-07 state of `main`), the same
+  accounting. *Local arm*: Qwen3.6-27B-FP8 at 1 and 9 agents. *Control arm*:
+  one frontier API model at 9 agents, then 1 if budget remains. This yields
+  CVFN, the population-size comparison, **and** the model-vs-harness
+  attribution the Prove2Me paper (arXiv 2608.28433 §7) leaves to future work.
+  ~~1 / 3 / 9 agents on one model~~ — a Qwen-only result cannot say whether a
+  bad number is the model or the harness.
+- **Budget**: 2M tokens per local config (4M total, hard-capped); the control
+  arm is capped at $300 with tokens recorded, so the arms compare on tokens
+  too. If a config exhausts its budget at zero verified statements, that is a
+  result — record and stop.
 
 **Gate C**: ≥1 statement clears all five machine gates in at least one config.
 If zero across all three, the finding is "the pipeline cannot produce novel
@@ -156,11 +167,16 @@ Deferred, not cancelled:
   Phase C shows dynamic range in proof success.
 - `specs/interactive_society.md`, the benchmark release, any paper
 
+**Reframed 2026-09-04:** the shared kernel, ART, CNF and Stacks are no longer
+LMS *production* targets — see `decisions/0002-lms-measures-collective-formalization.md`
+(Proposed). They remain slices and test material.
+
 ## 6. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Cluster time never materializes (FLAIME is P0) | Aug 21 pre-commitment: fall back to API + $300 cap |
+| Cluster time never materializes (FLAIME is P0) | ~~Aug 21 pre-commitment: fall back to API + $300 cap~~ — resolved 2026-09-04, the $300 funds the control arm (ADR 0001) |
+| A bad CVFN cannot be attributed to model vs harness | Frontier control arm on the same slice and harness (ADR 0001, 2026-09-04) |
 | Solo bandwidth — this is off `FOCUS_PLAN_MAR2026_JAN2027.md` entirely | Phase A is small and local; Phases B/D are the only ones needing you, ~2 days total |
 | Chosen slice turns out ~all N0 | Novelty classifier picks the slice on measurement (§4) |
 | Agents game the gates (as they did with trivial `example`s) | T2 non-vacuity + N1 requirement + D4 human review; gate-failure histogram makes gaming visible |
@@ -176,3 +192,9 @@ Ten weeks, one number, three ways it can end:
 - **CVFN is undefined (zero N1 statements)** → the collective-formalization thesis
   is not testable at current capability. Write it up, shelve the program, and the
   10 weeks bought a defensible answer rather than another quarter of estimates.
+
+**Read against the control (added 2026-09-04, ADR 0001).** Each outcome above
+is reported per arm. A zero on the local arm with a non-zero on the control arm
+says the harness works and the model is the bottleneck. A zero on both says the
+harness or the slice is. Non-zero on both gives the attribution the program now
+exists to produce.

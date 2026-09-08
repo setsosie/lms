@@ -161,11 +161,36 @@ could not fit, then runs the calibration itself. Detail in
   Sprint 3's **measured** N1 density over both candidate arcs. See §4 — the
   currently-decided Ch. I core arc is probably the wrong choice, because
   Minkowski, class-number finiteness and Dirichlet units are all in Mathlib.
-- **Configs**: 1 agent, 3 agents, 9 agents. Same slice, same per-config token
-  budget, same model — yields CVFN *and* the population-size comparison from one
-  spend. This is the first direct test of the project's core hypothesis.
-- **Budget**: 2M tokens per config, 6M total, hard-capped. A config that
-  exhausts its budget at zero verified statements is a result — record and stop.
+- **Configs (amended 2026-09-04, `decisions/0001-*.md`)**: two arms, same
+  slice, same harness (frozen at the 2026-09-07 state of `main`), same
+  accounting. *Local arm*: Qwen3.6-27B-FP8 at 1 and 9 agents. *Control arm*:
+  one frontier API model at 9 agents, then 1 if budget remains. Yields CVFN,
+  the population-size comparison, and the model-vs-harness attribution.
+- **Budget**: 2M tokens per local config (4M, hard-capped); the control arm is
+  capped at $300 with tokens recorded. A config that exhausts its budget at
+  zero verified statements is a result — record and stop.
+- **`26Q3-HARN-25`** (5) — proof sketches: a group's conditional proof becomes
+  open leaves with exact statements in the task graph instead of a failed
+  artifact. **Candidate, not committed**: Phase C's harness is frozen at
+  2026-09-07; if this is not merged by then it is the first harness variant
+  measured *after* the calibration, not a reason to delay it.
+- **The DAG phase** (`dag-phase.md`, 2026-09-05) — the Prove2Me/Stacks
+  statement-DAG model, three cards in order:
+  - **`26Q3-HARN-27`** (3) — source-anchored dependency edges. Every goal's
+    graph today is a *chain* (one AVAILABLE task at a time, measured on all
+    seven registered goals), so no committee run has ever had two distinct
+    tasks to allocate and the 9-agent arm would measure one large group on
+    one statement. **Decision for the user**: land it before the 2026-09-07
+    freeze (recommended — a defect repair, data plus one `from_goal` branch)
+    or hold it with the rest of the phase.
+  - **`26Q3-HARN-28`** (5) — theorem cards and statement pinning; includes the
+    ANT arc → goal converter Phase C's slice file needs.
+  - **`26Q3-HARN-26`** (5) — closing leaves and parent auto-resolution, Part 2
+    of `-25`.
+  `-28` and `-26` are the post-freeze **harness variant**: the same slice and
+  budget run a third time, giving the model × harness cell the Prove2Me paper
+  defers. `-29` (agent-authored cards) and `-30` (search-before-propose) are
+  named in `dag-phase.md` and not carded.
 - **Gate C**: ≥1 statement clears all five machine gates in at least one config.
   If zero across all three, the finding is "the pipeline cannot produce novel
   verified Lean at current capability" — skip to Phase E and publish that. A
@@ -174,20 +199,18 @@ could not fit, then runs the calibration itself. Detail in
   2026-09-21 under the revised calendar, and a bad review format would make
   Phase D measure the wrong thing.
 
-**Sizing note**: `-03` + Gate B + three Phase C configs exceeds a
-lighter-sprint budget. Expect to cut, and decide the cut at Sprint 4 planning
-with Sprint 3's N1 numbers in hand. Likeliest cut is the 3-agent config —
-keeping 1 and 9 tests the population-size hypothesis at its extremes for 4M
-tokens instead of 6M.
+**Sizing note**: `-03` + Gate B + Phase C exceeds a lighter-sprint budget.
+The 3-agent local config is already cut (ADR 0001) — 1 and 9 test the
+population-size hypothesis at its extremes. Decide any further cut at Sprint 4
+planning with Sprint 3's N1 numbers in hand.
 
 **Entry condition**: Sprint 3's DoD item 1 done — measured N1 density for both
 candidate arcs. If both measure ~zero, **do not start Phase C**; go straight to
 Phase E and write up "CVFN undefined at current scope."
 
-**The 2026-08-21 API-fallback pre-commitment is unresolved.** It fires by its own
-terms under the current plan, but it swaps the serving stack, and the constraint
-is bandwidth — see the flagged section in `current-sprint.md`. Needs a decision,
-not a default.
+**The 2026-08-21 API-fallback pre-commitment is resolved (2026-09-04,
+`decisions/0001-phase-c-model-harness-control.md`).** It does not fire as a
+swap; the $300 funds the frontier control arm above.
 
 ### Superseded pre-lock (Sprint 2 — draft) — ✅ RESOLVED 2026-07-24
 
