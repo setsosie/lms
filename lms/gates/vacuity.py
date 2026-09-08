@@ -17,6 +17,7 @@ from lms.gates.lean_source import (
     BinderGroup,
     TheoremSignature,
     extract_declarations,
+    named_declarations,
     parse_theorem_signature,
 )
 
@@ -118,7 +119,7 @@ class VacuityGate:
 
     def _check_named_declaration(self, code: str) -> GateResult:
         decls = extract_declarations(code)
-        named = [d for d in decls if d.name is not None and d.keyword != "axiom"]
+        named = named_declarations(code)
         if named:
             return GateResult(
                 gate="T2.named_declaration",
