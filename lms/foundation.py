@@ -56,6 +56,30 @@ def declared_universe_names(lines: Iterable[str]) -> set[str]:
     return names
 
 
+def strip_header_universes(lines: Iterable[str]) -> list[str]:
+    """Drop universe names the foundation header already binds.
+
+    Inlined text sits below `universe u v w`, so repeating any of those names
+    is `error: a universe level named 'u' has already been declared`. A line
+    binding names the header does *not* cover keeps exactly those, so a seed
+    or artifact using an exotic level still works.
+    """
+    out: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("universe "):
+            out.append(line)
+            continue
+        kept = [
+            name
+            for name in stripped[len("universe ") :].split()
+            if name not in FOUNDATION_UNIVERSES
+        ]
+        if kept:
+            out.append(f"universe {' '.join(kept)}")
+    return out
+
+
 def split_imports(code: str) -> tuple[list[str], list[str]]:
     """Partition Lean source lines into `import` lines and everything else.
 
@@ -659,6 +683,33 @@ end {FOUNDATION_NAMESPACE}
     def __len__(self) -> int:
         """Return number of entries in foundation."""
         return len(self.entries)
+
+    def set_seed(self, source: str) -> list[str]:
+        """Install the generation-0 axiom layer; return the names it claims.
+
+        The seed is the one part of the foundation no agent wrote. Its names
+        are registered in `_definition_names` so an agent redefining `Category`
+        contributes nothing rather than shadowing the layer everything else is
+        built on -- which is how `committee_fix_c` ended up with four mutually
+        incompatible `Functor`s.
+        """
+        # The seed is written below the header's `universe u v w`, so any
+        # header name it rebinds is a duplicate-declaration error. It keeps
+        # its own `universe` line so the file stands alone for review and
+        # standalone compilation; that line is normalised away on install.
+        _, body = split_imports(source.strip())
+        self.seed_source = "\n".join(strip_header_universes(body)).strip()
+        self.seed_entries = self._extract_entries(
+            self.seed_source, artifact_id="seed", generation=0, author="seed"
+        )
+        for entry in self.seed_entries:
+            self._definition_names.add(entry.name)
+            if (
+                entry.entry_type in ("structure", "class")
+                and entry.name in self.CORE_CONCEPTS
+            ):
+                self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
+        return [entry.name for entry in self.seed_entries]
 
     def snapshot(self) -> FoundationSnapshot:
         """Capture the current state so a bad generation can be undone."""
