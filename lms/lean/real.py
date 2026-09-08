@@ -45,6 +45,17 @@ class RealLeanVerifier(LeanVerifier):
 
     verifier_kind: VerifierKind = "real"
 
+    #: Seconds a run should allow one candidate. 30 -- the old default -- could
+    #: not fit the goal's own allowed imports: measured on a quiet machine with
+    #: warm oleans, an otherwise empty file costs 2.0s importing `LMS.Foundation`,
+    #: 3.8s importing `Mathlib.Tactic.Common`, and **31.8s importing
+    #: `Mathlib.Tactic`** -- which `ALLOWED_IMPORTS_FOUNDATION` lists and labels
+    #: "All tactics". An agent that followed the list it was given timed out
+    #: before its own code was read, and the failure was recorded against the
+    #: agent (26Q3-HARN-24). The box is busier than the machine measured on, so
+    #: this leaves real headroom rather than the smallest passing value.
+    RUN_TIMEOUT_S: float = 120.0
+
     def __init__(
         self,
         lean_path: str | None = None,
