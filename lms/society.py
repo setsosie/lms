@@ -37,6 +37,7 @@ from lms.lean.interface import (
 )
 from lms.planning import PlanningPanel, create_default_assignments
 from lms.providers.base import BaseLLMProvider
+from lms.seed import load_seed
 from lms.textbook import Textbook
 from lms.traces import TraceStore
 from lms.working_group import Role, WorkingGroup, WorkingGroupConfig
@@ -132,6 +133,7 @@ class Society:
         providers: list[BaseLLMProvider] | None = None,
         goal: Goal | None = None,
         foundation_path: Path | None = None,
+        seed_source: str | None = None,
     ) -> None:
         """Initialize the society.
 
@@ -143,6 +145,10 @@ class Society:
             providers: List of providers, one per agent (for heterogeneous societies)
             goal: Optional goal to work towards (enables goal-directed mode)
             foundation_path: Path to Foundation.lean for accumulated definitions
+            seed_source: Generation-0 axiom layer. `None` uses the shipped
+                default; pass `""` for a genuinely bare foundation, which is
+                the pre-26Q3-HARN-23 behaviour and what a bootstrapping
+                experiment wants.
         """
         self.n_agents = n_agents
         self.verifier = verifier
@@ -176,6 +182,19 @@ class Society:
         # Last foundation state that compiled, to roll back to when a
         # generation's additions break the merged module (26Q3-HARN-22).
         self._last_good_foundation: FoundationSnapshot | None = None
+        # Generation-0 axiom layer, installed by `reset_foundation`
+        # (26Q3-HARN-23). Explicit argument wins; then the goal's choice; then
+        # the shipped default. A goal setting `seed=""` gets a bare foundation,
+        # which is what a bootstrapping experiment wants.
+        if seed_source is not None:
+            self.seed_source: str = seed_source
+        elif goal is not None and goal.seed is not None:
+            self.seed_source = load_seed(goal.seed) if goal.seed else ""
+        else:
+            self.seed_source = load_seed()
+        # Gate 4 (novelty). None on mock/projectless runs, where "absent from
+        # Mathlib" could not be checked and must not be asserted.
+        self.novelty_classifier = default_novelty_classifier(verifier)
 
         # Working Group settings
         self.use_working_groups: bool = False  # Enable working group mode
@@ -293,9 +312,26 @@ class Society:
         LMS.Foundation` resolving from the first generation; an empty module is
         valid, a missing one is not.
 
+        "Empty" now means "seed only" (26Q3-HARN-23). The generation-0 axiom
+        layer is hand-written, so the single most load-bearing decision in a
+        run -- how `Category` is represented -- is made once by a human rather
+        than by whichever agent happens to submit first. In
+        `committee_fix_c` that decision landed on a parameterized `structure`,
+        and every generation from 5 on died writing `[C : Category]` against
+        it.
+
         Returns:
-            True if the empty foundation is on disk and compiled.
+            True if the seeded foundation is on disk and compiled.
         """
+        if self.seed_source:
+            claimed = self.foundation.set_seed(self.seed_source)
+            print(f"  Seeded foundation: {', '.join(claimed) or '(no declarations)'}")
+            if self.goal is not None:
+                seeded = self.goal.mark_seeded()
+                if seeded:
+                    # Say it out loud: these count toward `progress()` and were
+                    # not earned by the collective.
+                    print(f"  Tags given by the seed (not earned): {', '.join(seeded)}")
         return await self._write_and_build_foundation()
 
     async def _write_and_build_foundation(self) -> bool:
@@ -581,7 +617,7 @@ class Society:
                         self.library.add(pending.artifact)
                         continue
 
-                verify_tasks.append(self.verifier.verify(code))
+                verify_tasks.append(self._verify_admissible(code))
                 items_to_verify.append(pending)
 
             # Replace approved_items with only those that passed import check
@@ -609,11 +645,16 @@ class Society:
                     if creator_id in self.artifacts_by_agent:
                         self.artifacts_by_agent[creator_id]["verified"] += 1
 
-                    # Add to foundation for future generations to import
-                    try:
-                        self.foundation.add_artifact(artifact)
-                    except ValueError:
-                        pass  # Skip if artifact has issues
+                    # Add to foundation for future generations to import,
+                    # unless a gate failed: the next generation imports this
+                    # file, so anything the gates rejected must not reach it.
+                    if self._blocked_by_gates(artifact):
+                        self._note_gate_block(artifact)
+                    else:
+                        try:
+                            self.foundation.add_artifact(artifact)
+                        except ValueError:
+                            pass  # Skip if artifact has issues
 
                     # Add successful insights to textbook
                     if artifact.notes:
@@ -700,6 +741,98 @@ class Society:
         ):
             return
         artifact.gate_results = await self.gate_runner.run(artifact.lean_code)
+        await self._apply_novelty_gate(artifact)
+
+    async def _apply_novelty_gate(self, artifact: Artifact) -> None:
+        """Stamp the N0/N1 classification onto `artifact` (Gate 4).
+
+        Kept out of `gate_runner` because `NoveltyClassifier.classify` is
+        synchronous and talks to Loogle/LeanSearch over the network; running it
+        inline would stall every other group's generation for the duration.
+        `to_thread` keeps the event loop free.
+
+        A search that raises is a hole in the audit, not a failed artifact:
+        the run continues and `novelty_level` stays None, which reads as
+        "never classified" rather than as a novelty claim. That distinction is
+        the whole point of Gate 4 — `committee_fix_c` shipped 71 artifacts with
+        `novelty_level` None and no way to tell that from a checked verdict.
+        """
+        if self.novelty_classifier is None:
+            return
+        try:
+            await asyncio.to_thread(
+                apply_novelty_gate, artifact, self.novelty_classifier
+            )
+        except Exception as exc:  # noqa: BLE001 - audit hole, not a run-ender
+            artifact.novelty_evidence = [f"novelty gate errored: {exc}"[:300]]
+
+    def _blocked_by_gates(self, artifact: Artifact) -> bool:
+        """True when some gate positively failed on an otherwise-verified artifact.
+
+        Only `FAILED` blocks. `INCONCLUSIVE` must not: `T2.duplicate` is
+        inconclusive by construction whenever no duplicate checker is injected,
+        so treating it as blocking would stop every artifact from ever being
+        promoted.
+
+        Blocking governs *promotion* — foundation admission and closing a task
+        in the dependency graph — never `status`. "Lean accepted it" and "it is
+        safe to build on" are separate facts; collapsing them is what let a
+        file containing only `-- Your LEAN 4 code here` close the Yoneda
+        milestone in `committee_fix_c`.
+        """
+        return any(r.outcome is GateOutcome.FAILED for r in artifact.gate_results)
+
+    def _note_gate_block(self, artifact: Artifact) -> None:
+        """Record on the artifact why it was verified but not promoted.
+
+        `gate_results` already carries the verdicts for `artifacts.json`; this
+        puts the reason where a human reading the notes will see it, so a
+        verified-but-unpromoted artifact does not look like a bookkeeping bug.
+        """
+        failed = "; ".join(
+            f"{r.gate}: {r.reason}"
+            for r in artifact.gate_results
+            if r.outcome is GateOutcome.FAILED
+        )
+        artifact.notes = (
+            artifact.notes or ""
+        ) + f"\n[Not promoted to foundation — gate failure: {failed}]"
+
+    def _content_violation(self, code: str) -> str | None:
+        """Why `code` is not a formalization attempt at all, or None if it is.
+
+        A file of comments compiles with zero errors and zero sorries, so the
+        verifier reports success and the artifact is promoted. That is not a
+        hypothetical: in `committee_fix_c` three artifacts contained exactly
+        the scribe's own prompt scaffold, `-- Your LEAN 4 code here`, and one
+        of them closed the Yoneda Lemma milestone.
+
+        Checked before Lean runs, alongside the import restrictions, because a
+        submission introducing nothing should never reach the verifier, enter
+        the foundation, or consume a Lean invocation.
+        """
+        if not code or not code.strip():
+            return "Empty submission: no Lean code was produced."
+        if not named_declarations(code):
+            return (
+                "Contentless submission: no named declaration. Comments, "
+                "imports and `example`s alone are not a formalization — "
+                "emit a `theorem`, `def`, `structure` or `class`."
+            )
+        return None
+
+    async def _verify_admissible(self, code: str) -> VerificationResult:
+        """Verify `code`, rejecting inadmissible submissions before Lean runs.
+
+        The single funnel for every verification in the class, so the standard,
+        iterative and committee paths cannot drift on what they will accept.
+        """
+        blocked = self._content_violation(code)
+        if blocked is not None:
+            return self._rejected(code, blocked)
+        if self.verifier is None:
+            return self._rejected(code, "No verifier configured")
+        return await self.verifier.verify(code)
 
     def _rejected(self, code: str, error: str) -> VerificationResult:
         """A failure decided before the verifier ran (e.g. import restrictions).
@@ -814,9 +947,7 @@ class Society:
                 if not valid:
                     return self._rejected(code, f"Import restriction: {error}")
             # Run LEAN verification
-            if self.verifier is None:
-                return self._rejected(code, "No verifier configured")
-            return await self.verifier.verify(code)
+            return await self._verify_admissible(code)
 
         # Run all agents in parallel with iterative proposals
         iterative_tasks = [
@@ -873,11 +1004,15 @@ class Society:
                     artifacts_verified += 1
                     self.artifacts_by_agent[agent.id]["verified"] += 1
 
-                    # Add to foundation for future generations to import
-                    try:
-                        self.foundation.add_artifact(artifact)
-                    except ValueError:
-                        pass  # Skip if artifact has issues
+                    # Add to foundation for future generations to import,
+                    # unless a gate failed (see the standard path).
+                    if self._blocked_by_gates(artifact):
+                        self._note_gate_block(artifact)
+                    else:
+                        try:
+                            self.foundation.add_artifact(artifact)
+                        except ValueError:
+                            pass  # Skip if artifact has issues
 
                     # Add successful insights to textbook
                     if artifact.notes:
@@ -1246,7 +1381,7 @@ class Society:
                 verify_result: VerificationResult | None = None
                 last_error = self._import_violation(lean_code)
                 if last_error is None:
-                    verify_result = await self.verifier.verify(lean_code)
+                    verify_result = await self._verify_admissible(lean_code)
                     last_error = verify_result.error
 
                 # A failed verify goes back to the group's scribe with the
@@ -1281,7 +1416,7 @@ class Society:
                     artifact.notes = (
                         artifact.notes or ""
                     ) + f"\n[Repaired by scribe, attempt {attempts_used}]"
-                    verify_result = await self.verifier.verify(lean_code)
+                    verify_result = await self._verify_admissible(lean_code)
                     last_error = verify_result.error
 
                 # Phase 2 summed session spend before repairs existed; the
@@ -1303,20 +1438,29 @@ class Society:
                 if verify_result is not None and verify_result.success:
                     artifacts_verified += 1
 
-                    # Add to foundation
-                    try:
-                        self.foundation.add_artifact(artifact)
-                    except ValueError:
-                        pass
+                    # A gate failure blocks promotion but not the count: Lean
+                    # did accept it. Leaving the task un-DONE is the point --
+                    # `committee_fix_c` closed the Yoneda milestone with a
+                    # file containing only the scribe's prompt scaffold, and
+                    # the graph then released everything downstream of it.
+                    promoted = not self._blocked_by_gates(artifact)
+                    if not promoted:
+                        self._note_gate_block(artifact)
+                    else:
+                        # Add to foundation
+                        try:
+                            self.foundation.add_artifact(artifact)
+                        except ValueError:
+                            pass
 
-                    # Update dependency graph
-                    self.dependency_graph.update_status(
-                        group.config.task_tag, TaskStatus.DONE, artifact.id
-                    )
+                        # Update dependency graph
+                        self.dependency_graph.update_status(
+                            group.config.task_tag, TaskStatus.DONE, artifact.id
+                        )
 
-                    # Update goal progress
-                    if self.goal and artifact.stacks_tag:
-                        self.goal.mark_formalized(artifact.stacks_tag, artifact.id)
+                        # Update goal progress
+                        if self.goal and artifact.stacks_tag:
+                            self.goal.mark_formalized(artifact.stacks_tag, artifact.id)
 
                     # Add to textbook
                     self.textbook.add(
