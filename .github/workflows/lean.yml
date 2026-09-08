@@ -1,0 +1,40 @@
+name: Lean
+
+# Scoped to changes that can actually break the corpus. A Lean build pulls the
+# Mathlib cache and takes minutes; making every Python-only PR wait on it would
+# just teach people to ignore the check.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lean/**'
+      - '.github/workflows/lean.yml'
+  pull_request:
+    paths:
+      - 'lean/**'
+      - '.github/workflows/lean.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: lean-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: lake build (LMS corpus)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # lean-action installs elan, reads lean/lean-toolchain, and fetches the
+      # Mathlib cache before building. The lakefile's `globs = ["LMS.+"]` is
+      # what makes this build every module under LMS/ rather than the single
+      # root module.
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean

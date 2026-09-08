@@ -1,16 +1,13 @@
 """Tests for real LEAN 4 verifier."""
 
 import pytest
-import shutil
 
 from lms.lean.real import RealLeanVerifier
+from tests._lean_env import LEAN_MISSING, LEAN_MISSING_REASON
 
 
 # Skip all tests if LEAN is not installed
-pytestmark = pytest.mark.skipif(
-    shutil.which("lean") is None and not shutil.which("/home/stsosie/.elan/bin/lean"),
-    reason="LEAN 4 not installed",
-)
+pytestmark = pytest.mark.skipif(LEAN_MISSING, reason=LEAN_MISSING_REASON)
 
 
 class TestRealLeanVerifier:

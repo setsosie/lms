@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes the in-flight run obsolete.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # `uv sync` installs dependency-groups.dev (pytest, pytest-asyncio),
+      # which `asyncio_mode = "auto"` in pyproject.toml depends on. --frozen
+      # pins to uv.lock rather than re-resolving, so a red run means the code
+      # changed, not that a transitive dependency did.
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # The runner has no Lean toolchain, so the `shutil.which("lean")` guards
+      # in test_lean_real.py / test_verify_namespace.py skip those modules here.
+      # The Lean corpus is built by lean.yml instead.
+      #
+      # DESELECT, not a real exemption: test_from_env_uses_default_models
+      # asserts the Anthropic default model string, which only holds when a
+      # developer's private .env supplies it — it fails on any clean checkout,
+      # which is what CI is. The in-flight config-hermeticity PR settles that
+      # default; REMOVE THIS DESELECT when it lands.
+      - name: Run tests
+        run: |
+          uv run pytest -q \
+            --deselect tests/test_config.py::TestConfig::test_from_env_uses_default_models
+
+      # The suite must not write into the tracked Lean corpus (conftest.py's
+      # isolate_default_foundation fixture exists to prevent exactly this).
+      # A dirty lean/ here means that guard regressed.
+      - name: Assert the tracked Lean corpus was not modified
+        run: |
+          if [ -n "$(git status --porcelain lean/)" ]; then
+            echo "::error::pytest modified the tracked Lean corpus:"
+            git status --porcelain lean/
+            exit 1
+          fi
+          echo "lean/ clean after the suite"
