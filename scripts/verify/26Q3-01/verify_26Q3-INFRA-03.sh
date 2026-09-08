@@ -41,8 +41,8 @@ check "dependencies come from the lockfile, not a fresh resolve" \
   "grep -q 'uv sync --frozen' .github/workflows/tests.yml"
 check "it actually runs pytest" \
   "grep -q 'uv run pytest' .github/workflows/tests.yml"
-check "the clean-checkout deselect names what removes it" \
-  "grep -q 'REMOVE THIS DESELECT' .github/workflows/tests.yml"
+check "no deselect remains (the config suite is hermetic on a clean checkout)" \
+  "! grep -q 'deselect' .github/workflows/tests.yml"
 check "the tracked Lean corpus is asserted clean after the suite" \
   "grep -q 'git status --porcelain lean/' .github/workflows/tests.yml"
 
@@ -72,13 +72,27 @@ check "the helper probes the toolchain rather than trusting the binary" \
 check "the probe result is cached" \
   "grep -q 'lru_cache' tests/_lean_env.py"
 
-section "6. The suite behaves on this machine"
+section "6. Lint gates the expensive jobs"
+check "a lint job exists" \
+  "grep -q '^  lint:' .github/workflows/tests.yml"
+check "pytest waits on it" \
+  "grep -q '^    needs: lint$' .github/workflows/tests.yml"
+check "ruff runs in CI" \
+  "grep -q 'uv run ruff check' .github/workflows/tests.yml"
+check "mypy runs in CI" \
+  "grep -q 'uv run mypy' .github/workflows/tests.yml"
+check "ruff is clean on the tracked tree" \
+  "git ls-files '*.py' | xargs uv run ruff check"
+check "mypy is clean on the package" \
+  "uv run mypy lms/"
+
+section "7. The suite behaves on this machine"
 check "full suite passes" \
   "uv run pytest -q"
 check "Lean-dependent modules skip rather than fail when Lean is unusable" \
   "test -n \"\$(uv run pytest tests/test_lean_real.py -q --no-header 2>&1 | grep -E 'skipped|passed')\""
 check "build() degrades instead of raising when lake is absent" \
-  "uv run pytest tests/test_lean_project.py::TestBuildWithoutToolchain -q"
+  "uv run pytest tests/test_lean_project.py -k lake_is_absent -q"
 check "build() guards the subprocess launch" \
   "grep -q 'except FileNotFoundError' lms/lean/project.py"
 

@@ -15,7 +15,40 @@ permissions:
   contents: read
 
 jobs:
+  # Runs first and gates everything below it. Both checks are seconds, the
+  # suite is not, and a NameError-class defect is exactly what ruff catches
+  # for free -- `main` shipped five of them for eighteen days because nothing
+  # ran (see the restore-dropped-code PR).
+  lint:
+    name: ruff + mypy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # `.` is the tracked tree here: a fresh checkout has no untracked
+      # scratch directories, so this matches what the pre-commit hook lints.
+      - name: ruff check
+        run: uv run ruff check .
+
+      # Scoped to the package. `mypy tests/` reports 16 pre-existing errors
+      # in 12 files; widening the scope is its own chore, not this PR's.
+      - name: mypy
+        run: uv run mypy lms/
+
   pytest:
+    needs: lint
     name: pytest (Python 3.12)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -40,16 +73,8 @@ jobs:
       # The runner has no Lean toolchain, so the `shutil.which("lean")` guards
       # in test_lean_real.py / test_verify_namespace.py skip those modules here.
       # The Lean corpus is built by lean.yml instead.
-      #
-      # DESELECT, not a real exemption: test_from_env_uses_default_models
-      # asserts the Anthropic default model string, which only holds when a
-      # developer's private .env supplies it — it fails on any clean checkout,
-      # which is what CI is. The in-flight config-hermeticity PR settles that
-      # default; REMOVE THIS DESELECT when it lands.
       - name: Run tests
-        run: |
-          uv run pytest -q \
-            --deselect tests/test_config.py::TestConfig::test_from_env_uses_default_models
+        run: uv run pytest -q
 
       # The suite must not write into the tracked Lean corpus (conftest.py's
       # isolate_default_foundation fixture exists to prevent exactly this).
