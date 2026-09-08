@@ -1,4 +1,10 @@
-"""Tests for configuration management."""
+"""Tests for configuration management.
+
+Every test that touches `Config.from_env` passes an empty `env_path`: the
+repo-root `.env` otherwise leaks through `load_dotenv` even under
+`clear=True`, because an empty environ is exactly the case `load_dotenv`
+is designed to fill (issue #16).
+"""
 
 import os
 from pathlib import Path
@@ -7,6 +13,14 @@ from unittest import mock
 import pytest
 
 from lms.config import Config, ProviderConfig
+
+
+@pytest.fixture
+def empty_env(tmp_path: Path) -> Path:
+    """An env file with no variables, to neutralize the repo's real `.env`."""
+    env_file = tmp_path / "empty.env"
+    env_file.write_text("")
+    return env_file
 
 
 class TestProviderConfig:
@@ -32,61 +46,61 @@ class TestConfig:
         assert config.openai is None
         assert config.google is None
 
-    def test_from_env_with_anthropic_key(self):
+    def test_from_env_with_anthropic_key(self, empty_env: Path):
         """Config loads Anthropic credentials from environment."""
         env = {
             "ANTHROPIC_API_KEY": "sk-ant-test",
             "LMS_ANTHROPIC_MODEL": "claude-3-opus",
         }
         with mock.patch.dict(os.environ, env, clear=True):
-            config = Config.from_env()
+            config = Config.from_env(env_path=empty_env)
 
         assert config.anthropic is not None
         assert config.anthropic.api_key == "sk-ant-test"
         assert config.anthropic.model == "claude-3-opus"
 
-    def test_from_env_with_openai_key(self):
+    def test_from_env_with_openai_key(self, empty_env: Path):
         """Config loads OpenAI credentials from environment."""
         env = {
             "OPENAI_API_KEY": "sk-openai-test",
             "LMS_OPENAI_MODEL": "gpt-4-turbo",
         }
         with mock.patch.dict(os.environ, env, clear=True):
-            config = Config.from_env()
+            config = Config.from_env(env_path=empty_env)
 
         assert config.openai is not None
         assert config.openai.api_key == "sk-openai-test"
         assert config.openai.model == "gpt-4-turbo"
 
-    def test_from_env_with_google_key(self):
+    def test_from_env_with_google_key(self, empty_env: Path):
         """Config loads Google credentials from environment."""
         env = {
             "GOOGLE_API_KEY": "google-test-key",
             "LMS_GOOGLE_MODEL": "gemini-pro",
         }
         with mock.patch.dict(os.environ, env, clear=True):
-            config = Config.from_env()
+            config = Config.from_env(env_path=empty_env)
 
         assert config.google is not None
         assert config.google.api_key == "google-test-key"
         assert config.google.model == "gemini-pro"
 
-    def test_from_env_uses_default_models(self):
+    def test_from_env_uses_default_models(self, empty_env: Path):
         """Config uses default models when not specified."""
         env = {"ANTHROPIC_API_KEY": "test-key"}
         with mock.patch.dict(os.environ, env, clear=True):
-            config = Config.from_env()
+            config = Config.from_env(env_path=empty_env)
 
         assert config.anthropic.model == "claude-opus-4-5-20251101"
 
-    def test_from_env_loads_default_provider(self):
+    def test_from_env_loads_default_provider(self, empty_env: Path):
         """Config loads default provider from environment."""
         env = {
             "ANTHROPIC_API_KEY": "test",
             "LMS_DEFAULT_PROVIDER": "openai",
         }
         with mock.patch.dict(os.environ, env, clear=True):
-            config = Config.from_env()
+            config = Config.from_env(env_path=empty_env)
 
         assert config.default_provider == "openai"
 

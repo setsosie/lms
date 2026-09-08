@@ -19,7 +19,7 @@ from unittest import mock
 
 import pytest
 
-from lms.config import Config, ProviderConfig
+from lms.config import DEFAULT_MAX_TOKENS, Config, ProviderConfig
 from lms.providers.base import Message
 from lms.providers.openai import OpenAIProvider
 
@@ -173,6 +173,88 @@ class TestConfigFromEnv:
 
         assert config.openai is not None
         assert config.openai.model == "gpt-5.2"
+
+
+class TestMaxTokensFromEnv:
+    """26Q3-INFRA-02: the per-request completion cap follows the endpoint.
+
+    A vLLM server at `--max-model-len 65536` rejects any request where
+    `prompt_tokens + max_tokens > max_model_len`, so a Claude-sized 64k
+    default cap 400s every agent prompt. The operator knows the served
+    window; the env var lets the harness respect it.
+    """
+
+    def test_env_reaches_provider_config(self, empty_env: Path):
+        env = {"OPENAI_API_KEY": "dummy", "LMS_OPENAI_MAX_TOKENS": "8192"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        assert config.openai is not None
+        assert config.openai.max_tokens == 8192
+
+    def test_each_provider_reads_its_own_var(self, empty_env: Path):
+        env = {
+            "ANTHROPIC_API_KEY": "a",
+            "OPENAI_API_KEY": "o",
+            "GOOGLE_API_KEY": "g",
+            "LMS_ANTHROPIC_MAX_TOKENS": "1000",
+            "LMS_OPENAI_MAX_TOKENS": "2000",
+            "LMS_GOOGLE_MAX_TOKENS": "3000",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        assert config.anthropic is not None
+        assert config.openai is not None
+        assert config.google is not None
+        assert config.anthropic.max_tokens == 1000
+        assert config.openai.max_tokens == 2000
+        assert config.google.max_tokens == 3000
+
+    def test_unset_keeps_the_default(self, empty_env: Path):
+        """Hosted-provider behavior is unchanged when the var is absent."""
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk"}, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        assert config.openai is not None
+        assert config.openai.max_tokens == DEFAULT_MAX_TOKENS
+
+    def test_blank_is_treated_as_unset(self, empty_env: Path):
+        """`.env.example` ships keys bare; a copied file must not break loading."""
+        env = {"OPENAI_API_KEY": "sk", "LMS_OPENAI_MAX_TOKENS": ""}
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        assert config.openai is not None
+        assert config.openai.max_tokens == DEFAULT_MAX_TOKENS
+
+    @pytest.mark.parametrize("bad", ["64k", "8192.5", "-1", "0"])
+    def test_bad_value_fails_at_config_load(self, empty_env: Path, bad: str):
+        """A bad cap must fail here, not as an HTTP 400 on the first generation."""
+        env = {"OPENAI_API_KEY": "sk", "LMS_OPENAI_MAX_TOKENS": bad}
+        with mock.patch.dict(os.environ, env, clear=True):
+            with pytest.raises(ValueError, match="LMS_OPENAI_MAX_TOKENS"):
+                Config.from_env(env_path=empty_env)
+
+    async def test_cap_reaches_the_request_payload(
+        self, stub_endpoint: _StubEndpoint, empty_env: Path
+    ):
+        """The acceptance criterion: the configured cap is what the server sees."""
+        env = {
+            "OPENAI_API_KEY": "dummy",
+            "LMS_OPENAI_MODEL": "lms-generalist",
+            "LMS_OPENAI_BASE_URL": stub_endpoint.base_url,
+            "LMS_OPENAI_MAX_TOKENS": "8192",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = Config.from_env(env_path=empty_env)
+
+        provider = OpenAIProvider(config.get_provider_config("openai"), timeout=10.0)
+        await provider.generate([Message(role="user", content="formalize this")])
+
+        assert len(stub_endpoint.requests) == 1
+        payload = stub_endpoint.requests[0]["payload"]
+        assert payload["max_completion_tokens"] == 8192
 
 
 class TestOpenAIProviderClient:

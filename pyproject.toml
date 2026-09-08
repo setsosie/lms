@@ -22,8 +22,15 @@ testpaths = ["tests"]
 # `uv sync` installs dependency-groups.dev but NOT project.optional-dependencies.
 # The test plugins must live here or `asyncio_mode = "auto"` above refers to a
 # plugin that was never installed, and every async test reports a false red.
+# mypy and ruff live here so `uv run mypy` / `uv run ruff` resolve inside the
+# project venv on any checkout — outside it, mypy cannot see the dependencies
+# and reports phantom import-not-found errors. ruff is pinned exact: its rule
+# set moves between minor versions (0.16 flags ~50 things 0.15 does not), and
+# the verify scripts treat a clean `ruff check` as a gate.
 dev = [
+    "mypy>=1.14",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=7.0.0",
+    "ruff==0.15.8",
 ]

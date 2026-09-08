@@ -496,24 +496,20 @@ and 6 are unchanged.
 > `tmux capture-pane -t <session> -p -S -5000 > file`. `echo "$TMUX"` is the
 > reliable test for whether you are inside a session — it is empty outside.
 
-> **`--max-model-len` must exceed 64k, which is why it is 131072 and not the
-> 65536 this runbook originally said.** `ProviderConfig.max_tokens` defaults to
-> `DEFAULT_MAX_TOKENS = 64_000` (`lms/config.py:11`), sized for Claude Opus's
-> output cap, and nothing overrides it per request — `lms/agent.py` calls
-> `generate()` without a `max_tokens` argument, so every request reaches vLLM
-> asking for 64,000 completion tokens. vLLM rejects a request when
-> `prompt_tokens + max_tokens > max_model_len`, so at 65536 every call with a
-> prompt over ~1,536 tokens returns HTTP 400 — and the agent system prompts are
-> far larger than that. The symptom is a run that fails on the very first
-> generation with a 400 that looks like a malformed request.
->
-> 131072 is inside Qwen3-Coder-30B-A3B's native 262144 window and costs nothing
-> at rest: KV is ~96 KB/token (48 layers × 4 KV heads × 128 dim × 2 × 2 bytes),
-> so a full-length sequence is ~12.6 GB, ~6.3 GB per GPU at TP=2, against 94 GB
+> **Sizing `--max-model-len`.** Keep
+> `--max-model-len ≥ longest prompt + LMS_OPENAI_MAX_TOKENS` (Step 5 sets the
+> cap to 16384): vLLM rejects any request where
+> `prompt_tokens + max_tokens > max_model_len`, and the symptom is a run that
+> fails on the first generation with a 400 that looks like a malformed request.
+> 131072 is comfortable — inside Qwen3-Coder-30B-A3B's native 262144 window,
+> with room for the largest agent prompts — and costs nothing at rest: KV is
+> ~96 KB/token (48 layers × 4 KV heads × 128 dim × 2 × 2 bytes), so a
+> full-length sequence is ~12.6 GB, ~6.3 GB per GPU at TP=2, against 94 GB
 > H100 NVLs already holding ~30.5 GB of weights each.
 >
-> The real fix is to make the per-request cap configurable rather than to size
-> the server around a Claude-shaped constant — tracked as `26Q3-INFRA-02`.
+> *(History: before `26Q3-INFRA-02` the harness had no cap lever — every
+> request asked for 64,000 completion tokens, sized to Claude Opus's output
+> limit, which is why this note used to mandate 131072 as a workaround.)*
 
 Run it inside `tmux` (or `nohup`) so it survives your SSH session — the model
 download (~61 GB to `$HF_HOME`) plus startup can take a while on first run.
@@ -621,17 +617,24 @@ cd ~/code/lms
 cat >> .env <<'EOF'
 LMS_OPENAI_BASE_URL=http://localhost:8000/v1
 LMS_OPENAI_MODEL=lms-generalist
+LMS_OPENAI_MAX_TOKENS=16384
 OPENAI_API_KEY=EMPTY
 EOF
 
 uv run python -c "
 from lms.config import Config
 c = Config.from_env()
-print(c.openai.base_url, c.openai.model)
+print(c.openai.base_url, c.openai.model, c.openai.max_tokens)
 "
 ```
 
-**Checkpoint 5**: prints the local URL and model name.
+**Checkpoint 5**: prints the local URL, model name, and the 16384 cap.
+
+`LMS_OPENAI_MAX_TOKENS` (landed with `26Q3-INFRA-02`) is the per-request
+completion cap; unset it falls back to the 64k hosted-Claude default, which is
+more than any single Lean artifact needs and forces `--max-model-len` past 64k.
+16384 is generous for proof generation while keeping
+`prompt + cap` far inside the served window.
 
 ---
 

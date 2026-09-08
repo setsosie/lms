@@ -7,8 +7,31 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-# 64k tokens - limited by Claude Opus 4.5's max output tokens
+# Per-request completion cap when LMS_<PROVIDER>_MAX_TOKENS is unset. 64k
+# matches the hosted Claude Opus 4.5 output limit; a self-hosted endpoint
+# should set the env var to fit its served context window instead (issue #17:
+# vLLM 400s any request where prompt_tokens + max_tokens > max_model_len).
 DEFAULT_MAX_TOKENS = 64_000
+
+
+def _max_tokens_from_env(var: str) -> int:
+    """Read a per-request completion cap from the environment.
+
+    Blank is treated as unset, matching every other read in `Config.from_env`.
+    Anything else must parse as a positive integer: a bad value raises here,
+    at config load, rather than surfacing generations later as an HTTP 400
+    that reads like a malformed request.
+    """
+    raw = os.getenv(var) or None
+    if raw is None:
+        return DEFAULT_MAX_TOKENS
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{var} must be an integer, got {raw!r}") from None
+    if value <= 0:
+        raise ValueError(f"{var} must be positive, got {value}")
+    return value
 
 
 @dataclass
@@ -65,7 +88,8 @@ class Config:
         if anthropic_key:
             config.anthropic = ProviderConfig(
                 api_key=anthropic_key,
-                model=os.getenv("LMS_ANTHROPIC_MODEL") or "claude-sonnet-4-5-20250514",
+                model=os.getenv("LMS_ANTHROPIC_MODEL") or "claude-opus-4-5-20251101",
+                max_tokens=_max_tokens_from_env("LMS_ANTHROPIC_MAX_TOKENS"),
             )
 
         # Load OpenAI config
@@ -74,6 +98,7 @@ class Config:
             config.openai = ProviderConfig(
                 api_key=openai_key,
                 model=os.getenv("LMS_OPENAI_MODEL") or "gpt-5.2",
+                max_tokens=_max_tokens_from_env("LMS_OPENAI_MAX_TOKENS"),
                 # Blank here would hand the SDK a relative URL.
                 base_url=os.getenv("LMS_OPENAI_BASE_URL") or None,
             )
@@ -84,6 +109,7 @@ class Config:
             config.google = ProviderConfig(
                 api_key=google_key,
                 model=os.getenv("LMS_GOOGLE_MODEL") or "gemini-3",
+                max_tokens=_max_tokens_from_env("LMS_GOOGLE_MAX_TOKENS"),
             )
 
         config.default_provider = os.getenv("LMS_DEFAULT_PROVIDER") or "anthropic"
