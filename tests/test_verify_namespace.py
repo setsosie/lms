@@ -6,16 +6,13 @@ anything Lean core binds (`Functor`, `Option`, `Prod`, ...) failed verification
 for a collision that does not exist at the destination.
 """
 
-import shutil
-
 import pytest
 
 from lms.foundation import FOUNDATION_NAMESPACE, FoundationFile, split_imports
 from lms.lean.real import RealLeanVerifier
+from tests._lean_env import LEAN_MISSING
 
-_LEAN_MISSING = shutil.which("lean") is None and not shutil.which(
-    "/home/stsosie/.elan/bin/lean"
-)
+_LEAN_MISSING = LEAN_MISSING
 
 
 class TestWrapShape:

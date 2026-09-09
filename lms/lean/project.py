@@ -119,7 +119,10 @@ class LeanProject:
         """
         # A box without a Lean toolchain has no `lake` on PATH, and
         # create_subprocess_exec then raises instead of returning a status.
-        # That is a failed build, not a crash worth taking the harness down.
+        # That is a failed build, not a crash worth taking the harness down:
+        # callers read a False return as "the project is not built", while
+        # letting the error escape breaks every environment without elan on
+        # PATH -- CI, and a box between provisioning and `elan default stable`.
         try:
             if clean:
                 clean_proc = await asyncio.create_subprocess_exec(

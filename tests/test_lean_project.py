@@ -182,8 +182,12 @@ class TestLeanProjectAsync:
 
         Regression guard: `create_subprocess_exec("lake", ...)` raises
         `FileNotFoundError` when `lake` is not on PATH, which used to escape
-        `build()` — so the whole suite crashed on any machine without Lean
-        installed, CI included.
+        `build()` -- so the whole suite crashed on any machine without Lean
+        installed, CI included. `test_build_returns_false_on_missing_project`
+        above nominally asserts the same contract ("Either way, it shouldn't
+        crash"), but it can only observe the missing toolchain on a machine
+        that already lacks one, so it passed for the life of the repo while
+        `build()` raised. Emptying PATH makes the contract checkable everywhere.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             empty_path = Path(tmpdir) / "empty-path"
