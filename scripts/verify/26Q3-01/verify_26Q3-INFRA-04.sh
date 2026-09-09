@@ -31,8 +31,8 @@ check "elan is installed from the official script" \
   "grep -q 'elan.lean-lang.org/elan-init.sh' $W"
 check "the toolchain is pinned to lean/lean-toolchain" \
   "grep -q 'default-toolchain \"\$(cat lean/lean-toolchain)\"' $W"
-check "the cache key is that same pin" \
-  "grep -q \"hashFiles('lean/lean-toolchain')\" $W"
+check "the toolchain is not cached (measured: saving cost as much as fetching)" \
+  "! awk '/^  lean-tests:/,/^  pytest:/' $W | grep -q 'actions/cache'"
 check "the job never runs lake build" \
   "! awk '/^  lean-tests:/,/^  pytest:/' $W | grep -q 'lake build'"
 check "the job never fetches a Mathlib cache" \

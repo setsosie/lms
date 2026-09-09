@@ -73,15 +73,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      # Keyed on the toolchain pin, so a Lean version bump invalidates it.
-      - name: Cache the Lean toolchain
-        uses: actions/cache@v4
-        with:
-          path: ~/.elan
-          key: elan-${{ runner.os }}-${{ hashFiles('lean/lean-toolchain') }}
-
       # elan only, pinned to the same toolchain the corpus builds against.
       # --no-modify-path because GITHUB_PATH below is what persists across steps.
+      #
+      # Deliberately not cached. Measured on the first run: acquiring the
+      # toolchain costs ~10s (elan-init, then a lazy download on first use),
+      # while saving the 632 MiB cache cost 9.3s -- a wash. The repo's cache
+      # already holds two 2.31 GiB library caches for lean.yml, and a marginal
+      # entry that saves nothing risks evicting one that saves minutes.
       - name: Install the pinned Lean toolchain
         run: |
           if [ ! -x "$HOME/.elan/bin/lean" ]; then

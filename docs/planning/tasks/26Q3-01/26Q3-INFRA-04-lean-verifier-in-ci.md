@@ -50,6 +50,22 @@ The cost is one fixed charge, not per-test: `test_verify_valid_theorem` takes
 other 15 invocations run ~0.4s each. A CI runner is always cold, so budget
 toward the 92s figure.
 
+#### Measured in CI (first run)
+
+The job costs **34s** cold: ~10s to acquire the toolchain (elan-init, then a
+lazy download on first `lean --version`), 6.1s to run the tests — matching the
+6.1s measured locally — and the rest runner setup. The 24.8s cold-start charge
+seen on a developer box did not reproduce; it is a WSL filesystem artifact, not
+inherent to Lean.
+
+Because the job is parallel to `pytest`, the workflow's critical path goes from
+`lint` + `pytest` (15 + 19 = 34s) to `lint` + `lean-tests` (15 + 34 = 49s):
+**+15s wall clock**, ~34s of extra runner time.
+
+The toolchain is deliberately **not** cached. Saving the 632 MiB cache cost
+9.3s against a ~10s fetch, so it buys nothing, and the repo's cache already
+holds two 2.31 GiB library caches that a marginal entry could evict.
+
 #### Change
 
 A `lean-tests` job in `tests.yml`, parallel to `pytest` and gated on `lint`,
@@ -67,8 +83,8 @@ the precise failure this card exists to remove.
 
 - [ ] A `lean-tests` job runs the two Lean modules with a real toolchain,
       gated on `lint` and parallel to `pytest`
-- [ ] The toolchain is pinned to `lean/lean-toolchain`, cached on that pin, and
-      installed via elan alone — no Mathlib cache, no `lake build`
+- [ ] The toolchain is pinned to `lean/lean-toolchain` and installed via elan
+      alone — no Mathlib cache, no `lake build`, and not itself cached
 - [ ] The job fails, rather than skipping green, when the toolchain is absent
       or is an unconfigured `elan` shim (both guards verified against a real
       unconfigured shim)
