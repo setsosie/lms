@@ -53,19 +53,21 @@ supersede this estimate.
 
 #### Measured in CI (first run)
 
-The job costs **34s** cold: ~10s to acquire the toolchain (elan-init, then a
+The job costs **23s** cold: ~10s to acquire the toolchain (elan-init, then a
 lazy download on first `lean --version`), 6.1s to run the tests — matching the
 6.1s measured locally — and the rest runner setup. The 24.8s cold-start charge
 seen on a developer box did not reproduce; it is a WSL filesystem artifact, not
 inherent to Lean.
 
 Because the job is parallel to `pytest`, the workflow's critical path goes from
-`lint` + `pytest` (15 + 19 = 34s) to `lint` + `lean-tests` (15 + 34 = 49s):
-**+15s wall clock**, ~34s of extra runner time.
+`lint` + `pytest` (18 + 16 = 34s) to `lint` + `lean-tests` (18 + 23 = 41s):
+**+7s wall clock**, ~23s of extra runner time.
 
-The toolchain is deliberately **not** cached. Saving the 632 MiB cache cost
-9.3s against a ~10s fetch, so it buys nothing, and the repo's cache already
-holds two 2.31 GiB library caches that a marginal entry could evict.
+The toolchain is deliberately **not** cached, and that is measured rather than
+assumed: the first run cached it and took 34s, of which 9.3s was saving a
+632 MiB entry against a ~10s fetch. Removing the cache step took the job to
+23s. The repo's cache already holds two 2.31 GiB library caches for `lean.yml`
+that a marginal entry could evict at quota.
 
 #### Change
 
