@@ -47,8 +47,9 @@ On a developer box, against a real toolchain:
 
 The cost is one fixed charge, not per-test: `test_verify_valid_theorem` takes
 **24.8s** as the first Lean invocation (loading `Init`'s oleans), and the
-other 15 invocations run ~0.4s each. A CI runner is always cold, so budget
-toward the 92s figure.
+other 15 invocations run ~0.4s each. That 24.8s charge is a WSL filesystem
+artifact and did not reproduce on a runner — see the CI figures below, which
+supersede this estimate.
 
 #### Measured in CI (first run)
 
@@ -70,9 +71,9 @@ holds two 2.31 GiB library caches that a marginal entry could evict.
 
 A `lean-tests` job in `tests.yml`, parallel to `pytest` and gated on `lint`,
 that installs elan pinned to `lean/lean-toolchain` and runs those two modules.
-Running it beside `pytest` rather than inside it leaves the workflow's wall
-clock unchanged — the fast job everyone waits on stays fast, and this costs
-runner minutes instead of latency.
+Running it beside `pytest` rather than inside it keeps the fast job everyone
+waits on fast: the workflow's critical path grows by 15s rather than by the
+job's full 34s.
 
 The job asserts `lean --version` succeeds **and** `lean_available()` is True
 before running anything. Without that, a missing or unconfigured toolchain
