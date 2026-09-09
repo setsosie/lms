@@ -47,6 +47,69 @@ jobs:
       - name: mypy
         run: uv run mypy lms/
 
+  # Runs in parallel with `pytest`, not inside it. The Lean-dependent modules
+  # are the only ones that skip without a toolchain (16 tests, all in these two
+  # files), and paying a toolchain install inside the fast job would slow the
+  # feedback everyone waits on. Split this way the workflow's wall clock is
+  # unchanged -- this job just costs extra runner minutes.
+  #
+  # Deliberately NO Mathlib and NO `lake build`: every one of these tests
+  # constructs `RealLeanVerifier()` with no project, which runs bare `lean` on
+  # core-only code (`Nat`, `True`, `trivial`, `rfl`). Pulling the Mathlib cache
+  # would multiply the cost for nothing. lean.yml still builds the corpus.
+  lean-tests:
+    name: pytest (real Lean verifier)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # elan only, pinned to the same toolchain the corpus builds against.
+      # --no-modify-path because GITHUB_PATH below is what persists across steps.
+      #
+      # Deliberately not cached. Measured on the first run: acquiring the
+      # toolchain costs ~10s (elan-init, then a lazy download on first use),
+      # while saving the 632 MiB cache cost 9.3s -- a wash. The repo's cache
+      # already holds two 2.31 GiB library caches for lean.yml, and a marginal
+      # entry that saves nothing risks evicting one that saves minutes.
+      - name: Install the pinned Lean toolchain
+        run: |
+          if [ ! -x "$HOME/.elan/bin/lean" ]; then
+            curl -sSfL https://elan.lean-lang.org/elan-init.sh \
+              | sh -s -- -y --no-modify-path \
+                  --default-toolchain "$(cat lean/lean-toolchain)"
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # Without this the job is worthless: if the toolchain were missing or
+      # unconfigured, every test below would skip and the job would still be
+      # green. That is the exact failure this whole card exists to remove.
+      - name: Assert Lean is usable, so nothing below can skip silently
+        run: |
+          lean --version
+          uv run python -c "
+          from tests._lean_env import lean_available
+          assert lean_available(), 'toolchain present but not usable'
+          "
+
+      - name: Run the modules that need a real verifier
+        run: |
+          uv run pytest \
+            tests/test_lean_real.py tests/test_verify_namespace.py \
+            -q -rs --no-header
+
   pytest:
     needs: lint
     name: pytest (Python 3.12)
