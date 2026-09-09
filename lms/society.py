@@ -29,7 +29,9 @@ from lms.artifacts import (
 )
 from lms.dependency import DependencyGraph, TaskStatus
 from lms.foundation import FoundationFile, FoundationSnapshot
-from lms.gates import default_gate_runner
+from lms.gates import GateOutcome, default_gate_runner
+from lms.gates.lean_source import named_declarations
+from lms.gates.novelty import apply_novelty_gate, default_novelty_classifier
 from lms.lean.interface import (
     LeanVerifier,
     VerificationResult,
