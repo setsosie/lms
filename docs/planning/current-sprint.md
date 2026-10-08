@@ -184,6 +184,37 @@ numbers in hand.
 
 ## Sync Log
 
+- **2026-10-08** — The box is back, **restored to an earlier state**, with
+  per-user scratch moved from `/scratch/$USER` to `/scratch/users/$USER`. It
+  had been unavailable since 2026-09-08. Since the 08-28 sync: the four Qwen
+  run-ending harness fixes landed — `-21` (#54), `-22` (#55), `-23` (#56),
+  `-24` (#57) — with the config-suite fix (#58), the post-FLT reframe (#59),
+  the code the #53/#56 squashes dropped (`26Q3-CHORE-04`, #61), and the repo's
+  first CI: `26Q3-INFRA-03` (#60) and `26Q3-INFRA-04` (#62).
+  **Found while preparing DoD item 1, fixed in #63 (`26Q3-HARN-20` Part 1):**
+  the classifier counted stages that *could not have matched* as searches
+  that ran and found nothing. That covered non-elaborating `exact?` probes,
+  non-theorems, nameless payloads, and — on both ANT arcs — name search over
+  label names (`ant_c06_…`) that can never match. As built, Step 7 would have
+  called anything `exact?` cannot close one-shot a **decisive N1**, and would
+  have favoured the arc with more SCHEMATIC drafts (ramification, 12/21, vs
+  core, 3/20). The fix ships the arcs' two-stage ladder, which caps N1 at 0.6,
+  so arc N1 is review-routed by construction; the slice decision reads the
+  upper density and the D4 queue. Also in #63: all 41 arc drafts
+  pre-screened against a newer local library build (28/41 elaborate; every
+  failure is already marked SCHEMATIC; five repairs), and the Gate A control
+  arc committed, since its source archive is gitignored and was never on the
+  box. **Runbook:** `docs/runbooks/2026-10-08-box-restore.md`. Inventory,
+  re-provisioning, then DoD 1 and 3 as one CPU-only batch job
+  (`scripts/slurm/n1_density.sbatch`). DoD 4 needs either a run whose
+  `attempts.json` survived the restore, or a one-agent GPU smoke.
+  **Still open: all three server items (DoD 1, 3, 4).** Merge #63 before
+  running.
+  **Calendar, for the user:** the sprint window closed 2026-09-04, and the
+  2026-09-30 verdict date passed with Phases C–E not started. Nothing here
+  re-plans it. Getting the DoD 1 number first is what makes any re-plan
+  concrete.
+
 - **2026-09-05** — **The DAG phase** designed (`docs/planning/dag-phase.md`)
   as the harness-side response to Prove2Me and the Stacks dependency
   structure. Finding while designing it: `DependencyGraph.from_goal` infers a
@@ -248,4 +279,4 @@ numbers in hand.
 
 ---
 
-*Last Updated: 2026-08-28*
+*Last Updated: 2026-10-08*

@@ -10,6 +10,15 @@ Paste output back into the session after each checkpoint. Every step has an
 explicit expected result; if you get something else, stop at that step rather than
 continuing.
 
+> ## ⚠️ 2026-10-08: the box was restored to an earlier state
+>
+> Per-user scratch moved from `/scratch/$USER` to `/scratch/users/$USER`, so
+> every scratch path below is stale, and what survived in home is unknown.
+> **Start at [`docs/runbooks/2026-10-08-box-restore.md`](../runbooks/2026-10-08-box-restore.md)**:
+> inventory, re-provisioning, and Steps 7/7b as one batch job. This file stays
+> the record of *why* each step looks the way it does; read it for the
+> history, run the restore runbook.
+
 ## State of the box as of 2026-08-10
 
 Steps 0 through 2c ran early, on 2026-07-28. **Start at Step 2 (branch switch),
@@ -50,7 +59,7 @@ box's actual scratch mount if it isn't `/scratch/$USER`.
 
 ```bash
 cat >> ~/.bashrc <<'EOF'
-export SCRATCH=/scratch/$USER        # adjust to the real scratch mount
+export SCRATCH=/scratch/users/$USER  # /scratch/$USER before the 2026-10 restore
 export HF_HOME=$SCRATCH/hf           # model weights (vLLM downloads land here)
 export XDG_CACHE_HOME=$SCRATCH/cache # Mathlib download cache, uv, vLLM/torch caches
 export ELAN_HOME=$SCRATCH/elan       # Lean toolchains
@@ -758,7 +767,7 @@ No GPU needed: this is CPU-bound Lean elaboration plus rate-limited HTTP. The
 login node is fine; vLLM does not need to be running.
 
 ```bash
-cd ~/lms && git switch main && git pull
+cd ~/code/lms && git switch main && git pull
 ```
 
 ```bash
