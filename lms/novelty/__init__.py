@@ -85,6 +85,9 @@ class NoveltyResult:
     decisive_stage: str | None = None
     stages_available: list[str] = field(default_factory=list)
     stages_unavailable: list[str] = field(default_factory=list)
+    # Why a stage did not search, or what it reported instead of hits —
+    # e.g. the elaboration error that kept `exact?` from probing.
+    stage_errors: dict[str, str] = field(default_factory=dict)
 
     @property
     def needs_review(self) -> bool:
@@ -102,6 +105,7 @@ class NoveltyResult:
             "decisive_stage": self.decisive_stage,
             "stages_available": self.stages_available,
             "stages_unavailable": self.stages_unavailable,
+            "stage_errors": self.stage_errors,
             "needs_review": self.needs_review,
         }
 
@@ -141,9 +145,12 @@ class NoveltyClassifier:
         decisive_stage: str | None = None
         stages_available: list[str] = []
         stages_unavailable: list[str] = []
+        stage_errors: dict[str, str] = {}
 
         for backend in self.backends:
             outcome = self._run_stage(backend, query)
+            if outcome.error:
+                stage_errors[backend.stage] = outcome.error
             if not outcome.available:
                 stages_unavailable.append(backend.stage)
                 continue
@@ -162,6 +169,7 @@ class NoveltyClassifier:
             decisive_stage,
             stages_available,
             stages_unavailable,
+            stage_errors,
         )
 
     def _run_stage(self, backend: SearchBackend, query: StatementQuery) -> StageOutcome:
@@ -245,6 +253,7 @@ class NoveltyClassifier:
         decisive_stage: str | None,
         stages_available: list[str],
         stages_unavailable: list[str],
+        stage_errors: dict[str, str] | None = None,
     ) -> NoveltyResult:
         if best_confidence >= DECISIVE_CONFIDENCE:
             level, confidence = NoveltyLevel.N0, best_confidence
@@ -274,6 +283,7 @@ class NoveltyClassifier:
             decisive_stage=decisive_stage,
             stages_available=stages_available,
             stages_unavailable=stages_unavailable,
+            stage_errors=stage_errors or {},
         )
 
 

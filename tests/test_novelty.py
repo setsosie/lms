@@ -325,6 +325,12 @@ class TestExactProbeOutput:
         assert result.needs_review is True
         assert result.stages_unavailable == ["exact_probe"]
 
+    def test_the_elaboration_error_reaches_the_result(self):
+        # The box run's elaboration check reads these to repair signatures.
+        result = NoveltyClassifier([unelaborated_probe()]).classify(NOVEL)
+        assert "Unknown identifier `Foo.Bar`" in result.stage_errors["exact_probe"]
+        assert result.to_dict()["stage_errors"] == result.stage_errors
+
     def test_it_cannot_manufacture_an_n0(self):
         result = NoveltyClassifier([unelaborated_probe()]).classify(NOVEL)
         assert result.level is not NoveltyLevel.N0
