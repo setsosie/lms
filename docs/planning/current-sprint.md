@@ -198,7 +198,10 @@ numbers in hand.
   label names (`ant_c06_…`) that can never match. As built, Step 7 would have
   called anything `exact?` cannot close one-shot a **decisive N1**, and would
   have favoured the arc with more SCHEMATIC drafts (ramification, 12/21, vs
-  core, 3/20). The fix ships the arcs' two-stage ladder, which caps N1 at 0.6,
+  core, 3/20). It already had: the 2026-08-19 box run read the ramification
+  arc at **20/21 N1, every one at 0.9 with all four stages "available"**,
+  which is this defect's signature. **That number is void**; it was never
+  recorded here as a result. The fix ships the arcs' two-stage ladder, which caps N1 at 0.6,
   so arc N1 is review-routed by construction; the slice decision reads the
   upper density and the D4 queue. Also in #63: all 41 arc drafts
   pre-screened against a newer local library build (28/41 elaborate; every
