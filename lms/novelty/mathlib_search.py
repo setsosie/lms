@@ -13,8 +13,10 @@ Four search stages, tried in order and short-circuited by the classifier:
    fallback. Weak signal on its own; never decisive by itself.
 
 Every backend reports availability honestly instead of pretending: a stage
-that cannot run on this machine returns ``available=False`` and the classifier
-lowers its confidence accordingly. Results are cached on disk keyed by
+that cannot run on this machine — or cannot form a query for this statement,
+or ran on a statement that did not elaborate — returns ``available=False`` and
+the classifier lowers its confidence accordingly. Only a search that actually
+ran may count as "not found". Results are cached on disk keyed by
 (stage, query, mathlib_rev) so re-scoring archived runs costs nothing, and the
 HTTP backends respect the public services' rate limits.
 """
@@ -320,8 +322,11 @@ class MathlibNameSearch:
         return f"name:{query.name or ''}"
 
     def search(self, query: StatementQuery) -> StageOutcome:
+        # No name, no query: a search that never ran must not vote "absent".
         if not query.name:
-            return StageOutcome(self.stage, available=True, error="no declaration name")
+            return StageOutcome(
+                self.stage, available=False, error="no declaration name"
+            )
         if not self.is_available():
             return StageOutcome(
                 self.stage, available=False, error="no local Mathlib source"
@@ -432,7 +437,9 @@ class LoogleBackend(_HttpBackend):
     def search(self, query: StatementQuery) -> StageOutcome:
         q = self._query_string(query)
         if q is None:
-            return StageOutcome(self.stage, available=True, error="no declaration name")
+            return StageOutcome(
+                self.stage, available=False, error="no declaration name"
+            )
         url = f"{self.base_url}/json?q={urllib.parse.quote(q)}"
         try:
             data = self._get_json(url)
@@ -454,13 +461,21 @@ class LoogleBackend(_HttpBackend):
         return StageOutcome(self.stage, available=True, hits=hits)
 
 
+_LEAN_ERROR_RE = re.compile(r":\d+:\d+: error\b")
+_EXACT_MISS = "could not close the goal"
+# Newer toolchains print the suggestion on its own line behind an `[apply]`
+# tag; older ones print it inline. Either way the payload starts at `exact`.
+_TRY_THIS_RE = re.compile(r"Try this:\s*(?:\[apply\]\s*)?(exact\b.+)")
+
+
 class ExactProbeBackend:
     """Stage 3: does ``exact?`` close the goal from Mathlib alone?
 
     A closed goal is the strongest N0 signal available. An *elaboration* error
-    is recorded but proves nothing either way: statements phrased against
-    project-local definitions will not even elaborate in a pure-Mathlib
-    context, which is a naming mismatch, not novelty.
+    proves nothing either way: statements phrased against project-local
+    definitions will not even elaborate in a pure-Mathlib context, which is a
+    naming mismatch, not novelty. Such a probe reports ``available=False`` so
+    the classifier does not count it as a search that ran and found nothing.
     """
 
     stage = "exact_probe"
@@ -480,7 +495,9 @@ class ExactProbeBackend:
         )
 
     def cache_query(self, query: StatementQuery) -> str:
-        return f"exact_probe:{query.lean_statement}"
+        # v2: entries written before `read_output` cached elaboration failures
+        # as searches that ran; the version bump stops them being replayed.
+        return f"exact_probe/v2:{query.lean_statement}"
 
     @staticmethod
     def probe_source(lean_statement: str) -> str | None:
@@ -500,7 +517,7 @@ class ExactProbeBackend:
         source = self.probe_source(query.lean_statement)
         if source is None:
             return StageOutcome(
-                self.stage, available=True, error="statement not probeable"
+                self.stage, available=False, error="statement not probeable"
             )
         if not self.is_available():
             return StageOutcome(
@@ -531,17 +548,38 @@ class ExactProbeBackend:
                 cwd=self.project_dir,
             )
         except subprocess.TimeoutExpired:
-            return StageOutcome(self.stage, available=True, error="probe timed out")
+            # An unfinished search is not an empty one.
+            return StageOutcome(self.stage, available=False, error="probe timed out")
         finally:
             probe_path.unlink(missing_ok=True)
-        output = proc.stdout + proc.stderr
-        m = re.search(r"Try this:\s*(exact .+)", output)
-        if m:
+        return self.read_output(proc.stdout + proc.stderr)
+
+    @classmethod
+    def read_output(cls, output: str) -> StageOutcome:
+        """Turn Lean's output for one probe into a stage outcome.
+
+        Only a probe whose statement elaborated is evidence. When it did not,
+        ``exact?`` ran against whatever error recovery left behind — a goal
+        that is not the statement's — so a miss says nothing about Mathlib and
+        a close is spurious (an unknown type can leave ``x = x``, which
+        ``rfl`` closes).
+        """
+        elaboration_errors = [
+            line
+            for line in output.splitlines()
+            if _LEAN_ERROR_RE.search(line) and _EXACT_MISS not in line
+        ]
+        if elaboration_errors:
             return StageOutcome(
-                self.stage, available=True, closed_by=m.group(1).strip()
+                cls.stage,
+                available=False,
+                error=f"statement did not elaborate: {elaboration_errors[0][:400]}",
             )
+        m = _TRY_THIS_RE.search(output)
+        if m:
+            return StageOutcome(cls.stage, available=True, closed_by=m.group(1).strip())
         return StageOutcome(
-            self.stage,
+            cls.stage,
             available=True,
             error=output.strip()[:500] or None,
         )

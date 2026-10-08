@@ -27,6 +27,7 @@ field and each `book_ref` record the true book location.
   "arc": "core | ramification",
   "source": "free-text provenance",
   "mathlib_rev": "optional pin",
+  "names_are_labels": true,
   "statements": [
     {"id": "...", "book_ref": "Neukirch ANT Ch I §x.y", "name": "snake_case_name",
      "informal": "prose statement", "lean_statement": "theorem ... : ... := sorry",
@@ -35,26 +36,50 @@ field and each `book_ref` record the true book location.
 }
 ```
 
+`names_are_labels: true` says the declaration names (`ant_c06_discr_ne_zero`)
+are labels, not guesses at Mathlib names. The classifier's name-grep and loogle
+stages search by declaration name, so on these files they can never match and
+their silence is not evidence; `measure_n1_density.py` leaves them out and the
+ladder is `exact_probe` + `semantic`. Two stages cap N1 confidence at 0.6, below
+the 0.8 decisive line, so **every N1 here routes to D4** and the decisive
+density is 0 by construction. Read the upper density and the review queue.
+
 `mathlib_rev` is pinned to `lean/lake-manifest.json`'s mathlib entry at drafting
 time (`fe3134f0`). A novelty verdict is only meaningful relative to a Mathlib
 revision — a stale N1 becomes N0 when upstream lands it (HARN-04 card,
 Implementation Notes).
 
-## Validation status: **all Lean drafts are UNVALIDATED**
+## Validation status: pre-screened, not yet confirmed at the pin
 
-None of the 41 `lean_statement` drafts has been elaborated against Mathlib.
-Attempted locally 2026-08-19 via the lean-lsp MCP: every `import Mathlib.*`
-snippet fails with "imports are out of date and must be rebuilt" — the local
-olean cache is stale, and rebuilding it (`lake build` + Mathlib cache fetch) is
-box-runbook work, not part of this data PR. Consequences:
+**2026-08-19:** none of the 41 drafts had been elaborated; the local olean cache
+was stale.
 
-- Drafts whose `notes` say **SCHEMATIC** contain deliberate placeholder names
-  (marked `?` or named in the note) and will *not* elaborate as written. They
-  carry the statement's shape for the classifier's name/semantic stages;
-  the loogle/`exact?` stages need them repaired first.
-- All other drafts are best-effort Mathlib-idiomatic Lean 4 and *may*
-  elaborate, but none is confirmed. The first classifier run should report
-  elaboration failures per statement so signatures can be repaired in one pass.
+**2026-10-08 pre-screen.** All 41 elaborated in one file against a *newer*
+Mathlib than the pin (rev `520045ab`, toolchain v4.32.1; the only local build
+on the workstation), with two renames that happened between the revisions
+translated for that run only: `Ideal.ramificationIdx f p P` →
+`Ideal.ramificationIdx' p P`, and `NoZeroSMulDivisors` →
+`Module.IsTorsionFree`. Both spellings in the files are the pinned rev's,
+checked against its source.
+
+| | Count |
+|---|---:|
+| Elaborate | **28 / 41** |
+| Fail, all marked SCHEMATIC | 13 |
+| Non-SCHEMATIC drafts that fail | **0** |
+
+Getting there took five repairs, each recorded in the statement's `notes`:
+`core-06` (`Basis` → `Module.Basis`), `core-17` (scoped `⁰` notation spelled
+out), and `ram-16`/`-17`/`-20` (the instance arguments `differentIdeal`
+requires at the pin). The 13 failures were left as drafted: each is already
+marked SCHEMATIC.
+
+What this does not establish: elaboration **at `fe3134f0`**. The box run of
+`measure_n1_density.py` against the pinned build is the confirmation. A probe
+whose statement does not elaborate now reports `statement did not elaborate`
+and casts no vote either way (`exact_probe` stage), so a SCHEMATIC draft
+surfaces as INCONCLUSIVE rather than as a confident N1.
+
 - **Proposition numbers in `book_ref` were drafted from memory and are
   unconfirmed.** The D4 review doc
   (`docs/review/ant_arc_statements_d4.md`) asks the reviewer to confirm or

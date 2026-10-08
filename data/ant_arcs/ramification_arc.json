@@ -2,6 +2,7 @@
   "arc": "ramification",
   "source": "Neukirch, Algebraic Number Theory (Grundlehren 322), Ch. I §8–§10 plus the different/discriminant block of Ch. III §2, per the proposed revision in docs/planning/calibration-program.md §4 and the candidate row in specs/ant_shakedown.md §3 ('extensions of Dedekind domains, Hilbert ramification, different/discriminant'). NOTE: the different and discriminant live in Ch. III §2 of the book, not Ch. I — the arc label groups them with Ch. I ramification because that is how the program documents phrase the candidate. Statement selection and proposition numbers drafted from memory 2026-08-19; ALL book_ref numbers require D4 confirmation (see docs/review/ant_arc_statements_d4.md).",
   "mathlib_rev": "fe3134f0c3508d2fd6394307be226ffa9b8cb4ba",
+  "names_are_labels": true,
   "statements": [
     {
       "id": "ram-01",
@@ -128,16 +129,16 @@
       "book_ref": "Neukirch ANT Ch III §2",
       "name": "different_ideal_well_defined",
       "informal": "The inverse different 𝔠 = {x ∈ L : Tr_{L/K}(x·B) ⊆ A} is a fractional ideal of B containing B, and hence the different 𝔡_{B/A} = 𝔠⁻¹ is a nonzero integral ideal of B.",
-      "lean_statement": "theorem ant_r16_different_ne_bot {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [Algebra B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] : differentIdeal A B ≠ ⊥ := sorry",
-      "notes": "Expected N0 (Mathlib has differentIdeal with nonvanishing). Instance-stack spelling may need repair; the statement is the definitional well-definedness Neukirch proves en route."
+      "lean_statement": "theorem ant_r16_different_ne_bot {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [Algebra B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] [IsDedekindDomain B] [NoZeroSMulDivisors A B] : differentIdeal A B ≠ ⊥ := sorry",
+      "notes": "Expected N0 (Mathlib has differentIdeal with nonvanishing). Instance-stack spelling may need repair; the statement is the definitional well-definedness Neukirch proves en route. Repaired 2026-10-08: added `[IsDedekindDomain B] [NoZeroSMulDivisors A B]`, which `differentIdeal` requires at the pinned rev."
     },
     {
       "id": "ram-17",
       "book_ref": "Neukirch ANT Ch III §2 (2.6)",
       "name": "different_detects_ramification",
       "informal": "Dedekind's theorem on the different: a prime P of L is ramified over K if and only if P divides the different 𝔡_{B/A}.",
-      "lean_statement": "theorem ant_r17_different_dvd_iff_ramified {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] (P : Ideal B) [P.IsMaximal] (hP : P ≠ ⊥) : P ∣ differentIdeal A B ↔ 1 < Ideal.ramificationIdx (algebraMap A B) (Ideal.comap (algebraMap A B) P) P := sorry",
-      "notes": "Mathlib has partial coverage (pow_sub_one_dvd_differentIdeal and the tame/wild bounds); whether the clean global iff is stated is uncertain — good N1 discriminator. D4: Neukirch III.2.6 numbering to confirm."
+      "lean_statement": "theorem ant_r17_different_dvd_iff_ramified {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] [NoZeroSMulDivisors A B] (P : Ideal B) [P.IsMaximal] (hP : P ≠ ⊥) : P ∣ differentIdeal A B ↔ 1 < Ideal.ramificationIdx (algebraMap A B) (Ideal.comap (algebraMap A B) P) P := sorry",
+      "notes": "Mathlib has partial coverage (pow_sub_one_dvd_differentIdeal and the tame/wild bounds); whether the clean global iff is stated is uncertain — good N1 discriminator. D4: Neukirch III.2.6 numbering to confirm. Repaired 2026-10-08: added `[NoZeroSMulDivisors A B]`, which `differentIdeal` requires at the pinned rev."
     },
     {
       "id": "ram-18",
@@ -160,8 +161,8 @@
       "book_ref": "Neukirch ANT Ch III §2",
       "name": "different_of_monogenic_extension",
       "informal": "If B = A[θ] and f is the minimal polynomial of θ, then the different is principal: 𝔡_{B/A} = (f'(θ)).",
-      "lean_statement": "theorem ant_r20_different_monogenic {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] (θ : B) (hθ : Algebra.adjoin A {θ} = ⊤) : differentIdeal A B = Ideal.span {Polynomial.aeval θ (Polynomial.derivative (minpoly A θ))} := sorry",
-      "notes": "Plausibly elaborates modulo instance stack. Mathlib gained differentIdeal-of-adjoin results recently (conductor machinery) — coverage at the pinned rev is uncertain; good discriminator either way."
+      "lean_statement": "theorem ant_r20_different_monogenic {A K L B : Type*} [CommRing A] [IsDomain A] [IsDedekindDomain A] [Field K] [Field L] [Algebra A K] [IsFractionRing A K] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] [CommRing B] [IsDedekindDomain B] [Algebra B L] [IsFractionRing B L] [Algebra A B] [Algebra A L] [IsScalarTower A B L] [IsScalarTower A K L] [IsIntegralClosure B A L] [NoZeroSMulDivisors A B] (θ : B) (hθ : Algebra.adjoin A {θ} = ⊤) : differentIdeal A B = Ideal.span {Polynomial.aeval θ (Polynomial.derivative (minpoly A θ))} := sorry",
+      "notes": "Plausibly elaborates modulo instance stack. Mathlib gained differentIdeal-of-adjoin results recently (conductor machinery) — coverage at the pinned rev is uncertain; good discriminator either way. Repaired 2026-10-08: added `[NoZeroSMulDivisors A B]`, which `differentIdeal` requires at the pinned rev."
     },
     {
       "id": "ram-21",

@@ -347,6 +347,13 @@ def measure_density(
         "n1_density": (counts[NoveltyLevel.N1] / total) if total else 0.0,
         # Lower bound: only N1 labels confident enough to stand without D4.
         "n1_density_decisive": (decisive_n1 / total) if total else 0.0,
+        # The ceiling on any N1 verdict this ladder can return. Below
+        # DECISIVE_CONFIDENCE, a decisive density of 0 is a property of the
+        # ladder, not a measurement.
+        "stages_run": [b.stage for b in classifier.backends],
+        "max_n1_confidence": _N1_CONFIDENCE_BY_STAGES.get(
+            len(classifier.backends), 0.0
+        ),
         "confidence_distribution": buckets,
         "needs_review": review_queue,
         "statements": results,
