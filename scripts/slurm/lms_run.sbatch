@@ -11,6 +11,10 @@
 # SITE CONFIG -- resolved 2026-08-10 on mahpiya:
 #   sinfo  -> "gpu* infinite gpu:h100:4 localhost"  (single node, default part.)
 #   sacctmgr -> no accounting_storage plugin, so --account must NOT be set
+# UNRESOLVED on the box as restored 2026-10: partition, gres name and
+# accounting may all differ. Command-line flags override the directives
+# below, so pass -p / --gres / --account from the restore runbook's Step R0
+# rather than editing them here on a guess.
 # ---------------------------------------------------------------------------
 #SBATCH --job-name=lms-run
 #SBATCH --partition=gpu
@@ -46,7 +50,8 @@ TP_SIZE="${TP_SIZE:-4}"
 # A batch job does NOT source ~/.bashrc, so nothing exported interactively in
 # Step 0.5 survives into here. Every one of these must be set explicitly or the
 # job will redownload weights to $HOME and blow the quota.
-export SCRATCH="${SCRATCH:-/scratch/$USER}"
+# Per-user scratch moved under /scratch/users/ when the box was restored.
+export SCRATCH="${SCRATCH:-/scratch/users/$USER}"
 export HF_HOME="$SCRATCH/hf"
 export XDG_CACHE_HOME="$SCRATCH/cache"
 export ELAN_HOME="$SCRATCH/elan"

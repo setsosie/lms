@@ -70,3 +70,7 @@ Thumbs.db
 
 # Local-only planning docs — see claude-skills docs/SPRINT-SCHEMA.md
 docs/planning/retros/
+
+# Novelty-classifier search cache (scripts/measure_n1_density.py --cache-dir).
+# Keyed by statement and library rev; rebuildable, and machine-local.
+.novelty_cache/
