@@ -1,131 +1,92 @@
-# Sprint 3: Find out whether a calibratable slice exists
+# Sprint 4: Get the number Sprint 3 was for
 
-**Dates**: 2026-08-10 → 2026-09-04
-**Quarter**: Q3 2026 · folder `26Q3-01`
-**Program**: `docs/planning/calibration-program.md` — Phase B
-**Sprint Goal**: Answer the open decision in `calibration-program.md` §4 with a
-measurement, not a guess: **which ANT slice has enough N1 density to calibrate
-against, and is that number greater than zero?** If it is zero everywhere, the
-program ends early and honestly, and Phase C's 6M tokens are never spent.
+**Dates**: TBD (opened 2026-10-09; set at planning)
+**Quarter**: Q4 2026 by calendar · the carried card lives in folder `26Q3-01`
+**Program**: `docs/planning/calibration-program.md` — Phase B, completion
+**Sprint Goal**: Run the measurement Sprint 3 built but never ran, on the
+restored box: **measured N1 density for both ANT Ch. I candidate arcs, the
+Gate A control, and a CVFN denominator from a real run.** The density decides
+whether Phase C starts at all. If both arcs measure ~zero, it does not.
 
 **Status**: 🔄 ACTIVE
 
-> **Light sprint, long window.** 10 committed points over 26 days. Capacity
-> — not scope — is the binding constraint this cycle: the week straddling
-> August and September is expected to be near-idle, and the two weeks before it
-> are thin. The point total reflects what will actually get done, not what the
-> calendar could theoretically hold. Sprint 2 delivered 19 pts in three bursts
-> separated by 12 dead days; planning around real capacity is the correction.
+> **Phase C is not in this sprint.** Gate B, the two-arm calibration run and
+> the DAG-phase cards moved to the Sprint 5 pre-lock in `upcoming-sprints.md`.
+> All of them are entry-gated on DoD 1 below, and none of them can be sized
+> honestly until its number exists.
 
-> **Every sprint runs something on the server.** This sprint's server run is the
-> novelty classifier over both ANT candidate arcs on the 4×H100 (DoD item 1). A
-> sprint with no run on the box is a sprint whose assumptions went unchecked —
-> every consequential defect found in Sprint 2 came from running the thing, not
-> from reading it.
+> **Every sprint runs something on the server.** This sprint's server runs are
+> the sprint goal: runbook R4 (DoD 1 and 3) and R5 (DoD 4). The user runs the
+> runbook and pastes the output back.
 
 ---
 
-## Scope change 2026-08-12: this sprint cannot green Gate B
-
-Gate B requires one artifact through **all five** machine gates, which requires
-`26Q3-HARN-03` (T2/T4, 5 pts) *and* `26Q3-HARN-04` (novelty, 5 pts) *and*
-`26Q3-HARN-13` (2 pts) — 12 pts before any cost accounting. At a 10-pt ceiling,
-Gate B does not fit. Rather than commit 12 and miss, the sprint is re-pointed at
-the single highest-information question available for 10.
-
-**Gate B moves to Sprint 4.** `26Q3-HARN-03` moves with it.
-
-Why the slice decision is the right thing to buy instead: if the candidate arcs
-are ~entirely N0 — which `calibration-program.md` §4 explicitly suspects, because
-Minkowski theory, class-number finiteness and Dirichlet units are all in Mathlib
-— then **CVFN is undefined by construction** and no amount of gate work changes
-that. Learning this before Phase C saves the 6M-token run. Learning it after
-wastes the quarter.
-
-## ⚠️ The 2026-08-21 checkpoint needs your decision
-
-The pre-commitment made 2026-07-24 reads: *if Gate B is not green by 2026-08-21,
-Phase C runs on API models with a hard $300 cap.* On this plan **Gate B will not
-be green on 2026-08-21**, so the fallback fires by its own terms.
-
-But it was written against the wrong risk. The fallback swaps the *serving stack*
-— it is the mitigation for "the cluster is unavailable, FLAIME has P0 priority."
-The cluster is up and the oracle works. The actual constraint is **bandwidth**,
-and API models do not add bandwidth. Firing it as written would spend $300 and
-change nothing.
-
-Recommendation: re-point the checkpoint at **2026-09-04** (this sprint's end) and
-restate it as a *decision* rather than a *swap* — at Sprint 3 close, if the N1
-density measurement has not happened, the Sep 30 verdict is no longer reachable
-and the program should be re-planned or shelved rather than rushed. Keep the $300
-as available-on-demand for hard sub-tasks, not date-triggered.
-
-**This is your pre-commitment to change, not mine.** Recorded here as an open
-decision; nothing has been edited in `calibration-program.md`.
-
-> **Resolved 2026-09-04** — `decisions/0001-phase-c-model-harness-control.md`.
-> The checkpoint is re-pointed as a *control*, not a swap: Phase C runs the
-> local model and one frontier model on the same slice and harness, and the
-> $300 pays for the frontier arm. `calibration-program.md` §3 is amended.
-
-## Sprint 2 close-out (26Q3-01) — 19/41 pts, goal not met
+## Sprint 3 close-out (26Q3-01): 40/43 pts, goal not met
 
 | Metric | Value |
 |--------|-------|
-| Dates | 2026-07-27 → 2026-08-07 (closed 2026-08-12) |
-| Delivered | **19** (46%) |
-| Carried here | 22 pts across 7 tasks (+3 stretch) |
-| Gate A | ❌ not run |
+| Dates | 2026-08-10 → 2026-09-04 (closed 2026-10-09) |
+| Delivered | **40** (93% of 43; committed 10/10) |
+| Carried here | 3 pts across 1 task, plus DoD items 1, 3 and 4 |
+| N1 density | ❌ not measured. The 2026-08-19 reading is void (#63) |
 
-Full record: [`archive/sprint-02-26Q3-01.md`](archive/sprint-02-26Q3-01.md).
-Retro: `retros/sprint-02-retro.md` (local-only).
+Full record: [`archive/sprint-03-26Q3-01.md`](archive/sprint-03-26Q3-01.md).
 
-The Lean oracle went live and produced the first `verified_lean` artifact in
-project history; the cumulative-knowledge mechanism worked for the first time
-ever. But all three originally-planned CRITICAL gate tasks — `-03`, `-04`, `-05`,
-13 pts — were never started, and 17 pts of found-work displaced them.
+All ten committed points landed by 2026-08-19, and 30 points of found-work
+followed. The measurement itself never ran. The box time went to committee
+runs, and then the box was unavailable 2026-09-08 → 2026-10-08.
 
-Velocity: 9.5 pts/sprint over two sprints (0, then 19).
+Velocity: **19.7 pts/sprint** over three sprints (0, 19, 40). Sprint 3's 40
+is mostly found-work, so commit to what this sprint actually needs, not to
+the mean.
 
-## Sprint 3 Summary
+## Sprint 4 Summary
 
 | Metric | Value |
 |--------|-------|
-| Committed points | 10 |
-| Stretch | 0 — deliberately none |
-| Carryover | all 10 committed pts are Sprint 2 carryover |
-| Window | 26 days, low expected capacity |
-| Track | Phase B — resolve the slice decision, keep the oracle honest |
+| Committed points | 3 |
+| Server runs | 3 DoD items, unpointed |
+| Stretch | 0 |
+| Carryover | everything here is Sprint 3 carryover |
+| Window | TBD |
+| Track | Phase B: get the slice decision |
 | Status | 🔄 ACTIVE |
 
-**No stretch rows this sprint.** Stretch is what let Sprint 2's scope grow 71%
-mid-flight. If the committed 10 land early, pull `26Q3-HARN-03` forward from
-Sprint 4 as an explicit decision, not as a row that was sitting there.
-
-## Committed
+## Carryover from Sprint 3
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q3-HARN-13: Verify an artifact in the namespace it will be stored in | 2 | HIGH | HARN | ✅ DONE | #33, merged 2026-08-19 | Was "do this first", and it was: the oracle now wraps the temp file in `LMS.Foundation` before verifying, via a single shared `FOUNDATION_NAMESPACE` constant |
-| 26Q3-HARN-04: Novelty classifier (N0 / N1) | 5 | CRITICAL | HARN | ✅ DONE (code) | #38, merged 2026-08-19 | Four-stage Mathlib search (name-grep, `exact?` probe, loogle, LeanSearch) with confidence + D4 routing. **The acceptance test — the run on the box over both arcs — is runbook Step 7 and has no recorded result yet**; DoD item 1 is still open |
-| 26Q3-HARN-05: Per-statement cost accounting | 3 | HIGH | HARN | ✅ DONE | #37, merged 2026-08-19 | Tokens + wall-clock per statement including failed attempts — the CVFN denominator. Also fixed `len(response.attempts)` being counted as artifacts created |
+| 26Q3-HARN-20: Gate 4 withholds N1 when its search could not have matched | 3 | HIGH | HARN | 🔲 PENDING (Part 2 of 2) | Part 1: #63, merged 2026-10-09 | Part 2: the import-namespace rule, the Yoneda regression fixture, flagging `forbidden_imports` runs in the CVFN report, and scoring the informal statement. DoD 1 does not wait on it; Part 1 is what the density run needed |
+
+## Server runs (the sprint goal)
+
+Runbook: [`docs/runbooks/2026-10-08-box-restore.md`](../runbooks/2026-10-08-box-restore.md).
+These rows carry no points; their code was counted with `-04` and `-05` in
+Sprint 3. They are still what this sprint is for.
+
+| Step | What | DoD | Status | Notes |
+|------|------|-----|--------|-------|
+| R0 | Inventory (read-only) | — | 🔲 PENDING | Paste the output back before anything else; the box was restored to an earlier state |
+| R1–R3 | Scratch routing, Lean toolchain + library build, Python env + suite | — | 🔲 PENDING | Install the pinned toolchain, not `stable`; `lean/.lake` may dangle |
+| R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 3 | 🔲 PENDING | Expect some non-SCHEMATIC drafts to fail at the pin; repair them in one PR and re-run |
+| R5 | CVFN denominator from a real run | 4 | 🔲 PENDING | R5a if a run's `attempts.json` survived the restore, else R5b (a small real run) |
 
 ## Definition of Done
 
-1. **The server run happened** — the novelty classifier ran on the 4×H100 over
-   *both* ANT Ch. I candidate arcs (the committed core arc: integrality →
-   Minkowski → class number → units; and the ramification arc: extensions of
-   Dedekind domains, Hilbert ramification theory, different and discriminant).
-   **Measured N1 density is recorded for each.** This resolves
-   `calibration-program.md` §4 and is the input Sprint 4's calibration run needs.
-2. **`26Q3-HARN-13` landed** — artifacts verify in the namespace they are stored
-   in, so the oracle stops emitting false negatives.
-3. **Gate A run to the extent `-04` allows** — every artifact in the archived
-   `experiments/stacks_ch4_phase1/artifacts.json` classified N0/N1. It currently
-   reports 48/52 verified; the N0 count must account for essentially all of them.
-   The T2/T4 half of Gate A defers to Sprint 4 with `-03`.
-4. **A CVFN denominator exists** — tokens and wall-clock attributed per
-   statement, including failed attempts, on at least one real run.
+1. **N1 density measured for both ANT Ch. I arcs** at the pinned build, from
+   runbook R4. Record per arc: the upper density, the D4 queue,
+   `stages_run` and `max_n1_confidence`. On the arcs, decisive N1 is 0 by
+   construction (two search stages cap N1 at 0.6), so the slice decision reads
+   the upper density and the D4 queue, not a decisive count.
+2. **Gate A control run**, from the same batch job: every artifact in the
+   committed control arc (`data/novelty_control/gate_a_control_arc.json`)
+   classified. N0 must account for essentially all of them.
+3. **A CVFN denominator exists**: tokens and wall-clock attributed per
+   statement, including failed attempts, on at least one real run (R5).
+4. **`26Q3-HARN-20` Part 2 merged.**
+5. **The slice decision is written down.** It names the chosen arc, or
+   records "both ~zero, Phase C does not start, go to Phase E", and the
+   calendar re-plan for Sprints 5–7 follows from it.
 
 Read the gate histogram's *shape*, not its total.
 
@@ -133,153 +94,35 @@ Read the gate histogram's *shape*, not its total.
 
 | Risk | Mitigation | Task |
 |------|------------|------|
-| **The Sep 30 verdict date is now at genuine risk** | Phase C compresses to Sprint 4 (2026-09-07 → 2026-09-18), Phase D to 2026-09-21 → 2026-09-25, Phase E to 2026-09-28 → 2026-09-30. There is no slack left. If Sprint 3 slips past 2026-09-04, the verdict date moves — say so then rather than compressing D and E further | — |
-| Both candidate arcs measure ~zero N1 | **That is the sprint succeeding, not failing.** It means CVFN is undefined at current scope, and the honest move is Phase E early: write up "thesis untestable at current capability" and shelve. Do not respond by widening the slice until something scores | 26Q3-HARN-04 |
-| Novelty classifier is unreliable (Mathlib search is fuzzy) | Report N0/N1 with a confidence field; low-confidence routes to D4 human review rather than being counted. On a *density* measurement, systematic bias matters more than per-item error — report the confidence distribution, not just the mean | 26Q3-HARN-04 |
-| Found-work displaces the committed 10, as it displaced Sprint 2's 13 | New box defects get carded to Sprint 4 unless they block DoD item 1. Three committed rows is few enough to hold in mind — that is the point of a light sprint | — |
-| The near-idle straddle week absorbs the whole sprint | Front-load: `-13` is 2 pts and unblocks the oracle; `-04` is the only row whose acceptance test needs the box. Aim to have DoD item 1 done before 2026-08-28 | — |
-
-## Next sprint (Sprint 4, 2026-09-07 → 2026-09-18) — pre-lock
-
-Back to normal length. Phase C — **the calibration run** — plus the Gate B work
-this sprint could not fit.
-
-- `26Q3-HARN-03` (5) — T2/T4 machine gates, carried from Sprint 3's scope cut.
-  Gate B cannot go green without it.
-- **Gate B** — one artifact through all five machine gates, end-to-end on the box.
-- **Phase C** — the slice chosen by Sprint 3's measured N1 density, run as
-  two arms on one frozen harness (ADR 0001, 2026-09-04): Qwen at **1 and 9
-  agents**, 2M tokens each, hard-capped; one frontier control at 9 (then 1 if
-  budget remains), capped at $300. ~~1, 3 and 9 agents on one model~~. This is
-  the first direct test of the project's core hypothesis that population size
-  matters, with the model-vs-harness attribution the single-model design
-  could not give.
-- **Gate C** — ≥1 statement clears all five machine gates in at least one config.
-  Zero across all configs is a legitimate, publishable go/no-go outcome.
-- `26Q3-HARN-25` (5) — proof sketches: open child lemmas become leaves in the
-  task graph. Candidate; does not gate Phase C (harness frozen 2026-09-07).
-- **The DAG phase** (`docs/planning/dag-phase.md`, 2026-09-05): `26Q3-HARN-27`
-  (3, source-anchored dependency edges — **decide before 2026-09-07** whether
-  it enters the frozen baseline; every goal's graph is a chain today),
-  `26Q3-HARN-28` (5, theorem cards + statement pinning + ANT arc → goal
-  converter), `26Q3-HARN-26` (5, closing leaves, Part 2 of `-25`). `-28`/`-26`
-  are the post-freeze harness variant, run on the same slice and budget after
-  the two frozen arms.
-
-Sizing note: `-03` plus Gate B plus Phase C already fills a normal sprint; the
-DAG-phase cards are 13 points on top and will not all fit. The 3-agent config
-was cut by ADR 0001. Decide the rest at Sprint 4 planning with Sprint 3's N1
-numbers in hand.
+| Found-work displaces the runs again, as it did all of Sprint 3 | No new card enters this sprint until R4 has run. New defects card to Sprint 5 unless they block R4 or R5 | — |
+| The restored box is missing pieces (home contents, toolchain, library cache) | R0 is read-only and comes first. Re-provision from R1–R3, not from memory | R0–R3 |
+| Arc drafts fail to elaborate at the pin | 28/41 elaborated against a newer build; every failure was already SCHEMATIC. Repair any non-SCHEMATIC failure in one PR and re-run R4 | R4 |
+| Both arcs measure ~zero N1 | **That is the sprint succeeding.** CVFN is undefined at current scope; go to Phase E early. Do not widen the slice until something scores | DoD 5 |
+| No run's `attempts.json` survived the restore | R5b: a small real run produces one | R5 |
+| A third external result invites a third reframe | The pre-commitment exists to survive news. Get the number first | — |
 
 ## Deferred — not this sprint
 
 | Task | Points | Why |
 |------|--------|-----|
-| 26Q3-HARN-03: T2 / T4 machine gates | 5 | Moved to Sprint 4 with Gate B. Cut to fit the 10-pt ceiling. *Landed anyway 2026-08-19 (#39) in the found-work burst* |
-| 26Q3-HARN-12: committee architecture reachable + review stage | 3 | Real (iterative mode has no peer-review phase at all), but it does not block CVFN. Card and verify script sit uncommitted in the working tree. *Landed 2026-08-19 (#35)* |
-| 26Q3-INFRA-02: per-request token cap configurable | 2 | Issue #17. Worked around in the runbook; revisit if Phase C hits it. *Landed 2026-08-28: `LMS_<PROVIDER>_MAX_TOKENS` → `ProviderConfig.max_tokens`, runbook Steps 4–5 updated* |
-| 26Q3-HARN-08: agents emit Lean 3, not Lean 4 | 2 | **Re-evidence or close.** `shakedown_3x3_d` showed zero Lean 3 syntax across 4/4 artifacts — the card may describe a defect that no longer exists |
-| 26Q3-HARN-06: D4 side-by-side review view | 3 | Needed before Phase D (2026-09-21 under the revised calendar). Sprint 4 |
-| 26Q3-CAL-01: select the ANT slice | 3 | **Absorbed into this sprint's DoD item 1.** The card is unnecessary — it was always `-04`'s acceptance test |
+| Gate B + Phase C (two-arm calibration run, ADR 0001) | TBD | Sprint 5 pre-lock. Entry-gated on DoD 1 |
+| 26Q3-HARN-25 / -26 / -27 / -28: proof sketches and the DAG phase | 5 / 5 / 3 / 5 | Sprint 5 pre-lock (`docs/planning/dag-phase.md`) |
+| 26Q3-HARN-06: D4 side-by-side review view | 3 | Needed before Phase D, whose dates are TBD |
+| 26Q3-HARN-08: agents emit Lean 3, not Lean 4 | 2 | **Re-evidence or close.** Still no evidence the defect exists |
+
+Task cards follow the shared task-card template (`templates/task-card.md` in
+the planning tooling). Cards for this sprint live under
+`docs/planning/tasks/26Q3-01/`.
 
 ## Sync Log
 
-- **2026-10-08** — The box is back, **restored to an earlier state**, with
-  per-user scratch moved from `/scratch/$USER` to `/scratch/users/$USER`. It
-  had been unavailable since 2026-09-08. Since the 08-28 sync: the four Qwen
-  run-ending harness fixes landed — `-21` (#54), `-22` (#55), `-23` (#56),
-  `-24` (#57) — with the config-suite fix (#58), the post-FLT reframe (#59),
-  the code the #53/#56 squashes dropped (`26Q3-CHORE-04`, #61), and the repo's
-  first CI: `26Q3-INFRA-03` (#60) and `26Q3-INFRA-04` (#62).
-  **Found while preparing DoD item 1, fixed in #63 (`26Q3-HARN-20` Part 1):**
-  the classifier counted stages that *could not have matched* as searches
-  that ran and found nothing. That covered non-elaborating `exact?` probes,
-  non-theorems, nameless payloads, and — on both ANT arcs — name search over
-  label names (`ant_c06_…`) that can never match. As built, Step 7 would have
-  called anything `exact?` cannot close one-shot a **decisive N1**, and would
-  have favoured the arc with more SCHEMATIC drafts (ramification, 12/21, vs
-  core, 3/20). It already had: the 2026-08-19 box run read the ramification
-  arc at **20/21 N1, every one at 0.9 with all four stages "available"**,
-  which is this defect's signature. **That number is void**; it was never
-  recorded here as a result. The fix ships the arcs' two-stage ladder, which caps N1 at 0.6,
-  so arc N1 is review-routed by construction; the slice decision reads the
-  upper density and the D4 queue. Also in #63: all 41 arc drafts
-  pre-screened against a newer local library build (28/41 elaborate; every
-  failure is already marked SCHEMATIC; five repairs), and the Gate A control
-  arc committed, since its source archive is gitignored and was never on the
-  box. **Runbook:** `docs/runbooks/2026-10-08-box-restore.md`. Inventory,
-  re-provisioning, then DoD 1 and 3 as one CPU-only batch job
-  (`scripts/slurm/n1_density.sbatch`). DoD 4 needs either a run whose
-  `attempts.json` survived the restore, or a one-agent GPU smoke.
-  **Still open: all three server items (DoD 1, 3, 4).** Merge #63 before
-  running.
-  **Calendar, for the user:** the sprint window closed 2026-09-04, and the
-  2026-09-30 verdict date passed with Phases C–E not started. Nothing here
-  re-plans it. Getting the DoD 1 number first is what makes any re-plan
-  concrete.
-
-- **2026-09-05** — **The DAG phase** designed (`docs/planning/dag-phase.md`)
-  as the harness-side response to Prove2Me and the Stacks dependency
-  structure. Finding while designing it: `DependencyGraph.from_goal` infers a
-  total order, so every registered goal has exactly **one** AVAILABLE task at
-  any time — no committee run has ever allocated two distinct statements in a
-  generation, and "N agents converge on one tag" was the graph, not the
-  agents. The Stacks source's `\ref` cross-references give the real edges
-  (Track B and A go from 1 root to 18 and 16). Three cards: `26Q3-HARN-27`
-  (edges, 3), `26Q3-HARN-28` (theorem cards + pinning + arc → goal converter,
-  5), `26Q3-HARN-26` (closing leaves, 5, Part 2 of `-25`). Sprint 4 pre-lock
-  above amended to ADR 0001's two-arm design. **Open for the user**: whether
-  `-27` lands before the 2026-09-07 harness freeze. Sprint 3 not closed in
-  this entry.
-
-- **2026-09-04** — Response to Anthropic's FLT formalization post (2026-09-03)
-  and the Prove2Me paper. Two decision records opened in
-  `docs/planning/decisions/`: **0001** (Accepted) re-points the 2026-08-21
-  checkpoint as a model × harness control — Phase C becomes Qwen at {1, 9} plus
-  one frontier arm at {9, then 1}, the $300 funds the control, Sep 30 stands;
-  **0002** (Proposed) restates the research question as measurement on open
-  models and drops the three-text program as a production target. README and
-  CLAUDE.md reframed accordingly. New card `26Q3-HARN-25` (proof sketches, 5
-  pts) added to the Sprint 4 pre-lock as a candidate. Sprint 3 not closed in
-  this entry.
-
-- **2026-08-28** — Status sync against `main` (the doc had not been touched
-  since opening day; sixteen days and 21 PRs had passed). All 10 committed
-  points landed in the 2026-08-19/20 burst: `-13` (#33), `-05` (#37), `-04`
-  (#38). The found-work rule did not hold: Sprint 4's `26Q3-HARN-03` was pulled
-  forward (#39), `26Q3-HARN-12` landed (#35), and the first committee runs
-  spawned six new cards, all landed same-burst — `-14` (#48) through `-19`
-  (#53) — plus TP=4 serving (#42) and the Gate A control runner (#43).
-  **What is still open is exactly the DoD's server half**: runbook Steps 7/7b
-  (both arc densities + the Gate A control) have no recorded results, so DoD
-  items 1 and 3 — the sprint goal — remain unclosed with 7 days left in the
-  window. Step 8's smoke (Checkpoint 8, committee_smoke_e) is green (#47).
-  Also this sync: issue #16 fixed (config suite hermetic, Anthropic default
-  settled on `claude-opus-4-5-20251101`), `LeanProject.build` no longer
-  crashes on a box without `lake`, and deferred `26Q3-INFRA-02` delivered
-  (issue #17) — the per-request cap now follows the endpoint.
-
-- **2026-08-12 (second entry)** — Sprint 3 rescoped after a capacity review.
-  Window extended 2026-08-21 → **2026-09-04**; committed points cut 15 → **10**;
-  stretch rows removed entirely. `26Q3-HARN-03` (5) deferred to Sprint 4, which
-  moves **Gate B to Sprint 4** — 10 pts cannot cover the five machine gates.
-  Sprint goal re-pointed from "green Gate B" to "resolve the §4 slice decision
-  with a measurement", the highest-information 10 points available.
-  Standing rule adopted: **every sprint runs something on the server.** This
-  sprint's is DoD item 1.
-  Two things the user should decide: the 2026-08-21 API-fallback pre-commitment
-  (see the flagged section above — it will fire by its own terms and would not
-  help), and whether the 2026-09-30 verdict date survives a Phase C that now
-  starts 2026-09-07.
-
-- **2026-08-12** — Sprint 2 closed at 19/41 pts and archived to
-  `archive/sprint-02-26Q3-01.md`; Sprint 1 archived retroactively to
-  `archive/sprint-01-26Q2-01.md`. Sprint 3 opened.
-  Corrected during the close: `26Q3-HARN-11` was recorded 🔄 IN PROGRESS with
-  "#28 (open)" by the same-day sync, but #28 merged at 20:47 — an hour before
-  the sync commit landed. Counted as delivered (3 pts, 16 → 19).
-  `26Q3-HARN-13` stays carryover: #30 merged its card and verify stub only.
+- **2026-10-09** — Sprint 3 closed at 40/43 pts (committed 10/10), goal not
+  met, archived to `archive/sprint-03-26Q3-01.md`. Sprint 4 opened with dates
+  TBD and scope cut to the Sprint 3 server runs plus `26Q3-HARN-20` Part 2.
+  The pre-locked Gate B + Phase C content moves to Sprint 5; Sprints 5–7 are
+  TBD until DoD 1's number exists. The 2026-09-30 verdict date has passed and
+  needs a re-plan.
 
 ---
 
-*Last Updated: 2026-10-08*
+*Last Updated: 2026-10-09*
