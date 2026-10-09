@@ -2,6 +2,7 @@
   "arc": "core",
   "source": "Neukirch, Algebraic Number Theory (Grundlehren 322), Ch. I §2–§7. The arc committed by specs/ant_shakedown.md §3 (2026-06-09): integrality → ideals → Minkowski theory → class number → unit theorem. Statement selection and proposition numbers drafted from memory 2026-08-19; ALL book_ref numbers require D4 confirmation against the book (see docs/review/ant_arc_statements_d4.md).",
   "mathlib_rev": "fe3134f0c3508d2fd6394307be226ffa9b8cb4ba",
+  "names_are_labels": true,
   "statements": [
     {
       "id": "core-01",
@@ -48,8 +49,8 @@
       "book_ref": "Neukirch ANT Ch I §2 (2.8)",
       "name": "discriminant_of_basis_ne_zero",
       "informal": "For a finite separable extension L/K, the discriminant d(α₁, …, αₙ) = det(Tr(αᵢαⱼ)) of any K-basis of L is nonzero.",
-      "lean_statement": "theorem ant_c06_discr_ne_zero {K L : Type*} [Field K] [Field L] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] {ι : Type*} [Fintype ι] [DecidableEq ι] (b : Basis ι K L) : Algebra.discr K b ≠ 0 := sorry",
-      "notes": "Expected N0 (Mathlib: Algebra.discr_not_zero_of_basis)."
+      "lean_statement": "theorem ant_c06_discr_ne_zero {K L : Type*} [Field K] [Field L] [Algebra K L] [FiniteDimensional K L] [Algebra.IsSeparable K L] {ι : Type*} [Fintype ι] [DecidableEq ι] (b : Module.Basis ι K L) : Algebra.discr K b ≠ 0 := sorry",
+      "notes": "Expected N0 (Mathlib: Algebra.discr_not_zero_of_basis). Repaired 2026-10-08: `Basis` → `Module.Basis`; the root name does not exist at the pinned rev."
     },
     {
       "id": "core-07",
@@ -136,8 +137,8 @@
       "book_ref": "Neukirch ANT Ch I §6",
       "name": "every_class_contains_bounded_ideal",
       "informal": "Every ideal class of K contains an integral ideal a with 𝔑(a) ≤ M, where M is the Minkowski-type bound (2/π)ˢ√|d_K| — the key lemma for finiteness of the class number.",
-      "lean_statement": "theorem ant_c17_class_contains_bounded_ideal (K : Type*) [Field K] [NumberField K] (C : ClassGroup (NumberField.RingOfIntegers K)) : ∃ I : (Ideal (NumberField.RingOfIntegers K))⁰, ClassGroup.mk0 I = C ∧ (Ideal.absNorm (I : Ideal (NumberField.RingOfIntegers K)) : ℝ) ≤ (2 / Real.pi) ^ (NumberField.InfinitePlace.nrComplexPlaces K) * Real.sqrt |(NumberField.discr K : ℝ)| := sorry",
-      "notes": "SCHEMATIC-leaning: mk0/nonZeroDivisors plumbing and the constant's exact Mathlib form (NumberField.minkowskiBound uses the sharper constant) may need repair. Substance likely N0 (Mathlib: exists_ideal_in_class_of_norm_le)."
+      "lean_statement": "theorem ant_c17_class_contains_bounded_ideal (K : Type*) [Field K] [NumberField K] (C : ClassGroup (NumberField.RingOfIntegers K)) : ∃ I : nonZeroDivisors (Ideal (NumberField.RingOfIntegers K)), ClassGroup.mk0 I = C ∧ (Ideal.absNorm (I : Ideal (NumberField.RingOfIntegers K)) : ℝ) ≤ (2 / Real.pi) ^ (NumberField.InfinitePlace.nrComplexPlaces K) * Real.sqrt |(NumberField.discr K : ℝ)| := sorry",
+      "notes": "SCHEMATIC-leaning: mk0/nonZeroDivisors plumbing and the constant's exact Mathlib form (NumberField.minkowskiBound uses the sharper constant) may need repair. Substance likely N0 (Mathlib: exists_ideal_in_class_of_norm_le). Repaired 2026-10-08: `(Ideal _)⁰` → `nonZeroDivisors (Ideal _)`; the `⁰` notation is scoped and the exact? probe opens no namespaces. The constant is still unconfirmed."
     },
     {
       "id": "core-18",

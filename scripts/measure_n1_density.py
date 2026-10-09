@@ -14,12 +14,18 @@ Input schema (one file per arc):
       "arc": "core | ramification",
       "source": "free-text provenance",
       "mathlib_rev": "optional pin",
+      "names_are_labels": true,
       "statements": [
         {"id": "...", "book_ref": "Neukirch ANT Ch I §x.y", "name": "snake_case_name",
          "informal": "prose statement", "lean_statement": "theorem ... := sorry",
          "notes": "..."}
       ]
     }
+
+`names_are_labels` marks declaration names the drafter chose as labels
+(`ant_c06_discr_ne_zero`) rather than guesses at a Mathlib name. Name-keyed
+stages cannot match a label, so their silence is not evidence of absence; they
+are left out of the ladder and listed under `stages_excluded` in the report.
 
 The report carries the full confidence distribution and the D4 review queue,
 not just a density number: on a density measurement, systematic bias matters
@@ -33,10 +39,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lms.novelty import NoveltyClassifier, measure_density
+from lms.novelty import DECISIVE_CONFIDENCE, NoveltyClassifier, measure_density
 from lms.novelty.mathlib_search import DiskCache, default_backends, detect_mathlib_rev
 
 REQUIRED_STATEMENT_KEYS = ("id", "name", "lean_statement")
+
+# Stages whose query is the declaration name.
+NAME_KEYED_STAGES = ("name", "loogle")
 
 
 def load_arc(path: Path) -> dict:
@@ -50,9 +59,13 @@ def load_arc(path: Path) -> dict:
     return doc
 
 
-def build_classifier(args: argparse.Namespace) -> NoveltyClassifier:
+def build_classifier(
+    args: argparse.Namespace, names_are_labels: bool = False
+) -> NoveltyClassifier:
     cache = DiskCache(args.cache_dir) if args.cache_dir else None
     backends = default_backends(args.lean_project)
+    if names_are_labels:
+        backends = [b for b in backends if b.stage not in NAME_KEYED_STAGES]
     if args.offline:
         # Cache-only: every backend that would touch the network or the
         # toolchain is dropped; only cached answers and the local name grep
@@ -90,10 +103,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_statements is not None:
         doc = {**doc, "statements": doc["statements"][: args.max_statements]}
 
-    classifier = build_classifier(args)
+    names_are_labels = bool(doc.get("names_are_labels"))
+    classifier = build_classifier(args, names_are_labels)
     report = measure_density(doc, classifier)
+    report["stages_excluded"] = (
+        {stage: "declaration names are labels" for stage in NAME_KEYED_STAGES}
+        if names_are_labels
+        else {}
+    )
 
     print(f"Arc: {report['arc']}   (Mathlib {report['mathlib_rev'] or 'unknown'})")
+    if report["stages_excluded"]:
+        print(
+            f"Stages excluded: {', '.join(report['stages_excluded'])} (names are labels)"
+        )
     print(f"{'id':<28} {'level':<13} {'conf':>5}  evidence")
     for r in report["statements"]:
         top = r["evidence"][0] if r["evidence"] else ""
@@ -107,6 +130,12 @@ def main(argv: list[str] | None = None) -> int:
         f"N1 density: {report['n1_density']:.2f} (upper) / "
         f"{report['n1_density_decisive']:.2f} (decisive)"
     )
+    if report["max_n1_confidence"] < DECISIVE_CONFIDENCE:
+        print(
+            f"Decisive N1 is unreachable: {len(report['stages_run'])} stage(s) cap N1 "
+            f"confidence at {report['max_n1_confidence']:.2f}. Read the upper "
+            "density and the D4 queue, not the decisive one."
+        )
     print(f"Confidence distribution: {report['confidence_distribution']}")
     if report["needs_review"]:
         print(

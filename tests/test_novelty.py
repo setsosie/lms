@@ -22,10 +22,13 @@ from lms.novelty import (
 from lms.novelty.mathlib_search import (
     DiskCache,
     ExactProbeBackend,
+    LoogleBackend,
+    MathlibNameSearch,
     RateLimiter,
     RecordedBackend,
     SearchHit,
     StageOutcome,
+    StatementQuery,
     extract_identifiers,
     name_tokens,
     parse_declaration,
@@ -264,6 +267,107 @@ class TestExactProbe:
         assert backend.is_available() is False
 
 
+# Lean output recorded 2026-10-08 (toolchain v4.32.1) for three probes: one
+# that `exact?` closes, one it cannot, and one whose statement names a type
+# that does not exist — which error recovery reduced to a goal `rfl` closes.
+CLOSED_TAGGED = "Try this:\n  [apply] exact IsIntegral.add hx hy\n"
+MISSED = (
+    "probe.lean:5:59: error: `exact?` could not close the goal. "
+    "Try `apply?` to see partial suggestions.\n"
+)
+DID_NOT_ELABORATE = (
+    "probe.lean:7:51: error(lean.unknownIdentifier): Unknown identifier `Foo.Bar`\n"
+    "Try this:\n  [apply] exact ((fun a => a) ∘ fun a => a) rfl\n"
+)
+
+
+def unelaborated_probe() -> RecordedBackend:
+    outcome = ExactProbeBackend.read_output(DID_NOT_ELABORATE)
+    return RecordedBackend(
+        "exact_probe", {"sameDenom_eq_iff_exists_postcomp_W": outcome}
+    )
+
+
+class TestExactProbeOutput:
+    def test_inline_suggestion_closes(self):
+        outcome = ExactProbeBackend.read_output("Try this: exact Nat.add_zero n\n")
+        assert outcome.closed_by == "exact Nat.add_zero n"
+
+    def test_apply_tagged_suggestion_closes(self):
+        outcome = ExactProbeBackend.read_output(CLOSED_TAGGED)
+        assert outcome.available is True
+        assert outcome.closed_by == "exact IsIntegral.add hx hy"
+
+    def test_a_miss_is_a_search_that_ran(self):
+        outcome = ExactProbeBackend.read_output(MISSED)
+        assert outcome.available is True
+        assert outcome.closed_by is None
+
+    def test_a_statement_that_did_not_elaborate_casts_no_vote(self):
+        outcome = ExactProbeBackend.read_output(DID_NOT_ELABORATE)
+        assert outcome.available is False
+        assert outcome.closed_by is None
+        assert (outcome.error or "").startswith("statement did not elaborate")
+
+    def test_it_cannot_lift_n1_to_decisive(self):
+        # Three name/semantic stages empty: N1 below the decisive line. Before
+        # the probe stopped counting elaboration failures, it made the fourth
+        # empty stage and the verdict 0.9, decisive.
+        stages = [
+            empty_backend("name"),
+            empty_backend("loogle"),
+            unelaborated_probe(),
+            empty_backend("semantic"),
+        ]
+        result = NoveltyClassifier(stages).classify(NOVEL)
+        assert result.level is NoveltyLevel.N1
+        assert result.confidence < DECISIVE_CONFIDENCE
+        assert result.needs_review is True
+        assert result.stages_unavailable == ["exact_probe"]
+
+    def test_the_elaboration_error_reaches_the_result(self):
+        # The box run's elaboration check reads these to repair signatures.
+        result = NoveltyClassifier([unelaborated_probe()]).classify(NOVEL)
+        assert "Unknown identifier `Foo.Bar`" in result.stage_errors["exact_probe"]
+        assert result.to_dict()["stage_errors"] == result.stage_errors
+
+    def test_it_cannot_manufacture_an_n0(self):
+        result = NoveltyClassifier([unelaborated_probe()]).classify(NOVEL)
+        assert result.level is not NoveltyLevel.N0
+
+
+NAMELESS = "-- a payload with no named declaration\nexample : True := trivial"
+
+
+class TestStagesWithNoQuery:
+    """A stage that could not form a query did not search, so it cannot vote."""
+
+    def test_name_search_without_a_name(self, tmp_path):
+        query = StatementQuery.from_lean(NAMELESS)
+        assert MathlibNameSearch(tmp_path).search(query).available is False
+
+    def test_loogle_without_a_name(self):
+        query = StatementQuery.from_lean(NAMELESS)
+        assert LoogleBackend().search(query).available is False
+
+    def test_exact_probe_on_a_definition(self, tmp_path):
+        query = StatementQuery.from_lean("def foo : Nat := 0")
+        assert ExactProbeBackend(tmp_path).search(query).available is False
+
+    def test_a_nameless_definition_is_not_confident_n1(self, tmp_path):
+        # 11 of the 52 Gate A control payloads look like this. With the three
+        # query-less stages voting "absent", it read N1 at 0.9, decisive.
+        stages = [
+            MathlibNameSearch(tmp_path),
+            LoogleBackend(),
+            ExactProbeBackend(tmp_path),
+            empty_backend("semantic"),
+        ]
+        result = NoveltyClassifier(stages).classify(NAMELESS)
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert result.stages_available == ["semantic"]
+
+
 # ------------------------------------------------------------------ gate
 
 
@@ -376,6 +480,20 @@ class TestMeasureDensity:
             sum(report["confidence_distribution"].values())
             == report["total_statements"]
         )
+
+    def test_report_states_the_n1_ceiling_of_its_ladder(self):
+        stages = [empty_backend("exact_probe"), empty_backend("semantic")]
+        report = measure_density(arc_doc(), NoveltyClassifier(stages))
+        assert report["stages_run"] == ["exact_probe", "semantic"]
+        assert report["max_n1_confidence"] < DECISIVE_CONFIDENCE
+        # Two empty stages read N1, but none of it is decisive.
+        assert report["counts"]["N1"] == 2
+        assert report["n1_density_decisive"] == 0.0
+        assert report["needs_review"] == ["s1", "s2"]
+
+    def test_four_stages_can_reach_decisive(self):
+        report = measure_density(arc_doc(), NoveltyClassifier(four_empty_stages()))
+        assert report["max_n1_confidence"] >= DECISIVE_CONFIDENCE
 
 
 # ------------------------------------------------- recorded live fixtures
