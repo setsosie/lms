@@ -34,7 +34,7 @@ test -f lms/novelty/vocabulary.py
 test -f tests/fixtures/novelty/yoneda_bespoke_api.json
 
 # 6. Part 2 behavior proven in pytest
-uv run pytest tests/test_novelty.py -q -k "ProjectVocabulary or YonedaRegression or InformalNamedResults"
+uv run pytest tests/test_novelty.py -q -k "ProjectVocabulary or YonedaRegression or InformalNamedResults or ExplicitUniverses"
 uv run pytest tests/test_accounting.py -q -k "CVFNNovelty"
 
 echo "26Q3-HARN-20: verification passed"

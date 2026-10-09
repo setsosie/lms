@@ -270,7 +270,8 @@ class CVFNReport:
             lines.append(f"  awaiting D4 review: {self.awaiting_review}")
         if not self.goal_recorded:
             lines.append(
-                "  goal:              goal.json missing — forbidden_imports unchecked"
+                "  goal:              goal.json missing or predates "
+                "forbidden_imports — forbidden_imports unchecked"
             )
         if self.unmeasurable_reason is not None:
             lines.append(
@@ -316,11 +317,17 @@ def _load_review_minutes(run_dir: Path) -> float:
 
 
 def _forbidden_mathlib(run_dir: Path) -> list[str] | None:
-    """Mathlib areas the run's goal forbade; None when the goal was not saved."""
+    """Mathlib areas the run's goal forbade; None when that cannot be known.
+
+    Unknown means no `goal.json`, or one saved before `forbidden_imports` was
+    always written (2026-10-09): an absent key is not an empty list.
+    """
     path = run_dir / "goal.json"
     if not path.exists():
         return None
     goal = json.loads(path.read_text())
+    if "forbidden_imports" not in goal:
+        return None
     return [
         imp
         for imp in goal.get("forbidden_imports") or []

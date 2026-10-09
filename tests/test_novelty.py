@@ -340,6 +340,18 @@ class TestExactProbeOutput:
 NAMELESS = "-- a payload with no named declaration\nexample : True := trivial"
 
 
+class TestExplicitUniverses:
+    def test_the_name_stops_before_the_universe_list(self):
+        assert parse_declaration("theorem foo.{u} (x : Nat) : x = x := rfl") == (
+            "theorem",
+            "foo",
+        )
+        assert parse_declaration("structure Category.{u, v} where") == (
+            "structure",
+            "Category",
+        )
+
+
 class TestStagesWithNoQuery:
     """A stage that could not form a query did not search, so it cannot vote."""
 
@@ -467,7 +479,51 @@ def yoneda_stages(semantic_hits: bool) -> list[RecordedBackend]:
     return stages
 
 
+SEED = (Path(__file__).parent.parent / "lms" / "seed" / "category.lean").read_text()
+
+
+def seed_project(tmp_path: Path) -> Path:
+    """A Lean project whose foundation is the shipped seed: a class plus notation."""
+    module = tmp_path / "LMS" / "Foundation.lean"
+    module.parent.mkdir(parents=True)
+    module.write_text(SEED)
+    return tmp_path
+
+
 class TestProjectVocabulary:
+    def test_vocabulary_arriving_as_notation(self, tmp_path):
+        code = (
+            "import LMS.Foundation\nopen LMS.Foundation\n\n"
+            "theorem type_comp_apply {X Y Z : Type u} (f : X ⟶ Y) (g : Y ⟶ Z) (x : X) :\n"
+            "    (f ≫ g) x = g (f x) := rfl"
+        )
+        found = project_vocabulary(code, seed_project(tmp_path))
+        assert found
+        assert "⟶" in found.names
+
+    def test_vocabulary_arriving_through_a_variable(self, tmp_path):
+        code = (
+            "import LMS.Foundation\nopen LMS.Foundation\n\n"
+            "variable {C : Type u} [Category.{v} C]\n\n"
+            "theorem id_comp' {X Y : C} (f : X ⟶ Y) : 𝟙 X ≫ f = f := by simp"
+        )
+        found = project_vocabulary(code, seed_project(tmp_path))
+        assert found.names == ["Category", "⟶", "𝟙", "≫"]
+
+    def test_a_declaration_with_explicit_universes(self, tmp_path):
+        module = tmp_path / "LMS" / "Foundation.lean"
+        module.parent.mkdir(parents=True)
+        module.write_text("structure Category.{u, v} where\n  Obj : Type u\n")
+        code = "import LMS.Foundation\n\ntheorem t (C : Category.{0, 0}) (X : C.Obj) : True := trivial"
+        assert project_vocabulary(code, tmp_path).names == ["Category"]
+
+    def test_an_auto_param_does_not_end_the_header(self, tmp_path):
+        code = (
+            "import LMS.Foundation\n\n"
+            "theorem t (n : Nat) (h : 0 < n := by decide) (C : Category) : True := trivial"
+        )
+        assert project_vocabulary(code, yoneda_project(tmp_path)).names == ["Category"]
+
     def test_a_statement_in_foundation_vocabulary(self, tmp_path):
         found = project_vocabulary(YONEDA["lean_code"], yoneda_project(tmp_path))
         assert found.names == YONEDA_VOCABULARY
@@ -550,6 +606,16 @@ class TestInformalNamedResults:
             ("The integral closure of a Dedekind domain is Dedekind", []),
             ("The main theorem of this section", []),
             (None, []),
+            ("Nakayama’s lemma", [{"nakayama"}]),
+            ("Gauss' lemma on primitive polynomials", [{"gauss"}]),
+            ("The Sylow theorems", [{"sylow"}]),
+            ("Lagrange's four-square theorem", [{"lagrange"}]),
+            ("The Cauchy—Schwarz inequality", [{"cauchy", "schwarz"}]),
+            # A reference or a capitalised common word is not an eponym.
+            ("By Lemma 3, the map is injective", []),
+            ("Prime number theorem", []),
+            ("Central Limit Theorem", []),
+            ("First isomorphism theorem", []),
         ],
     )
     def test_named_results(self, informal, expected):

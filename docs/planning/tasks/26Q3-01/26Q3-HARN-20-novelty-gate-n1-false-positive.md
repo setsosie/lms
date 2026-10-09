@@ -104,9 +104,18 @@ search cannot see therefore arrives by import: the Yoneda artifact imported
 `Mathlib.CategoryTheory`. `lms/novelty/vocabulary.py` reads every imported
 project module (any root other than Mathlib, Lean's own, and their
 dependencies) from the classifier's `project_dir`, and finds which of its
-declarations the statement's header uses. If any are used, or a project module
-cannot be read, an all-empty search is INCONCLUSIVE with the reason as
+declarations or notations the statement uses — in its header or in a
+`variable` binder, which is how the shipped seed's `class Category` and its
+scoped `⟶`/`≫`/`𝟙` notation reach a statement. If any are used, or a project
+module cannot be read, an all-empty search is INCONCLUSIVE with the reason as
 `evidence[0]`, never N1. A match still wins: N0 evidence is unaffected.
+
+Found in review and fixed here: a declaration with an explicit universe list
+(`structure Category.{u, v}`) parsed as the name `Category.`. Beyond missing
+the vocabulary, that empty last component made the `name` stage's grep match
+every declaration in Mathlib, a spurious decisive N0 on any `theorem foo.{u}`.
+The header now also ends at the first `:=` *outside* brackets, so an
+`autoParam` binder no longer truncates it.
 
 **Informal scoring.** `named_results` pulls eponyms from the informal
 statement ("Yoneda lemma", "Nakayama's lemma", "Kummer–Dedekind theorem"). A
@@ -123,7 +132,10 @@ N0 or an N1.
 
 **CVFN report.** It reads `goal.json` from the run directory. A goal that
 forbids any `Mathlib.*` import is reported `unmeasurable` with the reason, and
-no number is computed. A run with no `goal.json` says the check did not run.
+no number is computed. A run with no `goal.json`, or one saved before the key
+was always written, says the check did not run: every archived `goal.json`
+under `experiments/` lacks the key, including the FROM-SCRATCH goal's.
+`Goal.save` now writes `forbidden_imports` even when it is null.
 Also fixed here: the denominator counted *every* verified N1, including those
 below the gate's decisive threshold. It now counts what Gate 4 counts, and
 reports the rest as awaiting D4 review.
@@ -133,7 +145,8 @@ kept. `tests/fixtures/novelty/yoneda_bespoke_api.json` restates the statement
 over the same vocabulary, keeps the recorded verdict verbatim, and adds real
 LeanSearch hits for the same informal statement (recorded 2026-10-09).
 
-**Known limits.** Transitive project imports are not followed. An eponym only
+**Known limits.** Transitive project imports are not followed. Re-scoring an
+archived run reads the *current* project foundation, not the run's own. An eponym only
 matches when Mathlib's declaration name carries it: Nakayama's lemma is
 `Submodule.eq_bot_of_le_smul_of_le_jacobson_bot`. A goal whose
 `allowed_imports` whitelist excludes a Mathlib area is not flagged; only

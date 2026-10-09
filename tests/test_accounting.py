@@ -617,6 +617,21 @@ class TestCVFNNovelty:
         assert report.cvfn_tokens_per_statement == 1_000
         assert report.unmeasurable_reason is None
 
+    def test_a_goal_saved_before_the_field_existed_is_unchecked(self, tmp_path):
+        """Goals saved before 2026-08-19 have no forbidden_imports key at all."""
+        goal = {"name": "Stacks Chapter 4 FROM SCRATCH"}
+        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        assert report.goal_recorded is False
+        assert "forbidden_imports unchecked" in report.format()
+
+    def test_a_goal_with_nothing_forbidden_says_so_on_disk(self, tmp_path):
+        from lms.goals import Goal
+
+        Goal(name="g", description="", source="").save(tmp_path / "goal.json")
+        saved = json.loads((tmp_path / "goal.json").read_text())
+        assert "forbidden_imports" in saved
+        assert saved["forbidden_imports"] is None
+
     def test_a_run_without_its_goal_says_so(self, tmp_path):
         report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1]))
         assert report.cvfn_tokens_per_statement == 1_000
