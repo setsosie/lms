@@ -42,13 +42,21 @@ next-sprint pre-lock. Generated 2026-06-18.
 |---|--------|-------|-------|--------:|----------:|--------|
 | 1 | ANT shakedown + local serving | 2026-06-16 → 2026-06-27 | 0 | 24 | 0 | ✅ Complete (0%) |
 | 2 | Make the harness incapable of lying | 2026-07-27 → 2026-08-07 | A | 41 | 19 | ✅ Complete (46%) |
-| 3 | Find out whether a calibratable slice exists | 2026-08-10 → 2026-09-04 | B | 10 | — | 🔄 Active |
-| 4 | Gate B + the calibration run | 2026-09-07 → 2026-09-18 | C | TBD | — | 🔲 Pre-locked |
-| 5 | Human D4 review | 2026-09-21 → 2026-09-25 | D | TBD | — | 🔲 Planned |
-| 6 | Verdict | 2026-09-28 → 2026-09-30 | E | TBD | — | 🔲 Planned |
+| 3 | Find out whether a calibratable slice exists | 2026-08-10 → 2026-09-04 | B | 43 | 40 | ✅ Complete (93%, goal not met) |
+| 4 | Get the number Sprint 3 was for | TBD | B | 3 | — | 🔄 Active |
+| 5 | Gate B + the calibration run | TBD | C | TBD | — | 🔲 Pre-locked |
+| 6 | Human D4 review | TBD | D | TBD | — | 🔲 Planned |
+| 7 | Verdict | TBD | E | TBD | — | 🔲 Planned |
+
+**Re-plan pending (2026-10-09).** Sprint 3 closed 35 days late with its server
+runs unrun, and the 2026-09-30 verdict date passed with Phases C–E not started.
+Sprint 4 now carries those runs, so Phase C moves to Sprint 5 and D and E shift
+one sprint each. All dates from Sprint 4 on are TBD until Sprint 4's DoD 1
+(measured N1 density) exists.
 
 Closed sprints: [`archive/README.md`](archive/README.md). Velocity across the
-two closed sprints is **9.5 pts/sprint** — two data points, not a forecast.
+three closed sprints is **19.7 pts/sprint** (0, 19, 40). Uneven data, not a
+forecast: Sprint 3's 40 is mostly found-work over a 61-day actual window.
 
 ## Two standing rules (adopted 2026-08-12)
 
@@ -66,6 +74,8 @@ two closed sprints is **9.5 pts/sprint** — two data points, not a forecast.
 remaining slack. Phase C now starts 2026-09-07 and Phases D and E are compressed
 to 5 and 3 days. The 2026-09-30 verdict date has no buffer left — if Sprint 3
 slips, the verdict date moves rather than D and E compressing further.
+*It slipped (closed 2026-10-09), so the verdict date moves; see the re-plan
+note under the sprint overview.*
 
 ## The honest headline
 
@@ -146,12 +156,18 @@ INFRA-01 ─→ ANT shakedown ─→ Shared kernel (spectral seq) ─→ ART+CNF
 - **Not the constraint:** money. **The constraints are wall-clock throughput, the
   reuse phase-transition, and local-model capability** (escape hatch absorbs the last).
 
-## Pre-locked next sprint (Sprint 4 — Gate B + Phase C, 2026-09-07 → 2026-09-18)
+## Pre-locked Sprint 5 — Gate B + Phase C (dates TBD)
+
+> **Re-labelled at the Sprint 3 close (2026-10-09).** This was Sprint 4's
+> pre-lock. Sprint 4 became the Sprint 3 server runs, so this content moved
+> here unchanged. Dates inside it, such as the 2026-09-07 harness freeze and
+> Phase D opening 2026-09-21, are from the old calendar and get re-set at the
+> re-plan.
 
 Back to normal sprint length. Carries the Gate B work Sprint 3's 10-point ceiling
 could not fit, then runs the calibration itself. Detail in
 `calibration-program.md` §3, Phase C; the committed form lands in
-`current-sprint.md` at the Sprint 3 close.
+`current-sprint.md` at the Sprint 4 close.
 
 - **`26Q3-HARN-03`** (5) — T2/T4 machine gates, cut from Sprint 3. **Gate B
   cannot go green without it**, so it comes first.
@@ -201,11 +217,11 @@ could not fit, then runs the calibration itself. Detail in
 
 **Sizing note**: `-03` + Gate B + Phase C exceeds a lighter-sprint budget.
 The 3-agent local config is already cut (ADR 0001) — 1 and 9 test the
-population-size hypothesis at its extremes. Decide any further cut at Sprint 4
-planning with Sprint 3's N1 numbers in hand.
+population-size hypothesis at its extremes. Decide any further cut at Sprint 5
+planning with Sprint 4's N1 numbers in hand.
 
-**Entry condition**: Sprint 3's DoD item 1 done — measured N1 density for both
-candidate arcs. If both measure ~zero, **do not start Phase C**; go straight to
+**Entry condition**: Sprint 4's DoD item 1 done (carried from Sprint 3) —
+measured N1 density for both candidate arcs. If both measure ~zero, **do not start Phase C**; go straight to
 Phase E and write up "CVFN undefined at current scope."
 
 **The 2026-08-21 API-fallback pre-commitment is resolved (2026-09-04,
@@ -252,7 +268,9 @@ or the local model needs heavy escape-hatch support.~~
 **Current bottom line**: there is no defensible timeline for the three-text
 program, because there is not yet a single measured data point on the cost of a
 verified *novel* statement. The Q3 calibration program exists to produce exactly
-one number (CVFN) by **2026-09-30**. Three outcomes, all acceptable:
+one number (CVFN) by **2026-09-30**. *That date passed with Phases C–E not
+started; the re-plan waits on Sprint 4's N1 density.* Three outcomes, all
+acceptable:
 
 | Outcome | Consequence |
 |---|---|
