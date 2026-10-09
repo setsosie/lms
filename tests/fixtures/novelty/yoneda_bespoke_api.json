@@ -1,0 +1,57 @@
+{
+  "provenance": "The Yoneda Lemma over a hand-rolled bundled Category, from the Sonnet-team simulation of 2026-08-20/21 (docs/LESSONS_FROM_SONNET_SIMULATION.md section 4b). That run's output directory was not kept, so lean_code is a reconstruction: the statement over the same vocabulary the run's foundation declared (Category, Functor, NatTrans), imported from LMS.Foundation as that goal's whitelist required. recorded_verdict is verbatim from the lessons doc. semantic_hits are real LeanSearch results for the same informal statement, recorded 2026-10-09.",
+  "informal": "Yoneda lemma: natural transformations Hom(X,-) => F correspond to elements of F(X)",
+  "lean_code": "import LMS.Foundation\n\nnamespace LMS.Foundation\n\ntheorem yoneda_lemma (C : Category) (F : Functor C TypeCat) (X : C.Obj) :\n    Function.Bijective\n      (fun α : NatTrans (homFunctor C X) F => α.component X (C.id X)) := by\n  sorry\n\nend LMS.Foundation\n",
+  "foundation_module": "LMS.Foundation",
+  "foundation_source": "import Mathlib.Logic.Equiv.Defs\n\nnamespace LMS.Foundation\n\nuniverse v\n\nstructure Category where\n  Obj : Type (v+1)\n  Hom : Obj → Obj → Type v\n  id : (x : Obj) → Hom x x\n  comp : {x y z : Obj} → Hom x y → Hom y z → Hom x z\n\nstructure Functor (C D : Category.{v}) where\n  obj : C.Obj → D.Obj\n  map : {x y : C.Obj} → C.Hom x y → D.Hom (obj x) (obj y)\n\nstructure NatTrans {C D : Category.{v}} (F G : Functor C D) where\n  component : (x : C.Obj) → D.Hom (F.obj x) (G.obj x)\n\ndef TypeCat : Category.{v} where\n  Obj := Type v\n  Hom := fun X Y => X → Y\n  id := fun _ x => x\n  comp := fun f g x => g (f x)\n\ndef homFunctor (C : Category.{v}) (X : C.Obj) : Functor C TypeCat.{v} where\n  obj := fun Y => C.Hom X Y\n  map := fun f g => C.comp g f\n\nend LMS.Foundation\n",
+  "recorded_verdict": {
+    "level": "N1",
+    "confidence": 0.9,
+    "needs_review": false,
+    "evidence": ["not found by: name, loogle, exact_probe, semantic"],
+    "stages_available": ["name", "loogle", "exact_probe", "semantic"],
+    "stages_unavailable": []
+  },
+  "semantic_hits": [
+    {
+      "name": "CategoryTheory.yonedaLemma",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "(C : Type u₁) → [inst : CategoryTheory.Category.{v₁, u₁} C] → CategoryTheory.yonedaPairing C ≅ CategoryTheory.yonedaEvaluation C"
+    },
+    {
+      "name": "CategoryTheory.yonedaEquiv",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → {X : C} → {F : CategoryTheory.Functor Cᵒᵖ (Type v₁)} → (CategoryTheory.yoneda.obj X ⟶ F) ≃ F.obj (Opposite.op X)"
+    },
+    {
+      "name": "CategoryTheory.coyonedaEquiv",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → {X : C} → {F : CategoryTheory.Functor C (Type v₁)} → (CategoryTheory.coyoneda.obj (Opposite.op X) ⟶ F) ≃ F.obj X"
+    },
+    {
+      "name": "CategoryTheory.Functor.representableByEquiv",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → {F : CategoryTheory.Functor Cᵒᵖ (Type v₁)} → {Y : C} → F.RepresentableBy Y ≃ (CategoryTheory.yoneda.obj Y ≅ F)"
+    },
+    {
+      "name": "CategoryTheory.Functor.RepresentableBy.homEquiv",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → {F : CategoryTheory.Functor Cᵒᵖ (Type v)} → {Y : C} → F.RepresentableBy Y → {X : C} → (X ⟶ Y) ≃ F.obj (Opposite.op X)"
+    },
+    {
+      "name": "CategoryTheory.yonedaMap",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → {D : Type u_1} → [inst_1 : CategoryTheory.Category.{v₁, u_1} D] → (F : CategoryTheory.Functor C D) → (X : C) → CategoryTheory.yoneda.obj X ⟶ F.op.comp (CategoryTheory.yoneda.obj (F.obj X))"
+    },
+    {
+      "name": "CategoryTheory.Functor.RepresentableBy.toIso",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → {F : CategoryTheory.Functor Cᵒᵖ (Type v₁)} → {Y : C} → F.RepresentableBy Y → (CategoryTheory.yoneda.obj Y ≅ F)"
+    },
+    {
+      "name": "CategoryTheory.yoneda",
+      "module": "Mathlib.CategoryTheory.Yoneda",
+      "type_signature": "{C : Type u₁} → [inst : CategoryTheory.Category.{v₁, u₁} C] → CategoryTheory.Functor C (CategoryTheory.Functor Cᵒᵖ (Type v₁))"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ API.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH — CVFN is the number the whole Q3 program turns on |
-| **Status** | 🔄 IN PROGRESS — Part 1 in review, Part 2 TODO |
+| **Status** | 🔄 IN PROGRESS — Part 1 merged (#63), Part 2 in review |
 | **Branch** | Part 1: `26Q3-HARN-20-part1-stages-that-cannot-match`; Part 2: `26Q3-HARN-20-novelty-gate-n1-false-positive` |
 | **Dependencies** | 26Q3-HARN-19 (wires Gate 4 into the run at all) |
 | **PR Size Target** | <400 lines per part |
@@ -94,18 +94,78 @@ the artifact itself is not in the repo's fixtures.
 Part 1 does not change `_N1_CONFIDENCE_BY_STAGES` or any threshold, per the
 decision gate below.
 
+#### Part 2 (2026-10-09): a statement no search can match is never novel
+
+**Reading of "the Mathlib namespace where its concept would live."** The
+classifier classifies an artifact's *first* declaration, so names declared
+later in the same artifact never reach its header. The vocabulary a Mathlib
+search cannot see therefore arrives by import: the Yoneda artifact imported
+`Category`, `Functor` and `NatTrans` from `LMS.Foundation` instead of from
+`Mathlib.CategoryTheory`. `lms/novelty/vocabulary.py` reads every imported
+project module (any root other than Mathlib, Lean's own, and their
+dependencies) from the classifier's `project_dir`, and finds which of its
+declarations or notations the statement uses — in its header or in a
+`variable` binder, which is how the shipped seed's `class Category` and its
+scoped `⟶`/`≫`/`𝟙` notation reach a statement. If any are used, or a project
+module cannot be read, an all-empty search is INCONCLUSIVE with the reason as
+`evidence[0]`, never N1. A match still wins: N0 evidence is unaffected.
+
+Found in review and fixed here: a declaration with an explicit universe list
+(`structure Category.{u, v}`) parsed as the name `Category.`. Beyond missing
+the vocabulary, that empty last component made the `name` stage's grep match
+every declaration in Mathlib, a spurious decisive N0 on any `theorem foo.{u}`.
+The header now also ends at the first `:=` *outside* brackets, so an
+`autoParam` binder no longer truncates it.
+
+**Informal scoring.** `named_results` pulls eponyms from the informal
+statement ("Yoneda lemma", "Nakayama's lemma", "Kummer–Dedekind theorem"). A
+semantic hit whose name carries the eponym scores 0.7: plausible, never
+decisive. An eponym the Lean header already uses as vocabulary is dropped, so
+"Dedekind's theorem" over `IsDedekindDomain` does not match every Dedekind
+hit. On the ANT arcs this rule can touch only core-13, core-14 and core-20,
+all of them noted as expected N0 or SCHEMATIC. The flagged N1 candidate ram-17
+is untouched, and no arc draft imports a project module, so DoD 1's
+measurement does not move.
+
+Both changes only ever turn an N1 into INCONCLUSIVE. Neither can manufacture an
+N0 or an N1.
+
+**CVFN report.** It reads `goal.json` from the run directory. A goal that
+forbids any `Mathlib.*` import is reported `unmeasurable` with the reason, and
+no number is computed. A run with no `goal.json`, or one saved before the key
+was always written, says the check did not run: every archived `goal.json`
+under `experiments/` lacks the key, including the FROM-SCRATCH goal's.
+`Goal.save` now writes `forbidden_imports` even when it is null.
+Also fixed here: the denominator counted *every* verified N1, including those
+below the gate's decisive threshold. It now counts what Gate 4 counts, and
+reports the rest as awaiting D4 review.
+
+**The fixture is a reconstruction.** The Sonnet run's output directory was not
+kept. `tests/fixtures/novelty/yoneda_bespoke_api.json` restates the statement
+over the same vocabulary, keeps the recorded verdict verbatim, and adds real
+LeanSearch hits for the same informal statement (recorded 2026-10-09).
+
+**Known limits.** Transitive project imports are not followed. Re-scoring an
+archived run reads the *current* project foundation, not the run's own. An eponym only
+matches when Mathlib's declaration name carries it: Nakayama's lemma is
+`Submodule.eq_bot_of_le_smul_of_le_jacobson_bot`. A goal whose
+`allowed_imports` whitelist excludes a Mathlib area is not flagged; only
+`forbidden_imports` is.
+
 #### Acceptance criteria
 
-- [ ] An artifact that does not import the Mathlib namespace where its concept
+- [x] An artifact that does not import the Mathlib namespace where its concept
       would live cannot receive a decisive N1. It reports INCONCLUSIVE and
-      routes to D4.
-- [ ] Regression test: the Yoneda artifact from this run (kept in the card's
-      fixtures) does **not** classify as decisive N1.
-- [ ] `cvfn_report` (when it exists) refuses to compute a CVFN over a run whose
+      routes to D4. *(Part 2, read as above.)*
+- [x] Regression test: the Yoneda artifact from this run (kept in the card's
+      fixtures) does **not** classify as decisive N1. *(Part 2,
+      reconstructed.)*
+- [x] `cvfn_report` (when it exists) refuses to compute a CVFN over a run whose
       goal carries `forbidden_imports` covering the relevant Mathlib area, or
-      reports it explicitly flagged as unmeasurable.
-- [ ] Novelty scored on the informal statement as well as the Lean source, so a
+      reports it explicitly flagged as unmeasurable. *(Part 2.)*
+- [x] Novelty scored on the informal statement as well as the Lean source, so a
       named theorem is recognisable regardless of the API it is written against.
+      *(Part 2.)*
 - [x] `verify_26Q3-HARN-20.sh` asserts behaviour in pytest, not inline Python.
       *(Part 1.)*
 

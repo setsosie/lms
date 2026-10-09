@@ -75,6 +75,7 @@ def build_classifier(
         backends,
         cache=cache,
         mathlib_rev=detect_mathlib_rev(args.lean_project),
+        project_dir=args.lean_project,
     )
 
 

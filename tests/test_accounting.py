@@ -11,6 +11,7 @@ import json
 import pytest
 
 from lms.accounting import (
+    DECISIVE_N1_CONFIDENCE,
     OVERHEAD_KEY,
     AttemptRecord,
     CostLedger,
@@ -509,8 +510,18 @@ class TestCVFN:
                 {
                     "artifacts": [
                         {"id": "a1", "status": "verified_lean", "novelty_level": "N0"},
-                        {"id": "a2", "status": "verified_lean", "novelty_level": "N1"},
-                        {"id": "a3", "status": "failed", "novelty_level": "N1"},
+                        {
+                            "id": "a2",
+                            "status": "verified_lean",
+                            "novelty_level": "N1",
+                            "novelty_confidence": 0.9,
+                        },
+                        {
+                            "id": "a3",
+                            "status": "failed",
+                            "novelty_level": "N1",
+                            "novelty_confidence": 0.9,
+                        },
                     ]
                 }
             )
@@ -541,6 +552,90 @@ class TestCVFN:
 
         report = cvfn_report(run_dir)
         assert report.review_minutes == 7.5
+
+
+def write_run(run_dir, artifacts, goal=None):
+    """A saved run directory with the given artifacts and, optionally, goal."""
+    run_dir.mkdir()
+    (run_dir / "results.json").write_text(
+        json.dumps({"generations": [], "checkpoint": {"total_tokens_used": 1_000}})
+    )
+    (run_dir / "artifacts.json").write_text(json.dumps({"artifacts": artifacts}))
+    if goal is not None:
+        (run_dir / "goal.json").write_text(json.dumps(goal))
+    return run_dir
+
+
+DECISIVE_N1 = {
+    "id": "a1",
+    "status": "verified_lean",
+    "novelty_level": "N1",
+    "novelty_confidence": 0.9,
+}
+
+
+class TestCVFNNovelty:
+    def test_only_decisive_n1_enters_the_denominator(self, tmp_path):
+        low = {**DECISIVE_N1, "id": "a2", "novelty_confidence": 0.75}
+        unlabelled_confidence = {
+            "id": "a3",
+            "status": "verified_lean",
+            "novelty_level": "N1",
+        }
+        inconclusive = {**DECISIVE_N1, "id": "a4", "novelty_level": "INCONCLUSIVE"}
+        report = cvfn_report(
+            write_run(
+                tmp_path / "run",
+                [DECISIVE_N1, low, unlabelled_confidence, inconclusive],
+            )
+        )
+        assert report.denominator == 1
+        assert report.cvfn_tokens_per_statement == 1_000
+        # The rest wait on D4 sign-off rather than vanishing from the report.
+        assert report.awaiting_review == 3
+        assert "awaiting D4 review: 3" in report.format()
+
+    def test_the_threshold_is_the_gates(self):
+        from lms.novelty import DECISIVE_CONFIDENCE
+
+        assert DECISIVE_N1_CONFIDENCE == DECISIVE_CONFIDENCE
+
+    def test_a_goal_forbidding_mathlib_is_unmeasurable(self, tmp_path):
+        goal = {
+            "name": "stacks-ch4-phase1",
+            "forbidden_imports": ["Mathlib.CategoryTheory"],
+        }
+        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        assert report.cvfn_tokens_per_statement is None
+        assert report.denominator_kind == "unmeasurable"
+        assert "Mathlib.CategoryTheory" in report.unmeasurable_reason
+        assert "unmeasurable" in report.format()
+
+    def test_a_goal_without_forbidden_mathlib_is_measured(self, tmp_path):
+        goal = {"name": "ant", "forbidden_imports": []}
+        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        assert report.cvfn_tokens_per_statement == 1_000
+        assert report.unmeasurable_reason is None
+
+    def test_a_goal_saved_before_the_field_existed_is_unchecked(self, tmp_path):
+        """Goals saved before 2026-08-19 have no forbidden_imports key at all."""
+        goal = {"name": "Stacks Chapter 4 FROM SCRATCH"}
+        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        assert report.goal_recorded is False
+        assert "forbidden_imports unchecked" in report.format()
+
+    def test_a_goal_with_nothing_forbidden_says_so_on_disk(self, tmp_path):
+        from lms.goals import Goal
+
+        Goal(name="g", description="", source="").save(tmp_path / "goal.json")
+        saved = json.loads((tmp_path / "goal.json").read_text())
+        assert "forbidden_imports" in saved
+        assert saved["forbidden_imports"] is None
+
+    def test_a_run_without_its_goal_says_so(self, tmp_path):
+        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1]))
+        assert report.cvfn_tokens_per_statement == 1_000
+        assert "goal.json missing" in report.format()
 
 
 class TestLedgerPersistence:

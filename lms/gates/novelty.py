@@ -51,6 +51,7 @@ def default_novelty_classifier(
         default_backends(project_dir),
         cache=DiskCache(Path(project_dir) / ".lake" / "novelty-cache"),
         mathlib_rev=detect_mathlib_rev(project_dir),
+        project_dir=project_dir,
     )
 
 

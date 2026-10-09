@@ -56,9 +56,11 @@ _DECL_KEYWORDS = (
     "inductive",
 )
 
+# The name stops before an explicit universe list: `Category.{u, v}` is
+# `Category`, not `Category.` (whose empty last component matches everything).
 _DECL_RE = re.compile(
     r"^\s*(?:private\s+|protected\s+|noncomputable\s+|@\[[^\]]*\]\s*)*"
-    rf"({'|'.join(_DECL_KEYWORDS)})\s+([A-Za-z_][\w.']*)",
+    rf"({'|'.join(_DECL_KEYWORDS)})\s+([A-Za-z_][\w']*(?:\.[\w']+)*)",
     re.MULTILINE,
 )
 
@@ -103,6 +105,46 @@ def parse_declaration(lean_code: str) -> tuple[str | None, str | None]:
     if not m:
         return None, None
     return m.group(1), m.group(2)
+
+
+def declared_names(lean_code: str) -> list[str]:
+    """Names of every declaration in a Lean snippet, in source order."""
+    return [m.group(2) for m in _DECL_RE.finditer(lean_code)]
+
+
+_OPENERS = "([{⦃⟨"
+_CLOSERS = ")]}⦄⟩"
+
+
+def statement_header(lean_code: str) -> str | None:
+    """Binders and type of the first declaration, without its body.
+
+    The body starts at the first `:=` or `where` outside any bracket, so a
+    default-valued binder such as `(h : 0 < n := by decide)` stays in.
+    """
+    m = _DECL_RE.search(lean_code)
+    if not m:
+        return None
+    rest = lean_code[m.end() :]
+    depth = 0
+    for i, ch in enumerate(rest):
+        if ch in _OPENERS:
+            depth += 1
+        elif ch in _CLOSERS:
+            depth = max(depth - 1, 0)
+        elif depth == 0 and (rest.startswith(":=", i) or _is_word(rest, i, "where")):
+            return rest[:i]
+    return rest
+
+
+def _is_word(text: str, i: int, word: str) -> bool:
+    """`word` starts at `text[i]` and is not part of a longer identifier."""
+    end = i + len(word)
+    return (
+        text.startswith(word, i)
+        and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] in "_'."))
+        and (end == len(text) or not (text[end].isalnum() or text[end] in "_'"))
+    )
 
 
 def extract_identifiers(lean_code: str) -> list[str]:
