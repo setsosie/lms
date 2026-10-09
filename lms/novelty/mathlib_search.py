@@ -105,6 +105,21 @@ def parse_declaration(lean_code: str) -> tuple[str | None, str | None]:
     return m.group(1), m.group(2)
 
 
+def declared_names(lean_code: str) -> list[str]:
+    """Names of every declaration in a Lean snippet, in source order."""
+    return [m.group(2) for m in _DECL_RE.finditer(lean_code)]
+
+
+def statement_header(lean_code: str) -> str | None:
+    """Binders and type of the first declaration, without its body."""
+    m = _DECL_RE.search(lean_code)
+    if not m:
+        return None
+    rest = lean_code[m.end() :]
+    end = re.search(r":=|\bwhere\b", rest)
+    return rest[: end.start()] if end else rest
+
+
 def extract_identifiers(lean_code: str) -> list[str]:
     """Capitalized / dotted identifiers appearing in a statement.
 

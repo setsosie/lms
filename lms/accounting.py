@@ -40,6 +40,10 @@ OVERHEAD_KEY = "__overhead__"
 #: HARN-04 classifier; absent on runs predating it).
 NOVEL_LEVELS = frozenset({"N1", "N2", "N3"})
 
+#: An N1 below this confidence waits on D4 sign-off instead of counting. Mirrors
+#: `lms.novelty.DECISIVE_CONFIDENCE`, which this module cannot import.
+DECISIVE_N1_CONFIDENCE = 0.8
+
 _DECL_RE = re.compile(
     r"^\s*(?:noncomputable\s+)?(?:private\s+|protected\s+)?"
     r"(?:theorem|lemma|def|abbrev|structure|class|instance|inductive)\s+"
@@ -235,7 +239,8 @@ class CVFNReport:
     verified_count: int
     #: Denominator actually used, and what it counts. "verified_novel" when
     #: novelty labels (HARN-04) are present; "verified_lean_unfiltered" when
-    #: they are not — an upper bound on the true denominator, flagged as such.
+    #: they are not — an upper bound on the true denominator, flagged as such;
+    #: "unmeasurable" when the goal forbids the Mathlib a novelty search needs.
     denominator: int
     denominator_kind: str
     cvfn_tokens_per_statement: float | None
@@ -243,6 +248,10 @@ class CVFNReport:
     gate_failures: dict[str, int] = field(default_factory=dict)
     ledger_present: bool = False
     overhead_tokens: int = 0
+    #: Verified statements labelled N1 or INCONCLUSIVE that need D4 sign-off.
+    awaiting_review: int = 0
+    unmeasurable_reason: str | None = None
+    goal_recorded: bool = True
 
     def format(self) -> str:
         lines = [
@@ -257,7 +266,17 @@ class CVFNReport:
             f"  verified (lean):   {self.verified_count}",
             f"  denominator:       {self.denominator} ({self.denominator_kind})",
         ]
-        if self.cvfn_tokens_per_statement is None:
+        if self.denominator_kind == "verified_novel":
+            lines.append(f"  awaiting D4 review: {self.awaiting_review}")
+        if not self.goal_recorded:
+            lines.append(
+                "  goal:              goal.json missing — forbidden_imports unchecked"
+            )
+        if self.unmeasurable_reason is not None:
+            lines.append(
+                f"  CVFN:              unmeasurable — {self.unmeasurable_reason}"
+            )
+        elif self.cvfn_tokens_per_statement is None:
             lines.append(
                 f"  CVFN:              undefined — {self.total_tokens:,} tokens / "
                 f"0 statements"
@@ -296,6 +315,29 @@ def _load_review_minutes(run_dir: Path) -> float:
     return float(sum(e.get("minutes", 0.0) for e in data))
 
 
+def _forbidden_mathlib(run_dir: Path) -> list[str] | None:
+    """Mathlib areas the run's goal forbade; None when the goal was not saved."""
+    path = run_dir / "goal.json"
+    if not path.exists():
+        return None
+    goal = json.loads(path.read_text())
+    return [
+        imp
+        for imp in goal.get("forbidden_imports") or []
+        if imp.split(".")[0] == "Mathlib"
+    ]
+
+
+def _counts_as_novel(artifact: dict[str, Any]) -> bool:
+    level = artifact.get("novelty_level")
+    if level not in NOVEL_LEVELS:
+        return False
+    if level != "N1":
+        return True  # N2/N3 are D4 verdicts, already signed off
+    confidence = artifact.get("novelty_confidence")
+    return confidence is not None and confidence >= DECISIVE_N1_CONFIDENCE
+
+
 def cvfn_report(run_dir: Path) -> CVFNReport:
     """CVFN over a saved run directory, archived or fresh.
 
@@ -303,7 +345,13 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
     the society totals in `results.json`, which were always complete even when
     attribution was not. Novelty labels are honored when the artifacts carry
     them; without them the denominator is the unfiltered verified count and is
-    labelled as such.
+    labelled as such. Only a decisive N1 counts, as at Gate 4; the rest are
+    reported as awaiting D4 review.
+
+    A goal that forbids part of Mathlib makes agents rebuild it from scratch,
+    and a from-scratch API matches nothing in a Mathlib search, so its N1
+    labels are inflated by construction. CVFN over such a run is reported
+    unmeasurable rather than computed.
     """
     run_dir = Path(run_dir)
 
@@ -336,12 +384,28 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
     verified = [a for a in artifacts if a.get("status") == "verified_lean"]
 
     has_novelty = any(a.get("novelty_level") for a in artifacts)
+    awaiting_review = 0
     if has_novelty:
-        denominator = sum(1 for a in verified if a.get("novelty_level") in NOVEL_LEVELS)
+        denominator = sum(1 for a in verified if _counts_as_novel(a))
         denominator_kind = "verified_novel"
+        awaiting_review = sum(
+            1
+            for a in verified
+            if a.get("novelty_level") in ("N1", "INCONCLUSIVE")
+            and not _counts_as_novel(a)
+        )
     else:
         denominator = len(verified)
         denominator_kind = "verified_lean_unfiltered"
+
+    forbidden = _forbidden_mathlib(run_dir)
+    unmeasurable_reason = None
+    if forbidden:
+        unmeasurable_reason = (
+            f"goal forbids {', '.join(forbidden)}; a from-scratch API cannot "
+            "match Mathlib, so its N1 labels are inflated by construction"
+        )
+        denominator_kind = "unmeasurable"
 
     return CVFNReport(
         run_dir=str(run_dir),
@@ -351,11 +415,16 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
         verified_count=len(verified),
         denominator=denominator,
         denominator_kind=denominator_kind,
-        cvfn_tokens_per_statement=calculate_cvfn(total_tokens, denominator),
+        cvfn_tokens_per_statement=(
+            None if unmeasurable_reason else calculate_cvfn(total_tokens, denominator)
+        ),
         status_histogram=dict(status_histogram),
         gate_failures=gate_failures,
         ledger_present=ledger is not None and bool(ledger.records),
         overhead_tokens=overhead,
+        awaiting_review=awaiting_review,
+        unmeasurable_reason=unmeasurable_reason,
+        goal_recorded=forbidden is not None,
     )
 
 
