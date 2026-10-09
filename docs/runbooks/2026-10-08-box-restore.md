@@ -9,6 +9,15 @@ and produce plausible-looking wrong output.
 measurement depends on, the committed Gate A control arc, and the repaired arc
 drafts. The R4 batch job refuses to run on a checkout without it.
 
+**Also merge before R4: #66** (`26Q3-HARN-20` Part 2), so DoD 1's numbers come
+from the classifier as it will stand. It does not move the arcs much: no arc
+draft uses project vocabulary, and the eponym rule can reach only core-13,
+core-14 and core-20. If R4 already ran, re-running after the merge is cheap.
+Search results are cached in `.novelty_cache/`, so only scoring repeats.
+
+**R6 needs this runbook's own PR merged:** it adds the committee-mode knob to
+`lms_run.sbatch`.
+
 ## What changed
 
 The box came back **restored to an earlier state**, and per-user scratch moved:
@@ -33,6 +42,7 @@ Sprint 3's Definition of Done has three open items, all of them server work:
 | 1 | N1 density for both ANT arcs | R4 | no |
 | 3 | Gate A novelty control | R4 (runs first) | no |
 | 4 | CVFN denominator on one real run | R5 | only if no ledger survived the restore |
+| — | Committee re-run: harness vs model (not DoD) | R6 | yes |
 
 ---
 
@@ -258,7 +268,10 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
    two stages cannot reach the 0.8 decisive line. The numbers that decide the
    slice are `upper` and the review queue. Cross-check against each
    statement's `notes`: one the drafter marked "Expected N0" that reads N1 is
-   a classifier miss worth a look.
+   a classifier miss worth a look. Since #66, core-13 and core-14 (Minkowski)
+   and core-20 (Dirichlet) can read INCONCLUSIVE with a semantic hit carrying
+   the eponym as `evidence[0]`. That is the instrument working; their notes
+   expect N0.
 3. **Elaboration at the pin.** The 2026-10-08 pre-screen against a newer
    library build expects only SCHEMATIC drafts here (13 of them). Paste any
    non-SCHEMATIC id: it gets repaired in one pass through a PR, and a re-run
@@ -293,7 +306,10 @@ cd ~/code/lms && uv run python -c "import json,collections as C; r=json.load(ope
 `n/a (run predates the ledger)`, `total wall-clock` is non-zero, and the
 second command attributes tokens and seconds to named statements. That is
 DoD 4, whatever the CVFN value is. **`CVFN: undefined` is still a pass**: the
-DoD asks for the denominator's inputs, not a non-zero numerator.
+DoD asks for the denominator's inputs, not a non-zero numerator. So is
+**`CVFN: unmeasurable — goal forbids Mathlib.CategoryTheory`**, which any run on
+a `stacks-ch4-*` goal prints since #66: those goals make agents rebuild the
+library from scratch, which no novelty search can match.
 
 ### R5b — a small real run, if nothing survived
 
@@ -345,12 +361,75 @@ lines must read `lean/ clean after restore`.
 
 ---
 
+## R6 — Committee re-run: harness or model? (after R4 and R5)
+
+Not a DoD item. It is the first experiment in the post-box queue: *re-run
+committee mode with the August fixes merged, then judge the model.* The last
+committee run on this box, `committee_fix_c` (2026-08-20), ended in harness
+defects, not in a verdict on the model. Its generations 5–9 verified 0 of 33,
+on a foundation API mismatch. Three "verified" artifacts were the scribe's
+prompt scaffold, and Gate 4 never ran. All of that is fixed on `main`.
+Re-running the same configuration separates the two explanations.
+
+Same configuration as `committee_fix_c` (3 agents, 3 groups,
+`stacks-ch4-phase1`), 10 generations. It ran at TP=4; on a shared node, TP=2
+serves 3 agents (about 1.1M tokens of KV cache). That changes wall-clock, not
+results. Substitute `GPU_PARTITION`, `GPU_GRES` and `MODEL` as in R5b:
+
+```bash
+cd ~/code/lms && git pull --ff-only origin main && mkdir -p logs && sbatch -p GPU_PARTITION --gres=GPU_GRES:2 --time=08:00:00 --export=ALL,TP_SIZE=2,AGENTS=3,N_GROUPS=3,ITERATIVE=0,GENERATIONS=10,GOAL=stacks-ch4-phase1,RUN_TAG=committee_rerun_a,MODEL_REPO=MODEL scripts/slurm/lms_run.sbatch
+```
+
+```bash
+grep -m1 '^agents=' ~/code/lms/logs/lms-run-JOBID.out
+```
+
+It must end `n_groups=3`. If the field is missing, the checkout predates the
+knob and the run is iterative, not committee: `scancel` it. **Do not use
+`--resume`** if the job hits its walltime. A resumed run points its foundation
+at the output directory, where Lean cannot import it (known, not yet carded).
+A partial run is still a result.
+
+Per generation: created, verified, tokens, seconds:
+
+```bash
+cd ~/code/lms && uv run python -c "import json; [print(g['generation'], g['artifacts_created'], g['artifacts_verified'], g['tokens_used'], round(g.get('wall_clock_s', 0))) for g in json.load(open('experiments/committee_rerun_a/results.json'))['generations']]"
+```
+
+Status, novelty and reuse over the whole run:
+
+```bash
+cd ~/code/lms && uv run python -c "import json,collections as C; a=json.load(open('experiments/committee_rerun_a/artifacts.json'))['artifacts']; v=[x for x in a if x.get('status')=='verified_lean']; print(len(a), 'created', len(v), 'verified'); print('status', dict(C.Counter(x.get('status') for x in a))); print('novelty on verified', dict(C.Counter(x.get('novelty_level') for x in v))); print('verified citing earlier work', sum(1 for x in v if x.get('references')))"
+```
+
+```bash
+cd ~/code/lms && uv run python -m lms.accounting experiments/committee_rerun_a
+```
+
+**Checkpoint R6**, against `committee_fix_c`: 71 created, 10 verified (3 of
+them the scaffold), generations 5–9 at 0 of 33, `novelty_level` unset on all
+71, about 5.6M tokens.
+
+- **Generations 5–9 verify something.** The foundation API fixes held.
+- **Every verified artifact has a `novelty_level`.** Gate 4 is wired. Expect
+  N0 and INCONCLUSIVE only: on this goal a statement over the foundation's own
+  `Category` cannot read N1 since #66.
+- **`verified citing earlier work` above 0.** Reuse is being recorded.
+- **The CVFN line reads `unmeasurable`.** That is by construction on this
+  goal. This run measures the harness, not novelty.
+- **Then judge the model.** The report's `gate failures (ledger)` histogram
+  separates harness rejections from Lean failures. If verification stays rare,
+  and the failures are Lean errors in the agents' own mathematics, then the
+  local model is the constraint. ADR 0001's control arm measures how much.
+
+---
+
 ## What to paste back
 
 R0 in full; the R1 echo; R2a/R2b versions, cache wall-clock and the build
 tail; R3's tail; R4's summary lines, elaboration list and job logs; R5a's two
-outputs. Paste after each checkpoint rather than at the end, so a failure stops
-the sequence where it happened.
+outputs; R6's `agents=` line and three read-backs. Paste after each checkpoint
+rather than at the end, so a failure stops the sequence where it happened.
 
 ## What not to do
 

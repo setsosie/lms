@@ -6,6 +6,7 @@
 #
 #   sbatch scripts/slurm/lms_run.sbatch
 #   sbatch --export=ALL,AGENTS=6,GENERATIONS=5 scripts/slurm/lms_run.sbatch
+#   sbatch --export=ALL,N_GROUPS=3,ITERATIVE=0 scripts/slurm/lms_run.sbatch   # committee mode
 #
 # ---------------------------------------------------------------------------
 # SITE CONFIG -- resolved 2026-08-10 on mahpiya:
@@ -37,6 +38,10 @@ AGENTS="${AGENTS:-3}"
 GENERATIONS="${GENERATIONS:-3}"
 GOAL="${GOAL:-stacks-ch4-phase1}"
 ITERATIVE="${ITERATIVE:-1}"          # 1 = pass --iterative
+# Committee mode (--groups) when > 0. Not GROUPS: bash owns that name and
+# silently ignores assignments to it.
+N_GROUPS="${N_GROUPS:-0}"
+REPAIR_ATTEMPTS="${REPAIR_ATTEMPTS:-2}"  # committee mode only
 RUN_TAG="${RUN_TAG:-slurm_${SLURM_JOB_ID:-manual}}"
 
 REPO="${REPO:-$HOME/code/lms}"
@@ -77,7 +82,13 @@ cd "$REPO" || { echo "FATAL: no repo at $REPO"; exit 1; }
 
 echo "=== LMS run $RUN_TAG ==="
 echo "node=$(hostname)  job=${SLURM_JOB_ID:-none}  gpus=${CUDA_VISIBLE_DEVICES:-unset-by-slurm}"
-echo "agents=$AGENTS generations=$GENERATIONS goal=$GOAL iterative=$ITERATIVE"
+echo "agents=$AGENTS generations=$GENERATIONS goal=$GOAL iterative=$ITERATIVE n_groups=$N_GROUPS"
+
+# lms.run refuses --groups with --iterative, but only after vLLM has loaded.
+if [ "$N_GROUPS" -gt 0 ] && [ "$ITERATIVE" = "1" ]; then
+  echo "FATAL: committee mode (N_GROUPS=$N_GROUPS) needs ITERATIVE=0"
+  exit 2
+fi
 echo "commit=$(git rev-parse --short HEAD) branch=$(git rev-parse --abbrev-ref HEAD)"
 echo "logs=$LOG_DIR"
 
@@ -105,15 +116,18 @@ command -v lake >/dev/null 2>&1 || { echo "FATAL: lake not on PATH; check ELAN_H
 
 # Refuse to load onto a GPU that is already busy.
 #
-# This box runs a single-node Slurm over the same four H100s that a tmux vLLM
-# may be holding. A server started outside Slurm is invisible to the scheduler,
-# so Slurm believes all four are free and can allocate the two already in use.
-# Without this check the failure is a confusing mid-load CUDA OOM rather than
-# "something else is on this GPU".
-echo "--- GPU state ---"
+# A server started outside Slurm is invisible to the scheduler, so Slurm can
+# allocate a GPU it is already holding. Without this check the failure is a
+# confusing mid-load CUDA OOM rather than "something else is on this GPU".
+#
+# Only the GPUs Slurm allocated are checked. Other people's jobs share this
+# node; a GPU busy with theirs is not ours to refuse over.
+echo "--- GPU state (allocated: ${CUDA_VISIBLE_DEVICES:-all}) ---"
 nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
 BUSY=$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits \
-  | awk -F', ' '$2 > 1024 {printf "%s ", $1}')
+  | awk -F', ' -v vis="${CUDA_VISIBLE_DEVICES:-}" '
+      BEGIN { n = split(vis, ids, ","); for (i = 1; i <= n; i++) mine[ids[i]] = 1 }
+      (n == 0 || ($1 in mine)) && $2 > 1024 { printf "%s ", $1 }')
 if [ -n "$BUSY" ]; then
   echo "FATAL: GPU(s) $BUSY already hold >1 GiB. A vLLM started outside Slurm"
   echo "       (e.g. in tmux) is invisible to the scheduler and will collide."
@@ -180,6 +194,8 @@ grep -m1 "GPU KV cache size" "$VLLM_LOG" || true
 # --- Run --------------------------------------------------------------------
 ITER_FLAG=""
 [ "$ITERATIVE" = "1" ] && ITER_FLAG="--iterative"
+MODE_FLAGS=""
+[ "$N_GROUPS" -gt 0 ] && MODE_FLAGS="--groups --n-groups $N_GROUPS --repair-attempts $REPAIR_ATTEMPTS"
 
 echo "--- running experiment -> $OUT_DIR ---"
 START=$SECONDS
@@ -190,6 +206,7 @@ uv run python -m lms.run \
   --generations "$GENERATIONS" \
   --goal "$GOAL" \
   $ITER_FLAG \
+  $MODE_FLAGS \
   --output "$OUT_DIR" \
   2>&1 | tee "$LOG_DIR/run.log"
 RUN_RC=${PIPESTATUS[0]}
