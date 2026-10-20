@@ -13,8 +13,9 @@ set -e
 
 # 1. The assertions moved
 test -f tests/test_reextract_lean_code.py
-! grep -q "uv run python" scripts/verify/26Q3-01/verify_26Q3-HARN-02.sh
-! grep -q "experiments/stacks_ch4_phase1" scripts/verify/26Q3-01/verify_26Q3-HARN-02.sh
+# Not `! grep`: set -e ignores a negated status, so those lines could never fail.
+if grep -q "uv run python" scripts/verify/26Q3-01/verify_26Q3-HARN-02.sh; then exit 1; fi
+if grep -q "experiments/stacks_ch4_phase1" scripts/verify/26Q3-01/verify_26Q3-HARN-02.sh; then exit 1; fi
 
 # 2. Behaviour
 uv run pytest tests/test_reextract_lean_code.py tests/test_lean_extraction.py -q
