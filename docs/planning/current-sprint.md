@@ -56,7 +56,7 @@ the mean.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q3-HARN-20: Gate 4 withholds N1 when its search could not have matched | 3 | HIGH | HARN | 🔲 PENDING (Part 2 of 2) | Part 1: #63, merged 2026-10-09 | Part 2: the import-namespace rule, the Yoneda regression fixture, flagging `forbidden_imports` runs in the CVFN report, and scoring the informal statement. DoD 1 does not wait on it; Part 1 is what the density run needed |
+| 26Q3-HARN-20: Gate 4 withholds N1 when its search could not have matched | 3 | HIGH | HARN | ✅ DONE | Part 1: #63, merged 2026-10-09; Part 2: #66, merged 2026-10-20 | Part 2: the import-namespace rule, the Yoneda regression fixture, flagging `forbidden_imports` runs in the CVFN report, and scoring the informal statement. Merged before R4, so the density run measures with the final classifier |
 
 ## Server runs (the sprint goal)
 
@@ -70,6 +70,17 @@ Sprint 3. They are still what this sprint is for.
 | R1–R3 | Scratch routing, Lean toolchain + library build, Python env + suite | — | 🔲 PENDING | Install the pinned toolchain, not `stable`; `lean/.lake` may dangle |
 | R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 3 | 🔲 PENDING | Expect some non-SCHEMATIC drafts to fail at the pin; repair them in one PR and re-run |
 | R5 | CVFN denominator from a real run | 4 | 🔲 PENDING | R5a if a run's `attempts.json` survived the restore, else R5b (a small real run) |
+| R6 | Committee re-run, `committee_fix_c` config at TP=2 | — | 🔲 PENDING | Not a DoD item: the first post-box experiment (#67, merged 2026-10-20). Resuming after a walltime needs #68 |
+
+## Found-work (unpointed)
+
+Card text for these is in `docs/planning/tasks/26Q4-01/`. None of them blocks
+R4 or R5, so per the risk register they belong to Sprint 5. They were
+worked during the box runs because the runs are the user's to execute.
+
+| Task | Points | Status | PR | Notes |
+|------|--------|--------|----|-------|
+| 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | 🔄 IN REVIEW | #68 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
 
 ## Definition of Done
 
@@ -83,7 +94,7 @@ Sprint 3. They are still what this sprint is for.
    classified. N0 must account for essentially all of them.
 3. **A CVFN denominator exists**: tokens and wall-clock attributed per
    statement, including failed attempts, on at least one real run (R5).
-4. **`26Q3-HARN-20` Part 2 merged.**
+4. **`26Q3-HARN-20` Part 2 merged.** ✅ #66, 2026-10-20.
 5. **The slice decision is written down.** It names the chosen arc, or
    records "both ~zero, Phase C does not start, go to Phase E", and the
    calendar re-plan for Sprints 5–7 follows from it.
@@ -116,6 +127,11 @@ the planning tooling). Cards for this sprint live under
 
 ## Sync Log
 
+- **2026-10-20** — The box is up; the user starts the runbook. #66
+  (`26Q3-HARN-20` Part 2, DoD 4) and #67 (R6 + sbatch knobs) merged, so R4
+  measures with the final classifier. HARN-16/17/18 card statuses corrected
+  to DONE (#50–#52, merged 2026-08-20). Found-work `26Q4-HARN-01` opened
+  as #68.
 - **2026-10-09** — Sprint 3 closed at 40/43 pts (committed 10/10), goal not
   met, archived to `archive/sprint-03-26Q3-01.md`. Sprint 4 opened with dates
   TBD and scope cut to the Sprint 3 server runs plus `26Q3-HARN-20` Part 2.
@@ -125,4 +141,4 @@ the planning tooling). Cards for this sprint live under
 
 ---
 
-*Last Updated: 2026-10-09*
+*Last Updated: 2026-10-20*

@@ -44,6 +44,9 @@ command -v lake >/dev/null 2>&1 || { echo "FATAL: lake not on PATH; check ELAN_H
 # The pre-fix classifier counted stages that could not search as empty
 # searches. Its absence is the signal this checkout predates that fix.
 grep -q "def read_output" lms/novelty/mathlib_search.py || { echo "FATAL: checkout predates the stage-availability fix; git pull main"; exit 1; }
+# And the project-vocabulary rule: without it, a statement over the project's
+# own names can read as novel when no search could have matched it.
+[ -f lms/novelty/vocabulary.py ] || { echo "FATAL: checkout predates the project-vocabulary rule; git pull main"; exit 1; }
 # Compute nodes may have no outbound route even when the login node does.
 for url in https://leansearch.net https://loogle.lean-lang.org; do
   curl -sS --max-time 15 -o /dev/null "$url" || { echo "FATAL: no route to $url from $(hostname)"; exit 1; }

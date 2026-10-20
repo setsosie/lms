@@ -8,7 +8,7 @@ measures the collective instead of re-measuring known harness gaps.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE (#51, merged 2026-08-20) |
 | **Branch** | `26Q3-HARN-17-yolo-a-harness-fixes` |
 | **Dependencies** | None (supersedes the self-report half of HARN-16) |
 | **PR Size Target** | <400 lines |
