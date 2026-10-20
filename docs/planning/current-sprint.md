@@ -81,6 +81,8 @@ worked during the box runs because the runs are the user's to execute.
 | Task | Points | Status | PR | Notes |
 |------|--------|--------|----|-------|
 | 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | 🔄 IN REVIEW | #68 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
+| 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | 🔄 IN REVIEW | #70 | Two of its checks read an untracked archive, so it failed on every clean checkout |
+| 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | 🔲 PENDING | — | Needs its AC first: seven LLM call sites, and a choice between a provider wrapper and threading a store like the cost ledger. Not blocking R6: committee transcripts already land in `textbook.json` |
 
 ## Definition of Done
 
@@ -131,7 +133,7 @@ the planning tooling). Cards for this sprint live under
   (`26Q3-HARN-20` Part 2, DoD 4) and #67 (R6 + sbatch knobs) merged, so R4
   measures with the final classifier. HARN-16/17/18 card statuses corrected
   to DONE (#50–#52, merged 2026-08-20). Found-work `26Q4-HARN-01` opened
-  as #68.
+  as #68, `26Q4-CHORE-01` as #70.
 - **2026-10-09** — Sprint 3 closed at 40/43 pts (committed 10/10), goal not
   met, archived to `archive/sprint-03-26Q3-01.md`. Sprint 4 opened with dates
   TBD and scope cut to the Sprint 3 server runs plus `26Q3-HARN-20` Part 2.
