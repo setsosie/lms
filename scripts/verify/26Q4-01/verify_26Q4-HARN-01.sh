@@ -8,12 +8,13 @@
 # Behavior is proven in tests/ (CI runs it every commit) — call pytest on it from here.
 #
 # Discrimination: at main @ 0c3ad12 the test file does not exist, FOUNDATION_SNAPSHOT
-# and RESUME are absent, and 6 of the 7 tests fail once the constant is added.
+# and RESUME are absent, and 9 of the 10 tests fail once the constant is added.
 set -e
 
 # 1. The checkpoint carries the foundation, and resume puts it back
 grep -q 'FOUNDATION_SNAPSHOT = "foundation.json"' lms/society.py
 grep -q 'async def restore_foundation' lms/society.py
+grep -q 'def snapshot_before' lms/foundation.py
 grep -q 'await society.restore_foundation()' lms/run.py
 grep -q 'def save_metadata' lms/foundation.py
 
@@ -23,7 +24,8 @@ grep -q 'CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-1}"' scripts/slurm/lms_run.
 bash -n scripts/slurm/lms_run.sbatch
 
 # 3. The runbook no longer forbids it
-! grep -q 'Do not use' docs/runbooks/2026-10-08-box-restore.md
+# Not `! grep`: set -e ignores a negated status, so that line could never fail.
+if grep -q 'Do not use' docs/runbooks/2026-10-08-box-restore.md; then exit 1; fi
 grep -q 'RESUME=1' docs/runbooks/2026-10-08-box-restore.md
 
 # 4. Behaviour

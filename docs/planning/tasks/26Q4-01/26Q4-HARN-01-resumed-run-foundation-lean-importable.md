@@ -67,7 +67,11 @@ grep -n 'metadata.json' lms/run.py    # written after the loop, read first on re
 - [ ] `lms_run.sbatch` takes `RESUME=1` and `CHECKPOINT_INTERVAL` (default 1),
       and refuses a fresh run over an existing checkpoint
 - [ ] Runbook R6 says how to resume instead of "do not use `--resume`"
-- [ ] `uv run pytest tests/test_resume_foundation.py -v` passes; 6 of its 7
+- [ ] A checkpoint taken mid-generation (the walltime case) resumes even when
+      the interrupted generation's entries break the build: `load` marks the
+      generation boundary as the last good state, so the existing rollback
+      drops them; the resume is refused only if the boundary fails too
+- [ ] `uv run pytest tests/test_resume_foundation.py -v` passes; 9 of its 10
       tests fail at `main`
 
 ---
@@ -76,7 +80,7 @@ grep -n 'metadata.json' lms/run.py    # written after the loop, read first on re
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `lms/foundation.py` | MODIFY | `save_metadata(path)`; `load(path, metadata_path=None)` |
+| `lms/foundation.py` | MODIFY | `save_metadata(path)`; `load(path, metadata_path=None)`; `snapshot_before(generation)` |
 | `lms/society.py` | MODIFY | `FOUNDATION_SNAPSHOT`; save/load it; `restore_foundation()` |
 | `lms/run.py` | MODIFY | Restore before resuming; metadata and goal at checkpoints |
 | `scripts/slurm/lms_run.sbatch` | MODIFY | `RESUME`, `CHECKPOINT_INTERVAL`, overwrite guard |

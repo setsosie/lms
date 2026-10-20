@@ -352,7 +352,13 @@ class Society:
         Returns:
             True if the restored foundation is on disk and compiled.
         """
-        return await self._write_and_build_foundation()
+        if await self._write_and_build_foundation():
+            return True
+        # The failed build rolled back to the generation boundary `load`
+        # marked as good and rebuilt that. Whether it compiled decides the
+        # resume; `_write_and_build_foundation` reports False either way.
+        project = getattr(self.verifier, "project", None)
+        return project is not None and await project.rebuild_changed_sources()
 
     async def _write_and_build_foundation(self) -> bool:
         """Write the foundation and recompile so imports see current contents.
@@ -1786,6 +1792,12 @@ class Society:
         # constructor chose: `import LMS.Foundation` only resolves there.
         society.foundation = FoundationFile.load(
             society.foundation.path, metadata_path=snapshot_path
+        )
+        # A walltime kill checkpoints mid-generation. The boundary state
+        # compiled in the original run; the interrupted generation's entries
+        # never went through a build together.
+        society._last_good_foundation = society.foundation.snapshot_before(
+            society.current_generation
         )
 
         # Load per-agent stats if they exist

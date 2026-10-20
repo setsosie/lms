@@ -79,6 +79,9 @@ export PATH="$ELAN_HOME/bin:$HOME/.elan/bin:$PATH"
 export LMS_OPENAI_BASE_URL="http://localhost:${PORT}/v1"
 export LMS_OPENAI_MODEL="$SERVED_NAME"
 export OPENAI_API_KEY="EMPTY"
+# Through `tee`, Python block-buffers stdout: progress lines (and the
+# runbook's resume check) would reach the log only in 8 KB chunks.
+export PYTHONUNBUFFERED=1
 
 LOG_DIR="$SCRATCH/lms-runs/$RUN_TAG"
 mkdir -p "$LOG_DIR"
@@ -94,9 +97,12 @@ echo "resume=$RESUME checkpoint_interval=$CHECKPOINT_INTERVAL out=$OUT_DIR"
 
 # Before vLLM loads, like the check below: a fresh run over a checkpoint
 # overwrites it, and a resume with no checkpoint has nothing to continue.
-if [ "$RESUME" = "1" ] && [ ! -f "$OUT_DIR/results.json" ]; then
-  echo "FATAL: RESUME=1 but no checkpoint at $OUT_DIR"
-  exit 2
+if [ "$RESUME" = "1" ]; then
+  # foundation.json is absent from checkpoints older than resume support,
+  # which lms.run refuses -- but only after vLLM has loaded.
+  for f in results.json metadata.json foundation.json; do
+    [ -f "$OUT_DIR/$f" ] || { echo "FATAL: RESUME=1 but $OUT_DIR has no $f"; exit 2; }
+  done
 fi
 if [ "$RESUME" != "1" ] && [ -f "$OUT_DIR/results.json" ]; then
   echo "FATAL: $OUT_DIR already holds a run; pass RESUME=1 or a new RUN_TAG"
@@ -215,11 +221,11 @@ ITER_FLAG=""
 [ "$ITERATIVE" = "1" ] && ITER_FLAG="--iterative"
 MODE_FLAGS=""
 [ "$N_GROUPS" -gt 0 ] && MODE_FLAGS="--groups --n-groups $N_GROUPS --repair-attempts $REPAIR_ATTEMPTS"
-RESUME_FLAG=""
-TEE_FLAG=""
+RESUME_ARGS=()
+TEE_ARGS=()
 if [ "$RESUME" = "1" ]; then
-  RESUME_FLAG="--resume $OUT_DIR"
-  TEE_FLAG="-a"  # keep the earlier jobs' log
+  RESUME_ARGS=(--resume "$OUT_DIR")
+  TEE_ARGS=(-a)  # keep the earlier jobs' log
 fi
 
 echo "--- running experiment -> $OUT_DIR ---"
@@ -232,10 +238,10 @@ uv run python -m lms.run \
   --goal "$GOAL" \
   $ITER_FLAG \
   $MODE_FLAGS \
-  $RESUME_FLAG \
+  ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   --checkpoint-interval "$CHECKPOINT_INTERVAL" \
   --output "$OUT_DIR" \
-  2>&1 | tee $TEE_FLAG "$LOG_DIR/run.log"
+  2>&1 | tee ${TEE_ARGS[@]+"${TEE_ARGS[@]}"} "$LOG_DIR/run.log"
 RUN_RC=${PIPESTATUS[0]}
 ELAPSED=$((SECONDS - START))
 
@@ -253,7 +259,11 @@ for a in d:
     by[a.get('status', 'unknown')] = by.get(a.get('status', 'unknown'), 0) + 1
 print('artifacts:', len(d))
 print('by status:', by)
-print('elapsed_s:', $ELAPSED, '| per artifact:', round($ELAPSED / max(len(d), 1), 1))
+if '$RESUME' == '1':
+    # This job ran only part of the run; dividing by every artifact understates it.
+    print('elapsed_s (this job):', $ELAPSED, '| per artifact: n/a on a resumed job')
+else:
+    print('elapsed_s:', $ELAPSED, '| per artifact:', round($ELAPSED / max(len(d), 1), 1))
 " | tee -a "$LOG_DIR/run.log"
 fi
 

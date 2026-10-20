@@ -400,8 +400,12 @@ grep -m2 '^resume=\|Continuing from generation' ~/code/lms/logs/lms-run-JOBID.ou
 ```
 
 The first line must read `resume=1`; the second must show how many generations
-the last job finished. Re-submitting without `RESUME=1` refuses to start rather
-than overwrite the partial run. A partial run is still a result.
+the last job finished. The generation the walltime interrupted runs again from
+the start. Whatever it produced before the kill stays in `artifacts.json` under
+the same generation number. If its foundation entries break the build, the log
+says `rolled back`, and the run continues from the last finished generation.
+Re-submitting without `RESUME=1` refuses to start rather than overwrite the
+partial run. A partial run is still a result.
 
 Per generation: created, verified, tokens, seconds:
 

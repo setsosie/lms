@@ -720,6 +720,35 @@ end {FOUNDATION_NAMESPACE}
             claimed_concepts=frozenset(self._claimed_concepts),
         )
 
+    def snapshot_before(self, generation: int) -> FoundationSnapshot:
+        """The state before `generation` added anything to it.
+
+        A checkpoint taken mid-generation (a walltime kill) holds that
+        generation's entries, which never went through a build together. A
+        resume treats this boundary state as the one known to compile, so a
+        build those entries break rolls back to it like any failed generation.
+        """
+        kept = tuple(e for e in self.entries if e.generation < generation)
+        later_ids = {e.artifact_id for e in self.entries if e.generation >= generation}
+        # Same claiming rules as `set_seed` (seed) and `load` (entries).
+        concepts = {
+            self.CORE_CONCEPTS[e.name]
+            for e in self.seed_entries
+            if e.entry_type in ("structure", "class") and e.name in self.CORE_CONCEPTS
+        } | {
+            self.CORE_CONCEPTS[e.name]
+            for e in kept
+            if e.entry_type == "structure" and e.name in self.CORE_CONCEPTS
+        }
+        return FoundationSnapshot(
+            entries=kept,
+            artifact_ids=frozenset(self._artifact_ids - later_ids),
+            definition_names=frozenset(
+                {e.name for e in self.seed_entries} | {e.name for e in kept}
+            ),
+            claimed_concepts=frozenset(concepts),
+        )
+
     def restore(self, snapshot: FoundationSnapshot) -> list[str]:
         """Roll back to `snapshot`; return the names of the dropped entries.
 

@@ -34,6 +34,7 @@ from lms.lean.mock import MockLeanVerifier
 from lms.goals import Goal
 from lms.run import resume_experiment, run_experiment
 from lms.society import FOUNDATION_SNAPSHOT, GenerationResult, Society
+from tests.test_foundation_rollback import FakeProject, ProjectVerifier
 from tests.test_society import MockProvider
 
 SEED = "class Category (obj : Type u) where\n  Hom : obj → obj → Type v\n"
@@ -245,3 +246,75 @@ async def test_a_run_killed_mid_way_leaves_what_resume_reads(
     assert first["n_agents"] == 1
     assert second["generations_completed"] == 1
     assert goal_saved, "a committee resume needs the checkpoint's goal"
+
+
+def _interrupted_checkpoint(run_dir: Path) -> None:
+    """Killed during generation 1: its entry is in, `current_generation` is not bumped."""
+    config = ProviderConfig(api_key="test", model="test")
+    society = Society(
+        n_agents=1,
+        provider=MockProvider(config),
+        verifier=MockLeanVerifier(),
+        seed_source=SEED,
+    )
+    assert society.foundation.add_artifact(_verified_artifact())
+    in_flight = Artifact(
+        id="definition-Broken-ef567890",
+        type=ArtifactType.DEFINITION,
+        natural_language="an entry that breaks the merged module",
+        lean_code="def Broken : Nat := 1",
+        status=VerificationStatus.VERIFIED_LEAN,
+        created_by="agent-0",
+        generation=1,
+    )
+    assert society.foundation.add_artifact(in_flight)
+    society.current_generation = 1
+    society.save(run_dir)
+
+
+def _load_onto(run_dir: Path, project: FakeProject) -> Society:
+    config = ProviderConfig(api_key="test", model="test")
+    return Society.load(run_dir, MockProvider(config), ProjectVerifier(project))
+
+
+@pytest.mark.asyncio
+async def test_an_interrupted_generation_that_breaks_the_build_is_dropped(
+    tmp_path: Path,
+) -> None:
+    """Its entries never built together, so a failure there must not strand the run."""
+    run_dir = tmp_path / "run"
+    _interrupted_checkpoint(run_dir)
+    resumed = _load_onto(run_dir, FakeProject([False, True, True]))
+
+    assert await resumed.restore_foundation() is True
+
+    assert [e.name for e in resumed.foundation.entries] == ["Pointed"]
+    written = resumed.foundation.path.read_text()
+    assert "def Broken" not in written
+    assert "structure Pointed" in written
+
+
+@pytest.mark.asyncio
+async def test_resume_refuses_when_the_boundary_state_does_not_build_either(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    _interrupted_checkpoint(run_dir)
+    resumed = _load_onto(run_dir, FakeProject([False, False, False]))
+
+    assert await resumed.restore_foundation() is False
+
+
+@pytest.mark.asyncio
+async def test_a_clean_checkpoint_builds_once_and_keeps_everything(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    _interrupted_checkpoint(run_dir)
+    project = FakeProject([True])
+    resumed = _load_onto(run_dir, project)
+
+    assert await resumed.restore_foundation() is True
+
+    assert project.builds == 1
+    assert [e.name for e in resumed.foundation.entries] == ["Pointed", "Broken"]
