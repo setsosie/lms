@@ -280,7 +280,7 @@ async def run_experiment(
         "provider": provider_name,
         "prompt_versions": get_all_versions(),
         # None unless --prompt-file / LMS_PROMPT_FILE was applied; then the
-        # source path and the exact override versions that ran (26Q4-EVO-01).
+        # source path and the exact override versions that ran.
         "prompt_overrides": active_overrides(),
         "total_tokens_used": 0,
         "max_tokens": max_tokens,
