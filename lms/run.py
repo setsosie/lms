@@ -9,6 +9,7 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from lms.agent import Agent
 from lms.config import Config
@@ -269,6 +270,34 @@ async def run_experiment(
         print(f"  Mode: ITERATIVE ({max_attempts} attempts/agent)")
     print()
 
+    # Written now as well as at the end: a job killed at its walltime never
+    # reaches the end, and `--resume` reads this file before anything else.
+    metadata: dict[str, Any] = {
+        "timestamp": datetime.now().isoformat(),
+        "n_agents": n_agents,
+        "n_generations": n_generations,
+        "generations_completed": 0,
+        "provider": provider_name,
+        "prompt_versions": get_all_versions(),
+        # None unless --prompt-file / LMS_PROMPT_FILE was applied; then the
+        # source path and the exact override versions that ran.
+        "prompt_overrides": active_overrides(),
+        "total_tokens_used": 0,
+        "max_tokens": max_tokens,
+        # Which machinery produced this run's results. Without it, a mock run
+        # is indistinguishable from a real one after the fact.
+        "verifier": society.verifier_metadata(),
+    }
+    # Add provider details
+    if mixed_providers:
+        metadata["providers"] = [
+            {"name": p.name, "model": p.config.model} for p in society.providers
+        ]
+    else:
+        metadata["model"] = society.provider.config.model
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
+
     # Initialize crash recovery log
     crash_log = CrashRecoveryLog(output_dir)
     start_time = datetime.now()
@@ -316,6 +345,14 @@ async def run_experiment(
             if (gen + 1) % checkpoint_interval == 0:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 society.save(output_dir)
+                # A committee resume cannot allocate without its goal.
+                if goal:
+                    goal.save(output_dir / "goal.json")
+                metadata["generations_completed"] = society.current_generation
+                metadata["total_tokens_used"] = society.total_tokens_used
+                (output_dir / "metadata.json").write_text(
+                    json.dumps(metadata, indent=2)
+                )
                 crash_log.log_checkpoint(gen)
                 print(f"    [Checkpoint saved at gen {gen + 1}]")
     except BudgetExceeded as e:
@@ -386,39 +423,19 @@ async def run_experiment(
     society.save(output_dir)
 
     # Save experiment metadata
-    metadata = {
-        "timestamp": datetime.now().isoformat(),
-        "n_agents": n_agents,
-        "n_generations": n_generations,
-        "generations_completed": society.current_generation,
-        "provider": provider_name,
-        "prompt_versions": get_all_versions(),
-        # None unless --prompt-file / LMS_PROMPT_FILE was applied; then the
-        # source path and the exact override versions that ran (26Q4-EVO-01).
-        "prompt_overrides": active_overrides(),
-        "total_tokens_used": society.total_tokens_used,
-        "max_tokens": max_tokens,
-        # Which machinery produced this run's results. Without it, a mock run
-        # is indistinguishable from a real one after the fact.
-        "verifier": society.verifier_metadata(),
-        "analysis": {
-            "total_artifacts": analysis.total_artifacts,
-            "verified_artifacts": analysis.verified_artifacts,
-            "artifacts_by_status": society.library.count_by_status(),
-            "reuse_rate": analysis.reuse_rate,
-            "fresh_creation_rate": analysis.fresh_creation_rate,
-            "verification_rate": analysis.verification_rate,
-            "growth_rate": analysis.growth_rate,
-            "potential_ratchet_failure": analysis.potential_ratchet_failure,
-        },
+    metadata["timestamp"] = datetime.now().isoformat()
+    metadata["generations_completed"] = society.current_generation
+    metadata["total_tokens_used"] = society.total_tokens_used
+    metadata["analysis"] = {
+        "total_artifacts": analysis.total_artifacts,
+        "verified_artifacts": analysis.verified_artifacts,
+        "artifacts_by_status": society.library.count_by_status(),
+        "reuse_rate": analysis.reuse_rate,
+        "fresh_creation_rate": analysis.fresh_creation_rate,
+        "verification_rate": analysis.verification_rate,
+        "growth_rate": analysis.growth_rate,
+        "potential_ratchet_failure": analysis.potential_ratchet_failure,
     }
-    # Add provider details
-    if mixed_providers:
-        metadata["providers"] = [
-            {"name": p.name, "model": p.config.model} for p in society.providers
-        ]
-    else:
-        metadata["model"] = society.provider.config.model
 
     # Add per-agent breakdowns
     if society.tokens_by_agent:
@@ -532,7 +549,11 @@ async def resume_experiment(
         verifier = MockLeanVerifier()
 
     # Load society from checkpoint
-    society = Society.load(checkpoint_dir, provider, verifier)
+    try:
+        society = Society.load(checkpoint_dir, provider, verifier)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return
 
     # If mixed mode, update the providers list
     if providers:
@@ -566,6 +587,12 @@ async def resume_experiment(
         society.use_working_groups = True
         society.n_working_groups = n_working_groups
         society.max_repair_attempts = max_repair_attempts
+
+    # The resume counterpart of run_experiment's reset: the project's
+    # Foundation.lean is whatever the last job left behind, not this run's.
+    if not await society.restore_foundation():
+        print("Error: the checkpoint's foundation did not compile; not resuming.")
+        return
 
     # Setup signal handlers for graceful shutdown
     setup_signal_handlers(society, checkpoint_dir, society.goal)
@@ -616,6 +643,11 @@ async def resume_experiment(
                 society.save(checkpoint_dir)
                 if society.goal:
                     society.goal.save(checkpoint_dir / "goal.json")
+                metadata["generations_completed"] = society.current_generation
+                metadata["total_tokens_used"] = society.total_tokens_used
+                (checkpoint_dir / "metadata.json").write_text(
+                    json.dumps(metadata, indent=2)
+                )
                 crash_log.log_checkpoint(gen)
                 print(f"    [Checkpoint saved at gen {gen + 1}]")
     except BudgetExceeded as e:

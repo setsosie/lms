@@ -7,6 +7,7 @@
 #   sbatch scripts/slurm/lms_run.sbatch
 #   sbatch --export=ALL,AGENTS=6,GENERATIONS=5 scripts/slurm/lms_run.sbatch
 #   sbatch --export=ALL,N_GROUPS=3,ITERATIVE=0 scripts/slurm/lms_run.sbatch   # committee mode
+#   sbatch --export=ALL,RESUME=1,RUN_TAG=<tag>,... scripts/slurm/lms_run.sbatch  # after a walltime
 #
 # ---------------------------------------------------------------------------
 # SITE CONFIG -- resolved 2026-08-10 on mahpiya:
@@ -43,6 +44,12 @@ ITERATIVE="${ITERATIVE:-1}"          # 1 = pass --iterative
 N_GROUPS="${N_GROUPS:-0}"
 REPAIR_ATTEMPTS="${REPAIR_ATTEMPTS:-2}"  # committee mode only
 RUN_TAG="${RUN_TAG:-slurm_${SLURM_JOB_ID:-manual}}"
+# 1 = continue experiments/$RUN_TAG from its checkpoint, to GENERATIONS total.
+# Pass the same mode knobs as the original job; the checkpoint does not keep them.
+RESUME="${RESUME:-0}"
+# Every generation, so a walltime kill loses at most the one in flight. The
+# CLI default (10) let a 10-generation job die with nothing to resume from.
+CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-1}"
 
 REPO="${REPO:-$HOME/code/lms}"
 MODEL_REPO="${MODEL_REPO:-Qwen/Qwen3-Coder-30B-A3B-Instruct}"
@@ -72,6 +79,9 @@ export PATH="$ELAN_HOME/bin:$HOME/.elan/bin:$PATH"
 export LMS_OPENAI_BASE_URL="http://localhost:${PORT}/v1"
 export LMS_OPENAI_MODEL="$SERVED_NAME"
 export OPENAI_API_KEY="EMPTY"
+# Through `tee`, Python block-buffers stdout: progress lines (and the
+# runbook's resume check) would reach the log only in 8 KB chunks.
+export PYTHONUNBUFFERED=1
 
 LOG_DIR="$SCRATCH/lms-runs/$RUN_TAG"
 mkdir -p "$LOG_DIR"
@@ -83,6 +93,21 @@ cd "$REPO" || { echo "FATAL: no repo at $REPO"; exit 1; }
 echo "=== LMS run $RUN_TAG ==="
 echo "node=$(hostname)  job=${SLURM_JOB_ID:-none}  gpus=${CUDA_VISIBLE_DEVICES:-unset-by-slurm}"
 echo "agents=$AGENTS generations=$GENERATIONS goal=$GOAL iterative=$ITERATIVE n_groups=$N_GROUPS"
+echo "resume=$RESUME checkpoint_interval=$CHECKPOINT_INTERVAL out=$OUT_DIR"
+
+# Before vLLM loads, like the check below: a fresh run over a checkpoint
+# overwrites it, and a resume with no checkpoint has nothing to continue.
+if [ "$RESUME" = "1" ]; then
+  # foundation.json is absent from checkpoints older than resume support,
+  # which lms.run refuses -- but only after vLLM has loaded.
+  for f in results.json metadata.json foundation.json; do
+    [ -f "$OUT_DIR/$f" ] || { echo "FATAL: RESUME=1 but $OUT_DIR has no $f"; exit 2; }
+  done
+fi
+if [ "$RESUME" != "1" ] && [ -f "$OUT_DIR/results.json" ]; then
+  echo "FATAL: $OUT_DIR already holds a run; pass RESUME=1 or a new RUN_TAG"
+  exit 2
+fi
 
 # lms.run refuses --groups with --iterative, but only after vLLM has loaded.
 if [ "$N_GROUPS" -gt 0 ] && [ "$ITERATIVE" = "1" ]; then
@@ -196,6 +221,12 @@ ITER_FLAG=""
 [ "$ITERATIVE" = "1" ] && ITER_FLAG="--iterative"
 MODE_FLAGS=""
 [ "$N_GROUPS" -gt 0 ] && MODE_FLAGS="--groups --n-groups $N_GROUPS --repair-attempts $REPAIR_ATTEMPTS"
+RESUME_ARGS=()
+TEE_ARGS=()
+if [ "$RESUME" = "1" ]; then
+  RESUME_ARGS=(--resume "$OUT_DIR")
+  TEE_ARGS=(-a)  # keep the earlier jobs' log
+fi
 
 echo "--- running experiment -> $OUT_DIR ---"
 START=$SECONDS
@@ -207,8 +238,10 @@ uv run python -m lms.run \
   --goal "$GOAL" \
   $ITER_FLAG \
   $MODE_FLAGS \
+  ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
+  --checkpoint-interval "$CHECKPOINT_INTERVAL" \
   --output "$OUT_DIR" \
-  2>&1 | tee "$LOG_DIR/run.log"
+  2>&1 | tee ${TEE_ARGS[@]+"${TEE_ARGS[@]}"} "$LOG_DIR/run.log"
 RUN_RC=${PIPESTATUS[0]}
 ELAPSED=$((SECONDS - START))
 
@@ -226,7 +259,11 @@ for a in d:
     by[a.get('status', 'unknown')] = by.get(a.get('status', 'unknown'), 0) + 1
 print('artifacts:', len(d))
 print('by status:', by)
-print('elapsed_s:', $ELAPSED, '| per artifact:', round($ELAPSED / max(len(d), 1), 1))
+if '$RESUME' == '1':
+    # This job ran only part of the run; dividing by every artifact understates it.
+    print('elapsed_s (this job):', $ELAPSED, '| per artifact: n/a on a resumed job')
+else:
+    print('elapsed_s:', $ELAPSED, '| per artifact:', round($ELAPSED / max(len(d), 1), 1))
 " | tee -a "$LOG_DIR/run.log"
 fi
 
