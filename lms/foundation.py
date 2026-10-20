@@ -1198,8 +1198,15 @@ Create foundational definitions that future generations can build upon.
 
         # Write Lean file
         self.path.write_text(lean_content)
+        self.save_metadata(self.path.with_suffix(".json"))
 
-        # Write metadata JSON
+    def save_metadata(self, metadata_path: Path) -> None:
+        """Write the state `load` rebuilds from: entries, ids and the seed.
+
+        Callable on its own so a checkpoint can keep a copy in the run
+        directory. The Lean file has to live in the project, where each job's
+        cleanup and the next run's reset overwrite it.
+        """
         metadata = {
             "entries": [e.to_dict() for e in self.entries],
             "artifact_ids": list(self._artifact_ids),
@@ -1207,22 +1214,25 @@ Create foundational definitions that future generations can build upon.
             # than silently dropping it and letting agents redefine `Category`.
             "seed_source": self.seed_source,
         }
-        metadata_path = self.path.with_suffix(".json")
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(json.dumps(metadata, indent=2))
 
     @classmethod
-    def load(cls, path: Path) -> FoundationFile:
+    def load(cls, path: Path, metadata_path: Path | None = None) -> FoundationFile:
         """Load foundation from saved metadata.
 
         Args:
             path: Path to Foundation.lean file
+            metadata_path: Metadata to rebuild from, when it is not the
+                sidecar next to `path` (a checkpoint's copy)
 
         Returns:
             Loaded FoundationFile
         """
         foundation = cls(path)
 
-        metadata_path = path.with_suffix(".json")
+        if metadata_path is None:
+            metadata_path = path.with_suffix(".json")
         if metadata_path.exists():
             metadata = json.loads(metadata_path.read_text())
             foundation.entries = [

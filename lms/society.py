@@ -53,6 +53,11 @@ DEFAULT_FOUNDATION_PATH = (
     Path(__file__).parent.parent / "lean" / "LMS" / "Foundation.lean"
 )
 
+#: A checkpoint's copy of the foundation, inside the run directory. The Lean
+#: file itself cannot live there (see `reset_foundation`), and the project copy
+#: does not outlast the job, so this is what a resume restores from.
+FOUNDATION_SNAPSHOT = "foundation.json"
+
 # For `_derive_references`: top-level names a piece of Lean code declares,
 # and the comment forms to strip before scanning it for foundation names.
 _DECL_NAME_RE = re.compile(
@@ -334,6 +339,19 @@ class Society:
                     # Say it out loud: these count toward `progress()` and were
                     # not earned by the collective.
                     print(f"  Tags given by the seed (not earned): {', '.join(seeded)}")
+        return await self._write_and_build_foundation()
+
+    async def restore_foundation(self) -> bool:
+        """Put a resumed run's foundation back where Lean imports it.
+
+        `Society.load` rebuilds the foundation in memory from the checkpoint.
+        The project's file is whatever the last job left, which the batch
+        script resets to the tracked corpus on exit, so a resumed generation
+        would otherwise import that instead of its own run's work.
+
+        Returns:
+            True if the restored foundation is on disk and compiled.
+        """
         return await self._write_and_build_foundation()
 
     async def _write_and_build_foundation(self) -> bool:
@@ -1666,6 +1684,9 @@ class Society:
                 # TODO: Add compilation check in future iteration
                 # For now, we trust that individually verified artifacts compile together
                 pass
+        # Always, even with no entries: a seed-only foundation is still state
+        # a resume has to rebuild.
+        self.foundation.save_metadata(output_dir / FOUNDATION_SNAPSHOT)
 
         # Save the cost ledger — per-statement attribution incl. failed
         # attempts. This is what cvfn_report reads.
@@ -1709,10 +1730,23 @@ class Society:
 
         Returns:
             Society restored from checkpoint
+
+        Raises:
+            ValueError: If the checkpoint has no foundation snapshot. Such a
+                run would resume on an empty foundation while its library
+                still lists the verified work that foundation held.
         """
         # Load results and checkpoint
         results_data = json.loads((output_dir / "results.json").read_text())
         checkpoint = results_data.get("checkpoint", {})
+
+        snapshot_path = output_dir / FOUNDATION_SNAPSHOT
+        if not snapshot_path.exists():
+            raise ValueError(
+                f"{output_dir} has no {FOUNDATION_SNAPSHOT}; it was checkpointed "
+                "before runs kept their foundation, so a resume would import "
+                "none of its verified work. Start a new run instead."
+            )
 
         # Load goal from checkpoint if not provided and file exists
         goal_path = output_dir / "goal.json"
@@ -1748,10 +1782,11 @@ class Society:
         if conversations_path.exists():
             society.trace_store = TraceStore.load(output_dir)
 
-        # Load foundation if it exists
-        foundation_path = output_dir / "LMS" / "Foundation.lean"
-        if foundation_path.with_suffix(".json").exists():
-            society.foundation = FoundationFile.load(foundation_path)
+        # Rebuilt from the run directory, but kept at the project path the
+        # constructor chose: `import LMS.Foundation` only resolves there.
+        society.foundation = FoundationFile.load(
+            society.foundation.path, metadata_path=snapshot_path
+        )
 
         # Load per-agent stats if they exist
         stats_path = output_dir / "agent_stats.json"

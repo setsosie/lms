@@ -385,10 +385,23 @@ grep -m1 '^agents=' ~/code/lms/logs/lms-run-JOBID.out
 ```
 
 It must end `n_groups=3`. If the field is missing, the checkout predates the
-knob and the run is iterative, not committee: `scancel` it. **Do not use
-`--resume`** if the job hits its walltime. A resumed run points its foundation
-at the output directory, where Lean cannot import it (known, not yet carded).
-A partial run is still a result.
+knob and the run is iterative, not committee: `scancel` it.
+
+If the job hits its walltime, resume it. Use the same command with `RESUME=1`
+added and every other knob unchanged. The run checkpoints after each
+generation and continues from the last one it finished:
+
+```bash
+cd ~/code/lms && mkdir -p logs && sbatch -p GPU_PARTITION --gres=GPU_GRES:2 --time=08:00:00 --export=ALL,RESUME=1,TP_SIZE=2,AGENTS=3,N_GROUPS=3,ITERATIVE=0,GENERATIONS=10,GOAL=stacks-ch4-phase1,RUN_TAG=committee_rerun_a,MODEL_REPO=MODEL scripts/slurm/lms_run.sbatch
+```
+
+```bash
+grep -m2 '^resume=\|Continuing from generation' ~/code/lms/logs/lms-run-JOBID.out
+```
+
+The first line must read `resume=1`; the second must show how many generations
+the last job finished. Re-submitting without `RESUME=1` refuses to start rather
+than overwrite the partial run. A partial run is still a result.
 
 Per generation: created, verified, tokens, seconds:
 
