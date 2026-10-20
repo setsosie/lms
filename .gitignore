@@ -74,3 +74,6 @@ docs/planning/retros/
 # Novelty-classifier search cache (scripts/measure_n1_density.py --cache-dir).
 # Keyed by statement and library rev; rebuildable, and machine-local.
 .novelty_cache/
+
+# Novelty search cache (scripts/measure_n1_density.py --cache-dir default)
+.novelty_cache/
