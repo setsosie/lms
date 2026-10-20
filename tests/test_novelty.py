@@ -33,6 +33,7 @@ from lms.novelty.mathlib_search import (
     name_tokens,
     parse_declaration,
 )
+from lms.novelty.vocabulary import named_results, project_vocabulary
 
 FIXTURES = Path(__file__).parent / "fixtures" / "novelty"
 
@@ -339,6 +340,18 @@ class TestExactProbeOutput:
 NAMELESS = "-- a payload with no named declaration\nexample : True := trivial"
 
 
+class TestExplicitUniverses:
+    def test_the_name_stops_before_the_universe_list(self):
+        assert parse_declaration("theorem foo.{u} (x : Nat) : x = x := rfl") == (
+            "theorem",
+            "foo",
+        )
+        assert parse_declaration("structure Category.{u, v} where") == (
+            "structure",
+            "Category",
+        )
+
+
 class TestStagesWithNoQuery:
     """A stage that could not form a query did not search, so it cannot vote."""
 
@@ -434,6 +447,222 @@ class TestNoveltyGate:
         loaded = Artifact.from_dict(d)
         assert loaded.novelty_level is None
         assert loaded.novelty_evidence == []
+
+
+# ------------------------------------- statements no Mathlib search can match
+
+YONEDA = json.loads((FIXTURES / "yoneda_bespoke_api.json").read_text())
+YONEDA_VOCABULARY = ["Category", "Functor", "TypeCat", "NatTrans", "homFunctor"]
+
+
+def yoneda_project(tmp_path: Path) -> Path:
+    """A Lean project holding the run's foundation, where the gate looks for it."""
+    module = tmp_path / "LMS" / "Foundation.lean"
+    module.parent.mkdir(parents=True)
+    module.write_text(YONEDA["foundation_source"])
+    return tmp_path
+
+
+def yoneda_stages(semantic_hits: bool) -> list[RecordedBackend]:
+    """The four stages as the card recorded them: every one ran."""
+    stages = [empty_backend(s) for s in ("name", "loogle", "exact_probe")]
+    hits = (
+        [SearchHit.from_dict(h) for h in YONEDA["semantic_hits"]]
+        if semantic_hits
+        else []
+    )
+    stages.append(
+        RecordedBackend(
+            "semantic", {"yoneda_lemma": StageOutcome("semantic", True, hits=hits)}
+        )
+    )
+    return stages
+
+
+SEED = (Path(__file__).parent.parent / "lms" / "seed" / "category.lean").read_text()
+
+
+def seed_project(tmp_path: Path) -> Path:
+    """A Lean project whose foundation is the shipped seed: a class plus notation."""
+    module = tmp_path / "LMS" / "Foundation.lean"
+    module.parent.mkdir(parents=True)
+    module.write_text(SEED)
+    return tmp_path
+
+
+class TestProjectVocabulary:
+    def test_vocabulary_arriving_as_notation(self, tmp_path):
+        code = (
+            "import LMS.Foundation\nopen LMS.Foundation\n\n"
+            "theorem type_comp_apply {X Y Z : Type u} (f : X ⟶ Y) (g : Y ⟶ Z) (x : X) :\n"
+            "    (f ≫ g) x = g (f x) := rfl"
+        )
+        found = project_vocabulary(code, seed_project(tmp_path))
+        assert found
+        assert "⟶" in found.names
+
+    def test_vocabulary_arriving_through_a_variable(self, tmp_path):
+        code = (
+            "import LMS.Foundation\nopen LMS.Foundation\n\n"
+            "variable {C : Type u} [Category.{v} C]\n\n"
+            "theorem id_comp' {X Y : C} (f : X ⟶ Y) : 𝟙 X ≫ f = f := by simp"
+        )
+        found = project_vocabulary(code, seed_project(tmp_path))
+        assert found.names == ["Category", "⟶", "𝟙", "≫"]
+
+    def test_a_declaration_with_explicit_universes(self, tmp_path):
+        module = tmp_path / "LMS" / "Foundation.lean"
+        module.parent.mkdir(parents=True)
+        module.write_text("structure Category.{u, v} where\n  Obj : Type u\n")
+        code = "import LMS.Foundation\n\ntheorem t (C : Category.{0, 0}) (X : C.Obj) : True := trivial"
+        assert project_vocabulary(code, tmp_path).names == ["Category"]
+
+    def test_an_auto_param_does_not_end_the_header(self, tmp_path):
+        code = (
+            "import LMS.Foundation\n\n"
+            "theorem t (n : Nat) (h : 0 < n := by decide) (C : Category) : True := trivial"
+        )
+        assert project_vocabulary(code, yoneda_project(tmp_path)).names == ["Category"]
+
+    def test_a_statement_in_foundation_vocabulary(self, tmp_path):
+        found = project_vocabulary(YONEDA["lean_code"], yoneda_project(tmp_path))
+        assert found.names == YONEDA_VOCABULARY
+        assert found.modules == ["LMS.Foundation"]
+        assert found.unread == []
+
+    def test_a_statement_over_mathlib_alone(self, tmp_path):
+        code = "import Mathlib\n\ntheorem t {A : Type*} [CommRing A] (x : A) : x + 0 = x := by simp"
+        assert not project_vocabulary(code, tmp_path)
+
+    def test_a_project_import_the_statement_does_not_use(self, tmp_path):
+        code = "import LMS.Foundation\n\ntheorem t (n : Nat) : n + 0 = n := rfl"
+        assert not project_vocabulary(code, yoneda_project(tmp_path))
+
+    def test_an_unreadable_project_module_is_not_assumed_safe(self, tmp_path):
+        found = project_vocabulary(YONEDA["lean_code"], tmp_path)
+        assert found
+        assert found.unread == ["LMS.Foundation"]
+
+    def test_no_project_dir_reads_nothing(self):
+        assert project_vocabulary(YONEDA["lean_code"], None).unread == [
+            "LMS.Foundation"
+        ]
+
+
+class TestYonedaRegression:
+    """The card's case: a textbook theorem over a bespoke API is not novel."""
+
+    def test_the_recorded_outcomes_no_longer_read_as_decisive_n1(self, tmp_path):
+        assert YONEDA["recorded_verdict"]["level"] == "N1"
+        classifier = NoveltyClassifier(
+            yoneda_stages(semantic_hits=False), project_dir=yoneda_project(tmp_path)
+        )
+        result = classifier.classify(YONEDA["lean_code"], informal=YONEDA["informal"])
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert result.needs_review is True
+        assert result.outside_mathlib == YONEDA_VOCABULARY
+        assert "LMS.Foundation" in result.evidence[0]
+
+    def test_the_gate_does_not_count_it(self, tmp_path):
+        artifact = make_artifact(YONEDA["lean_code"])
+        artifact.natural_language = YONEDA["informal"]
+        classifier = NoveltyClassifier(
+            yoneda_stages(semantic_hits=False), project_dir=yoneda_project(tmp_path)
+        )
+        decision = apply_novelty_gate(artifact, classifier)
+        assert decision.counts_as_novel is False
+        assert decision.needs_human_review is True
+        assert artifact.novelty_level == "INCONCLUSIVE"
+
+    def test_the_reviewer_sees_mathlibs_yoneda_first(self, tmp_path):
+        classifier = NoveltyClassifier(
+            yoneda_stages(semantic_hits=True), project_dir=yoneda_project(tmp_path)
+        )
+        result = classifier.classify(YONEDA["lean_code"], informal=YONEDA["informal"])
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert result.evidence[0].startswith("semantic: CategoryTheory.yonedaLemma")
+
+    def test_a_novel_statement_over_mathlib_is_unaffected(self, tmp_path):
+        classifier = NoveltyClassifier(
+            four_empty_stages(), project_dir=yoneda_project(tmp_path)
+        )
+        result = classifier.classify(NOVEL)
+        assert result.level is NoveltyLevel.N1
+        assert result.needs_review is False
+        assert result.outside_mathlib == []
+
+
+class TestInformalNamedResults:
+    @pytest.mark.parametrize(
+        ("informal", "expected"),
+        [
+            (YONEDA["informal"], [{"yoneda"}]),
+            ("Nakayama's lemma for finitely generated modules", [{"nakayama"}]),
+            (
+                "The Kummer–Dedekind theorem on splitting primes",
+                [{"kummer", "dedekind"}],
+            ),
+            ("Dirichlet's unit theorem", [{"dirichlet"}]),
+            ("The integral closure of a Dedekind domain is Dedekind", []),
+            ("The main theorem of this section", []),
+            (None, []),
+            ("Nakayama’s lemma", [{"nakayama"}]),
+            ("Gauss' lemma on primitive polynomials", [{"gauss"}]),
+            ("The Sylow theorems", [{"sylow"}]),
+            ("Lagrange's four-square theorem", [{"lagrange"}]),
+            ("The Cauchy—Schwarz inequality", [{"cauchy", "schwarz"}]),
+            # A reference or a capitalised common word is not an eponym.
+            ("By Lemma 3, the map is injective", []),
+            ("Prime number theorem", []),
+            ("Central Limit Theorem", []),
+            ("First isomorphism theorem", []),
+        ],
+    )
+    def test_named_results(self, informal, expected):
+        assert named_results(informal) == [frozenset(e) for e in expected]
+
+    @staticmethod
+    def classify(informal: str | None, hit_name: str):
+        semantic = RecordedBackend(
+            "semantic",
+            {"lemma_17": StageOutcome("semantic", True, hits=[hit(hit_name)])},
+        )
+        others = [empty_backend(s) for s in ("name", "loogle", "exact_probe")]
+        return NoveltyClassifier([*others, semantic]).classify(
+            "theorem lemma_17 (C : Cat) : True := trivial", informal=informal
+        )
+
+    def test_a_hit_carrying_the_eponym_is_plausible_never_decisive(self):
+        result = self.classify(
+            "Yoneda lemma, stated for Cat", "CategoryTheory.yonedaEquiv"
+        )
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert "CategoryTheory.yonedaEquiv" in result.evidence[0]
+
+    def test_without_the_informal_the_same_hit_is_noise(self):
+        result = self.classify(None, "CategoryTheory.yonedaEquiv")
+        assert result.level is NoveltyLevel.N1
+
+    def test_a_hit_without_the_eponym_changes_nothing(self):
+        result = self.classify("Nakayama's lemma", "CategoryTheory.yonedaEquiv")
+        assert result.level is NoveltyLevel.N1
+
+    def test_an_eponym_the_statement_uses_as_a_concept_is_not_distinctive(self):
+        """Every ANT hit says Dedekind; ram-17's eponym cannot single one out."""
+        semantic = RecordedBackend(
+            "semantic",
+            {
+                "ram_17": StageOutcome(
+                    "semantic", True, hits=[hit("IsDedekindDomain.HeightOneSpectrum")]
+                )
+            },
+        )
+        others = [empty_backend(s) for s in ("name", "loogle", "exact_probe")]
+        result = NoveltyClassifier([*others, semantic]).classify(
+            "theorem ram_17 {A : Type*} [CommRing A] [IsDedekindDomain A] : True := trivial",
+            informal="Dedekind's theorem on the different",
+        )
+        assert result.level is NoveltyLevel.N1
 
 
 # ------------------------------------------------------- density measurement

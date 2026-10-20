@@ -16,6 +16,12 @@ the confidence of that N1 scales with how many stages could actually run: an
 than one backed by all four. INCONCLUSIVE (and low-confidence N1) routes to D4
 human review — it is never counted as novel without sign-off.
 
+Silence only counts where a match was possible. A statement phrased over a
+project module's vocabulary (a hand-rolled `Category` imported from
+`LMS.Foundation`) cannot match Mathlib whatever Mathlib contains, so it is
+INCONCLUSIVE, never N1. And a result the informal statement names ("Yoneda
+lemma") is recognised by eponym, regardless of the API the Lean uses.
+
 Every result records the Mathlib revision it was computed against. Mathlib
 moves; yesterday's N1 is today's N0.
 """
@@ -36,6 +42,11 @@ from lms.novelty.mathlib_search import (
     detect_mathlib_rev,
     extract_identifiers,
     name_tokens,
+)
+from lms.novelty.vocabulary import (
+    ProjectVocabulary,
+    named_results,
+    project_vocabulary,
 )
 
 __all__ = [
@@ -59,6 +70,10 @@ _N1_CONFIDENCE_BY_STAGES = {4: 0.9, 3: 0.75, 2: 0.6, 1: 0.45, 0: 0.0}
 # Weakest N0 evidence still worth flagging for human eyes: below decisive but
 # above this floor the result is INCONCLUSIVE rather than N1.
 _N0_CANDIDATE_FLOOR = 0.5
+
+# A semantic hit carrying the eponym the informal statement names. Plausible,
+# never decisive: prose can name a result the formal statement only resembles.
+_INFORMAL_NAME_MATCH = 0.7
 
 
 class NoveltyLevel(str, Enum):
@@ -88,6 +103,8 @@ class NoveltyResult:
     # Why a stage did not search, or what it reported instead of hits —
     # e.g. the elaboration error that kept `exact?` from probing.
     stage_errors: dict[str, str] = field(default_factory=dict)
+    # Names the statement takes from project modules, not Mathlib.
+    outside_mathlib: list[str] = field(default_factory=list)
 
     @property
     def needs_review(self) -> bool:
@@ -106,6 +123,7 @@ class NoveltyResult:
             "stages_available": self.stages_available,
             "stages_unavailable": self.stages_unavailable,
             "stage_errors": self.stage_errors,
+            "outside_mathlib": self.outside_mathlib,
             "needs_review": self.needs_review,
         }
 
@@ -129,10 +147,13 @@ class NoveltyClassifier:
         backends: Sequence[SearchBackend],
         cache: DiskCache | None = None,
         mathlib_rev: str | None = None,
+        project_dir: Path | str | None = None,
     ) -> None:
         self.backends = list(backends)
         self.cache = cache
         self.mathlib_rev = mathlib_rev
+        # Where project modules a statement imports (`LMS.Foundation`) live.
+        self.project_dir = project_dir
 
     def classify(
         self,
@@ -140,6 +161,7 @@ class NoveltyClassifier:
         informal: str | None = None,
     ) -> NoveltyResult:
         query = StatementQuery.from_lean(lean_statement, informal=informal)
+        vocabulary = project_vocabulary(lean_statement, self.project_dir)
         best_confidence = 0.0
         evidence: list[str] = []
         decisive_stage: str | None = None
@@ -170,6 +192,7 @@ class NoveltyClassifier:
             stages_available,
             stages_unavailable,
             stage_errors,
+            vocabulary,
         )
 
     def _run_stage(self, backend: SearchBackend, query: StatementQuery) -> StageOutcome:
@@ -208,6 +231,12 @@ class NoveltyClassifier:
             for t in name_tokens(ident)
         )
 
+        eponyms = (
+            named_results(query.informal, query.lean_statement)
+            if outcome.stage == "semantic"
+            else []
+        )
+
         best = 0.0
         scored: list[tuple[float, str]] = []
         for hit in outcome.hits[:10]:
@@ -238,6 +267,9 @@ class NoveltyClassifier:
                     score = 0.55
                 else:
                     score = 0.3
+                hit_name_tokens = set(name_tokens(hit.name))
+                if any(e <= hit_name_tokens for e in eponyms):
+                    score = max(score, _INFORMAL_NAME_MATCH)
             if score > best:
                 best = score
             if score >= _N0_CANDIDATE_FLOOR:
@@ -254,13 +286,23 @@ class NoveltyClassifier:
         stages_available: list[str],
         stages_unavailable: list[str],
         stage_errors: dict[str, str] | None = None,
+        vocabulary: ProjectVocabulary | None = None,
     ) -> NoveltyResult:
+        vocabulary = vocabulary or ProjectVocabulary()
         if best_confidence >= DECISIVE_CONFIDENCE:
             level, confidence = NoveltyLevel.N0, best_confidence
         elif best_confidence >= _N0_CANDIDATE_FLOOR:
             # Plausible Mathlib match that no stage could confirm decisively.
             level, confidence = NoveltyLevel.INCONCLUSIVE, 0.5
             decisive_stage = None
+        elif vocabulary:
+            # Nothing found, by a search that could not have found it.
+            level, confidence = NoveltyLevel.INCONCLUSIVE, 0.0
+            decisive_stage = None
+            evidence = [
+                vocabulary.reason,
+                f"not found by: {', '.join(stages_available) or 'none'}",
+            ]
         else:
             n1_confidence = _N1_CONFIDENCE_BY_STAGES.get(len(stages_available), 0.0)
             if n1_confidence < _N0_CANDIDATE_FLOOR:
@@ -284,6 +326,7 @@ class NoveltyClassifier:
             stages_available=stages_available,
             stages_unavailable=stages_unavailable,
             stage_errors=stage_errors or {},
+            outside_mathlib=list(vocabulary.names),
         )
 
 
@@ -307,6 +350,7 @@ def classify_novelty(
             default_backends(project_dir),
             cache=cache,
             mathlib_rev=detect_mathlib_rev(project_dir),
+            project_dir=project_dir,
         )
     return classifier.classify(lean_decl, informal=informal)
 

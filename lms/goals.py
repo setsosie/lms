@@ -7,6 +7,7 @@ The Stacks Project. This enables focused work and progress tracking.
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 # =============================================================================
@@ -224,7 +225,7 @@ class Goal:
         a resumed run that reconstructs its goal from `goal.json` must keep
         the same restrictions the original run was configured with.
         """
-        data = {
+        data: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "source": self.source,
@@ -242,8 +243,9 @@ class Goal:
         }
         if self.allowed_imports is not None:
             data["allowed_imports"] = self.allowed_imports
-        if self.forbidden_imports is not None:
-            data["forbidden_imports"] = self.forbidden_imports
+        # Always written, even as null: a goal.json without the key predates
+        # it, and the CVFN report must not read that as "nothing forbidden".
+        data["forbidden_imports"] = self.forbidden_imports
         if self.preamble is not None:
             data["preamble"] = self.preamble
         path.write_text(json.dumps(data, indent=2))
