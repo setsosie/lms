@@ -8,7 +8,7 @@ change the committee's working population, so that agent-count experiments
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE (#52, merged 2026-08-20) |
 | **Branch** | `26Q3-HARN-18-agents-inert-in-committee-mode` |
 | **Dependencies** | None |
 | **PR Size Target** | <150 lines |

@@ -9,7 +9,7 @@ API.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH — CVFN is the number the whole Q3 program turns on |
-| **Status** | 🔄 IN PROGRESS — Part 1 merged (#63), Part 2 in review |
+| **Status** | ✅ DONE — Part 1 #63 (merged 2026-10-09), Part 2 #66 (merged 2026-10-20) |
 | **Branch** | Part 1: `26Q3-HARN-20-part1-stages-that-cannot-match`; Part 2: `26Q3-HARN-20-novelty-gate-n1-false-positive` |
 | **Dependencies** | 26Q3-HARN-19 (wires Gate 4 into the run at all) |
 | **PR Size Target** | <400 lines per part |

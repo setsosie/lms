@@ -5,18 +5,12 @@ Claude prepares the commands and reads what you paste back. Every code block
 is **one command on one line**: multi-line pastes get mangled in the terminal
 and produce plausible-looking wrong output.
 
-**Prerequisite:** PR #63 merged to `main`. It carries the classifier fix this
-measurement depends on, the committed Gate A control arc, and the repaired arc
-drafts. The R4 batch job refuses to run on a checkout without it.
-
-**Also merge before R4: #66** (`26Q3-HARN-20` Part 2), so DoD 1's numbers come
-from the classifier as it will stand. It does not move the arcs much: no arc
-draft uses project vocabulary, and the eponym rule can reach only core-13,
-core-14 and core-20. If R4 already ran, re-running after the merge is cheap.
-Search results are cached in `.novelty_cache/`, so only scoring repeats.
-
-**R6 needs this runbook's own PR merged:** it adds the committee-mode knob to
-`lms_run.sbatch`.
+**Prerequisites, all merged to `main` as of 2026-10-20:** #63 (the classifier
+fix this measurement depends on, the Gate A control arc, the repaired arc
+drafts), #66 (`26Q3-HARN-20` Part 2, so DoD 1's numbers come from the
+classifier as it will stand) and #67 (R6's committee knob in
+`lms_run.sbatch`). R2's `git pull` brings all three; the R4 batch job refuses
+a checkout that predates #63 or #66.
 
 ## What changed
 
