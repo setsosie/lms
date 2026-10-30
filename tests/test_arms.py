@@ -217,17 +217,25 @@ def test_an_unmeasurable_arm_refuses_to_pair(tmp_path):
         paired_comparison(a_arm, u_arm, shared_statements(a_arm, u_arm))
 
 
-def test_pairing_different_denominator_kinds_is_flagged(tmp_path):
+def test_pairing_different_denominator_kinds_is_refused(tmp_path):
     bare = {"id": "x", "status": "verified_lean", "stacks_tag": "t1"}
     a = arm_report("A", [write_run(tmp_path / "a", [novel("t1")], tags=TAGS)])
     b = arm_report("B", [write_run(tmp_path / "b", [bare], tags=TAGS)])
-    result = paired_comparison(a, b, shared_statements(a, b))
-    assert (result.a_kind, result.b_kind) == (
-        "verified_novel",
-        "verified_lean_unfiltered",
-    )
-    assert "kind mismatch" in result.format()
-    assert "verified_lean_unfiltered" in result.format()
+    with pytest.raises(ValueError, match="verified_novel.*verified_lean_unfiltered"):
+        paired_comparison(a, b, shared_statements(a, b))
+
+
+def test_a_run_that_verified_nothing_does_not_set_the_pooled_kind(tmp_path):
+    proved = write_run(tmp_path / "p", [novel("t1")], tags=TAGS)
+    empty = write_run(tmp_path / "e", [], tags=TAGS)
+    i9 = arm_report("I9", [proved, empty])
+    assert i9.denominator_kind == "verified_novel"
+    c9 = arm_report("C9", [write_run(tmp_path / "c", [novel("t1")], tags=TAGS)])
+    assert paired_comparison(i9, c9, shared_statements(i9, c9)).both == 1
+
+    # The goal makes a run unmeasurable whether or not it verified anything.
+    barred = write_run(tmp_path / "b", [], tags=TAGS, forbidden=["Mathlib"])
+    assert arm_report("X", [proved, barred]).denominator_kind == "unmeasurable"
 
 
 def test_an_arm_with_no_runs_is_refused():
@@ -249,6 +257,15 @@ def test_cli_refuses_a_repeated_arm_name(tmp_path):
     a = write_run(tmp_path / "a", [], tags=TAGS)
     with pytest.raises(SystemExit):
         load_cli().main(["--arm", f"A={a}", "--arm", f"A={a}"])
+
+
+@pytest.mark.parametrize("dirs", ["{a},", "{a},{missing}"])
+def test_cli_refuses_a_missing_run_directory_as_usage(tmp_path, dirs):
+    a = write_run(tmp_path / "a", [], tags=TAGS)
+    spec = dirs.format(a=a, missing=tmp_path / "missing")
+    with pytest.raises(SystemExit) as exited:
+        load_cli().main(["--arm", f"A={spec}"])
+    assert exited.value.code == 2
 
 
 def test_cli_prints_arms_and_pairs_and_writes_the_same_as_json(tmp_path, capsys):
