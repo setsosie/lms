@@ -27,7 +27,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lms.accounting import calculate_cvfn, counts_as_novel, cvfn_report, statement_key
+from lms.accounting import (
+    CVFNReport,
+    calculate_cvfn,
+    counts_as_novel,
+    cvfn_report,
+    statement_key,
+)
 
 #: Resamples drawn for the statement bootstrap.
 BOOTSTRAP_RESAMPLES = 2_000
@@ -135,11 +141,26 @@ class ArmReport:
         )
 
 
-def _pooled_kind(kinds: list[str]) -> str:
-    """One denominator kind for a non-empty pool; the weakest run's kind wins."""
-    for kind in ("unmeasurable", "verified_lean_unfiltered"):
-        if kind in kinds:
-            return kind
+#: Kind of an arm none of whose runs verified anything. It counts nothing
+#: under either rule, so it pairs with an arm of any measurable kind.
+NOTHING_VERIFIED = "nothing_verified"
+
+
+def _pooled_kind(reports: list[CVFNReport]) -> str:
+    """One denominator kind for a non-empty pool; the weakest run's kind wins.
+
+    Only runs that verified something vote: novelty labels are stamped on
+    verified artifacts alone, so a run that verified nothing reads as
+    unfiltered without saying anything about the rule. An unmeasurable goal
+    wins regardless, since it comes from the goal, not the artifacts.
+    """
+    if any(r.denominator_kind == "unmeasurable" for r in reports):
+        return "unmeasurable"
+    kinds = [r.denominator_kind for r in reports if r.verified_count]
+    if not kinds:
+        return NOTHING_VERIFIED
+    if "verified_lean_unfiltered" in kinds:
+        return "verified_lean_unfiltered"
     return "verified_novel"
 
 
@@ -173,7 +194,7 @@ def arm_report(name: str, run_dirs: list[Path]) -> ArmReport:
 
     total_tokens = sum(r.total_tokens for r in reports)
     distinct = sum(outcomes.values())
-    kind = _pooled_kind([r.denominator_kind for r in reports])
+    kind = _pooled_kind(reports)
     reason = next(
         (r.unmeasurable_reason for r in reports if r.unmeasurable_reason), None
     )
@@ -241,18 +262,9 @@ class PairedResult:
 
     def format(self) -> str:
         lo, hi = self.bootstrap_ci
-        mismatch = (
-            [
-                f"  !! denominator kind mismatch: {self.a_name} {self.a_kind}, "
-                f"{self.b_name} {self.b_kind}"
-            ]
-            if self.a_kind != self.b_kind
-            else []
-        )
         return "\n".join(
             [
                 f"{self.a_name} vs {self.b_name} over {self.statements} statements",
-                *mismatch,
                 f"  both {self.both}  {self.a_name} only {self.a_only}  "
                 f"{self.b_name} only {self.b_only}  neither {self.neither}",
                 f"  McNemar exact p = {self.mcnemar_p:.4g}",
@@ -277,8 +289,9 @@ def paired_comparison(
     """2x2 table, exact McNemar and bootstrap interval over `statements`.
 
     Refuses an unmeasurable arm: its counts are inflated by construction, so a
-    test on them would look like a result. Arms with two measurable but
-    different denominator kinds are compared, and the result says so.
+    test on them would look like a result. Refuses two different denominator
+    kinds too: an arm whose novelty classifier was absent counts statements
+    the other arm filtered out, which reads as a win from identical work.
     """
     for arm in (a, b):
         if arm.denominator_kind == "unmeasurable":
@@ -286,6 +299,12 @@ def paired_comparison(
                 f"cannot pair {a.name}:{b.name}: {arm.name} is unmeasurable "
                 f"({arm.unmeasurable_reason})"
             )
+    kinds = {a.denominator_kind, b.denominator_kind} - {NOTHING_VERIFIED}
+    if len(kinds) > 1:
+        raise ValueError(
+            f"cannot pair {a.name}:{b.name}: denominator kinds differ "
+            f"({a.name} {a.denominator_kind}, {b.name} {b.denominator_kind})"
+        )
     pairs = [(a.outcomes.get(s, False), b.outcomes.get(s, False)) for s in statements]
     both = sum(1 for x, y in pairs if x and y)
     a_only = sum(1 for x, y in pairs if x and not y)
