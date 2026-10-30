@@ -178,6 +178,19 @@ def test_pairing_uses_the_shared_slice_and_refuses_different_goals(tmp_path):
         shared_statements(a, arm_report("C", [other]))
 
 
+def test_runs_with_different_goals_pool_but_refuse_to_pair(tmp_path):
+    a = arm_report("A", [write_run(tmp_path / "a", [], tags=["t1"])])
+    r1 = write_run(tmp_path / "r1", [novel("t1")], tags=["t1"])
+    r2 = write_run(tmp_path / "r2", [novel("t2")], tags=["t2"], goal_name="other")
+    mixed = arm_report("B", [r1, r2])
+    assert mixed.distinct_statements == 2
+    assert "2 different goals" in mixed.format()
+
+    with pytest.raises(ValueError, match="goals differ") as refused:
+        shared_statements(a, mixed)
+    assert "'ant'" in str(refused.value) and "'other'" in str(refused.value)
+
+
 def test_cli_prints_arms_and_pairs_and_writes_the_same_as_json(tmp_path, capsys):
     spec = importlib.util.spec_from_file_location(
         "compare_arms", ROOT / "scripts" / "compare_arms.py"
