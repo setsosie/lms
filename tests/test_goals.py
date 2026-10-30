@@ -510,3 +510,23 @@ class TestPhase1ImportPolicy:
         ]:
             valid, _ = STACKS_CHAPTER_4_PHASE_1.validate_code(f"import {imp}\n")
             assert not valid, imp
+
+
+def test_requires_round_trip(tmp_path):
+    """`requires` survives save/load; None is omitted so old goal files still load."""
+    path = tmp_path / "goal.json"
+    Goal(
+        name="g",
+        description="d",
+        source="s",
+        definitions=[
+            StacksDefinition(tag="A", section="1.1", name="a", content="", requires=[]),
+            StacksDefinition(
+                tag="B", section="1.2", name="b", content="", requires=["A"]
+            ),
+            StacksDefinition(tag="C", section="1.3", name="c", content=""),
+        ],
+    ).save(path)
+    raw = json.loads(path.read_text())["definitions"]
+    assert [d.get("requires", "absent") for d in raw] == [[], ["A"], "absent"]
+    assert [d.requires for d in Goal.load(path).definitions] == [[], ["A"], None]
