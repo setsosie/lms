@@ -35,7 +35,7 @@ def novel(tag, **kw):
     }
 
 
-def write_run(run_dir, artifacts, tags=(), goal_name="ant", records=None):
+def write_run(run_dir, artifacts, tags=(), goal_name="ant", records=None, forbidden=()):
     """A saved run directory; `records` becomes the attempt ledger."""
     run_dir.mkdir()
     (run_dir / "results.json").write_text(
@@ -44,7 +44,7 @@ def write_run(run_dir, artifacts, tags=(), goal_name="ant", records=None):
     (run_dir / "artifacts.json").write_text(json.dumps({"artifacts": artifacts}))
     goal = {
         "name": goal_name,
-        "forbidden_imports": [],
+        "forbidden_imports": list(forbidden),
         "definitions": [{"tag": t} for t in tags],
     }
     (run_dir / "goal.json").write_text(json.dumps(goal))
@@ -125,10 +125,7 @@ def test_novelty_labels_filter_and_their_absence_is_flagged(tmp_path):
 
 
 def test_a_goal_forbidding_mathlib_makes_the_arm_unmeasurable(tmp_path):
-    run = write_run(tmp_path / "r", [novel("0013")])
-    goal = json.loads((run / "goal.json").read_text())
-    goal["forbidden_imports"] = ["Mathlib"]
-    (run / "goal.json").write_text(json.dumps(goal))
+    run = write_run(tmp_path / "r", [novel("0013")], forbidden=["Mathlib"])
 
     report = arm_report("C9", [run])
     assert report.denominator_kind == "unmeasurable"
@@ -191,13 +188,71 @@ def test_runs_with_different_goals_pool_but_refuse_to_pair(tmp_path):
     assert "'ant'" in str(refused.value) and "'other'" in str(refused.value)
 
 
-def test_cli_prints_arms_and_pairs_and_writes_the_same_as_json(tmp_path, capsys):
+def test_a_quoted_tag_pools_and_pairs_as_the_bare_tag(tmp_path):
+    # Flat and iterative agents copy the prompt's quotes into the tag.
+    quoted = write_run(tmp_path / "q", [novel('"0013"')], tags=["0013"])
+    bare = write_run(tmp_path / "b", [novel("0013")], tags=["0013"])
+    assert statement_outcomes(quoted) == {"tag:0013": True}
+
+    pooled = arm_report("I9", [quoted, bare])
+    assert pooled.distinct_statements == 1
+    assert pooled.duplicate_statements == ["tag:0013"]
+
+    a, b = arm_report("I9", [quoted]), arm_report("C9", [bare])
+    assert paired_comparison(a, b, shared_statements(a, b)).both == 1
+
+
+def test_a_verified_statement_off_the_goal_slice_is_counted_aside(tmp_path):
+    run = write_run(tmp_path / "r", [novel("t1"), novel("t9")], tags=["t1"])
+    report = arm_report("C9", [run])
+    assert report.off_slice_verified == 1
+    assert "1 off-slice" in report.format()
+
+
+def test_an_unmeasurable_arm_refuses_to_pair(tmp_path):
+    u = write_run(tmp_path / "u", [novel("t1")], tags=TAGS, forbidden=["Mathlib"])
+    a = write_run(tmp_path / "a", [novel("t1")], tags=TAGS)
+    u_arm, a_arm = arm_report("U", [u]), arm_report("A", [a])
+    with pytest.raises(ValueError, match="U.*unmeasurable"):
+        paired_comparison(a_arm, u_arm, shared_statements(a_arm, u_arm))
+
+
+def test_pairing_different_denominator_kinds_is_flagged(tmp_path):
+    bare = {"id": "x", "status": "verified_lean", "stacks_tag": "t1"}
+    a = arm_report("A", [write_run(tmp_path / "a", [novel("t1")], tags=TAGS)])
+    b = arm_report("B", [write_run(tmp_path / "b", [bare], tags=TAGS)])
+    result = paired_comparison(a, b, shared_statements(a, b))
+    assert (result.a_kind, result.b_kind) == (
+        "verified_novel",
+        "verified_lean_unfiltered",
+    )
+    assert "kind mismatch" in result.format()
+    assert "verified_lean_unfiltered" in result.format()
+
+
+def test_an_arm_with_no_runs_is_refused():
+    with pytest.raises(ValueError, match="no run"):
+        arm_report("E", [])
+
+
+def load_cli():
     spec = importlib.util.spec_from_file_location(
         "compare_arms", ROOT / "scripts" / "compare_arms.py"
     )
     assert spec is not None and spec.loader is not None
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
+    return cli
+
+
+def test_cli_refuses_a_repeated_arm_name(tmp_path):
+    a = write_run(tmp_path / "a", [], tags=TAGS)
+    with pytest.raises(SystemExit):
+        load_cli().main(["--arm", f"A={a}", "--arm", f"A={a}"])
+
+
+def test_cli_prints_arms_and_pairs_and_writes_the_same_as_json(tmp_path, capsys):
+    cli = load_cli()
 
     a = write_run(tmp_path / "a", [novel("t1")], tags=TAGS)
     b1 = write_run(tmp_path / "b1", [novel("t1")], tags=TAGS)
@@ -212,3 +267,4 @@ def test_cli_prints_arms_and_pairs_and_writes_the_same_as_json(tmp_path, capsys)
     assert [arm["name"] for arm in data["arms"]] == ["A", "B"]
     assert data["arms"][1]["distinct_statements"] == 2
     assert len(data["pairs"]) == 1 and "mcnemar_p" in data["pairs"][0]
+    assert data["pairs"][0]["a_kind"] == "verified_novel"
