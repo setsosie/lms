@@ -87,6 +87,7 @@ grep -n "trace_store\.\(add\|record\|log\|append\)" lms/*.py            # nothin
 | `lms/society.py` | MODIFY | Pass `self.trace_store` beside `self.ledger` |
 | `lms/traces.py` | MODIFY | Only if a small helper for one-exchange logs earns its place |
 | `tests/test_trace_store_wiring.py` | CREATE | Behaviour tests |
+| `docs/LESSONS_FROM_SONNET_SIMULATION.md` | MODIFY | Mark defect 2 ("conversations are never recorded") fixed |
 
 > This table is a fence the gate checks: `/pre-merge` treats a changed file not named here
 > (tests and this task's own card/verify script excepted) as a blocking finding.
