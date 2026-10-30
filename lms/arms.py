@@ -95,7 +95,8 @@ class ArmReport:
     denominator_kind: str
     unmeasurable_reason: str | None = None
     outcomes: dict[str, bool] = field(default_factory=dict)
-    goal_name: str | None = None
+    #: Distinct goal names the runs recorded, None for a run without one.
+    goal_names: list[str | None] = field(default_factory=list)
     goal_statements: list[str] = field(default_factory=list)
 
     def format(self) -> str:
@@ -105,8 +106,13 @@ class ArmReport:
             cvfn = "undefined"
         else:
             cvfn = f"{self.cvfn_tokens_per_statement:,.0f}"
+        goals = (
+            f", {len(self.goal_names)} different goals"
+            if len(self.goal_names) > 1
+            else ""
+        )
         return (
-            f"{self.name}: {len(self.run_dirs)} run(s), "
+            f"{self.name}: {len(self.run_dirs)} run(s){goals}, "
             f"{self.total_tokens:,} tokens, "
             f"{self.distinct_statements} distinct statements "
             f"({self.artifact_denominator} by artifact count), "
@@ -129,14 +135,11 @@ def arm_report(name: str, run_dirs: list[Path]) -> ArmReport:
 
     Tokens are summed over all runs, the ledger read first and `results.json`
     totals as the fallback, exactly as `cvfn_report` reads each run. Statements
-    are unioned. Pooled runs must record the same goal.
+    are unioned. Runs recording different goals still pool, but the arm then
+    refuses to pair.
     """
     reports = [cvfn_report(Path(d)) for d in run_dirs]
     goals = [_recorded_goal(Path(d)) for d in run_dirs]
-    goal_names = {g[0] for g in goals}
-    if len(goal_names) > 1:
-        raise ValueError(f"arm {name}: pooled runs record different goals")
-
     outcomes: dict[str, bool] = {}
     counted_by: Counter[str] = Counter()
     untagged = 0
@@ -173,7 +176,7 @@ def arm_report(name: str, run_dirs: list[Path]) -> ArmReport:
         denominator_kind=kind,
         unmeasurable_reason=reason,
         outcomes=outcomes,
-        goal_name=goals[0][0] if goals else None,
+        goal_names=list(dict.fromkeys(g[0] for g in goals)),
         goal_statements=goal_statements,
     )
 
@@ -184,12 +187,12 @@ def shared_statements(a: ArmReport, b: ArmReport) -> list[str]:
     Refuses when either arm has no recorded goal or the goals differ; a
     comparison over two different slices is not paired.
     """
-    if a.goal_name is None or b.goal_name is None:
+    if None in a.goal_names + b.goal_names:
         raise ValueError(f"cannot pair {a.name}:{b.name}: no recorded goal")
-    if a.goal_name != b.goal_name:
+    if len(a.goal_names) != 1 or a.goal_names != b.goal_names:
         raise ValueError(
             f"cannot pair {a.name}:{b.name}: recorded goals differ "
-            f"({a.goal_name!r} vs {b.goal_name!r})"
+            f"({a.name}: {a.goal_names}; {b.name}: {b.goal_names})"
         )
     theirs = set(b.goal_statements)
     return [s for s in a.goal_statements if s in theirs]
