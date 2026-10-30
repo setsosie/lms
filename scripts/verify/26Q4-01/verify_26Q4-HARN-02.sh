@@ -8,7 +8,7 @@
 # Behavior is proven in tests/ (CI runs it every commit) — call pytest on it from here.
 #
 # Discrimination: at main @ 80da9f5 no call site takes a trace store and all
-# four tests fail on an empty store.
+# five tests fail on an empty store.
 set -e
 
 # 1. The store is threaded beside the ledger to every call site

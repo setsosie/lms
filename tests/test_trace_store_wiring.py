@@ -9,6 +9,7 @@ import json
 
 import pytest
 
+from lms.lean.interface import LeanVerifier, VerificationResult, VerifierKind
 from tests.test_accounting import (
     ARTIFACT_RESPONSE,
     GROUP_RESPONSES,
@@ -18,6 +19,21 @@ from tests.test_accounting import (
     make_committee_society,
     make_society,
 )
+
+
+class FailsOnceVerifier(LeanVerifier):
+    """Rejects the first submission and accepts every later one."""
+
+    verifier_kind: VerifierKind = "real"
+    calls = 0
+
+    async def verify(self, code: str) -> VerificationResult:
+        self.calls += 1
+        if self.calls == 1:
+            return self._result(
+                success=False, code=code, error="unknown identifier 'foo'"
+            )
+        return self._result(success=True, code=code)
 
 
 def transcript_tokens(society) -> int:
@@ -85,3 +101,22 @@ async def test_checkpoint_writes_the_transcripts(tmp_path):
 
     saved = json.loads((tmp_path / "run" / "conversations.json").read_text())
     assert saved and saved[0]["turns"][-1]["content"] == ARTIFACT_RESPONSE
+
+
+@pytest.mark.asyncio
+async def test_iterative_log_keeps_artifact_ids_and_verifier_errors(tmp_path):
+    society = make_society(
+        n_agents=1,
+        responses=[ARTIFACT_RESPONSE],
+        verifier=FailsOnceVerifier(),
+        tmp_path=tmp_path,
+    )
+    society.iterative_mode = True
+    await society.run_generation(0)
+
+    [log] = society.trace_store.conversations
+    assert log.success is True
+    assert log.errors_encountered == ["unknown identifier 'foo'"]
+    # one artifact per attempt: the rejected one and the verified retry
+    assert len(log.artifacts_produced) == 2
+    assert transcript_tokens(society) == society.ledger.total_tokens

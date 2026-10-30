@@ -56,23 +56,23 @@ grep -n "trace_store\.\(add\|record\|log\|append\)" lms/*.py            # nothin
 > Every criterion needs something that can **accept** it — a command, or a human step in the
 > Outcome Demo.
 
-- [ ] `Agent.propose`, `Agent.propose_iterative`, `Agent.review`,
+- [x] `Agent.propose`, `Agent.propose_iterative`, `Agent.review`,
       `PlanningPanel` and `WorkingGroup` take an optional `trace_store`
       beside the ledger, and `Society` passes `self.trace_store` wherever it
       passes `self.ledger` (and to `propose`/`review`). `None` is a no-op
-- [ ] One `ConversationLog` per exchange the ledger records: one per
+- [x] One `ConversationLog` per exchange the ledger records: one per
       `propose`, `review`, panel call and group call. A `propose_iterative`
       session is one log holding every turn, retries and writeup included
-- [ ] Each log opens with the system prompt as a `system` turn. The user turn
+- [x] Each log opens with the system prompt as a `system` turn. The user turn
       that sent a request carries that call's prompt tokens; the assistant
       reply carries its completion tokens. So the transcripts' tokens equal
       `ledger.total_tokens` in flat, iterative and committee modes
-- [ ] Each log's `metadata["kind"]` names the exchange: `propose`, `review`,
+- [x] Each log's `metadata["kind"]` names the exchange: `propose`, `review`,
       `iterative`, `planning`, or the group call's ledger outcome
-- [ ] An iterative log records `success`, the produced artifact ids, and each
+- [x] An iterative log records `success`, the produced artifact ids, and each
       failed attempt's verifier error
-- [ ] `Society.save` writes the transcripts to `conversations.json`
-- [ ] `uv run pytest tests/test_trace_store_wiring.py -v` passes; all of its
+- [x] `Society.save` writes the transcripts to `conversations.json`
+- [x] `uv run pytest tests/test_trace_store_wiring.py -v` passes; all of its
       tests fail at `main`
 
 ---
@@ -144,11 +144,11 @@ run's `attempts.json`.
 
 #### Definition of Done
 
-- [ ] All acceptance criteria checked off
-- [ ] `scripts/verify/26Q4-01/verify_26Q4-HARN-02.sh` exits 0
+- [x] All acceptance criteria checked off
+- [x] `scripts/verify/26Q4-01/verify_26Q4-HARN-02.sh` exits 0
 - [ ] `uv run ruff format`, `uv run ruff check`, `uv run mypy` clean
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
-- [ ] Tests included with implementation
+- [x] Tests included with implementation
 - [ ] Outcome Demo run by a human validator (or the card explicitly says `N/A` and why)
 
 ---

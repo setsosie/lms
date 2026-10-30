@@ -17,6 +17,7 @@ from lms.lean.interface import VerificationResult, VerificationStatus
 from lms.prompts import get_prompt
 from lms.providers.base import BaseLLMProvider, Message, TokenUsage
 from lms.textbook import Textbook
+from lms.traces import TraceStore, open_conversation
 
 if TYPE_CHECKING:
     from lms.goals import Goal
@@ -235,6 +236,7 @@ class Agent:
         goal: "Goal | None" = None,
         textbook: Textbook | None = None,
         foundation: FoundationFile | None = None,
+        trace_store: TraceStore | None = None,
     ) -> AgentResponse:
         """Propose new artifacts given the current library and optional goal.
 
@@ -243,6 +245,7 @@ class Agent:
             goal: Optional goal to work towards (uses goal-directed prompts)
             textbook: Optional collective wisdom to search
             foundation: Optional foundation file with verified definitions to import
+            trace_store: Optional store the exchange is transcribed into
 
         Returns:
             AgentResponse with proposed artifacts, references, and token usage
@@ -288,6 +291,9 @@ class Agent:
             messages,
             system_prompt=system_prompt.content,
         )
+        open_conversation(
+            trace_store, self.id, self.generation, "propose", system_prompt.content
+        ).add_exchange(user_content, response.content, response.usage)
 
         # Parse artifacts from response
         proposed, referenced = self._parse_artifacts(response.content, response.usage)
@@ -308,6 +314,7 @@ class Agent:
         max_attempts: int = 5,
         foundation: FoundationFile | None = None,
         ledger: CostLedger | None = None,
+        trace_store: TraceStore | None = None,
     ) -> IterativeResponse:
         """Propose artifacts with multiple verification attempts.
 
@@ -327,6 +334,8 @@ class Agent:
             ledger: Optional cost ledger. When given, every generation call —
                 including ones that parse to zero artifacts — is recorded and
                 attributed to the statement it was spent on (or to overhead)
+            trace_store: Optional store the whole session is transcribed into,
+                as one log holding every turn
 
         Returns:
             IterativeResponse with all attempts and final writeup
@@ -383,6 +392,9 @@ Include error messages and how you fixed them. Be detailed - this helps future a
 """
 
         conversation.append(Message(role="user", content=initial_content))
+        log = open_conversation(
+            trace_store, self.id, self.generation, "iterative", system_prompt.content
+        )
 
         for attempt_num in range(1, max_attempts + 1):
             # Query LLM
@@ -391,6 +403,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 conversation,
                 system_prompt=system_prompt.content,
             )
+            log.add_exchange(conversation[-1].content, response.content, response.usage)
 
             tokens_used = response.usage.total_tokens if response.usage else 0
             total_tokens += tokens_used
@@ -425,6 +438,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             artifact = proposed[0]
             artifact.generation = self.generation
             artifact.created_by = self.id
+            log.artifacts_produced.append(artifact.id)
 
             # Non-None by the `not proposed[0].lean_code` guard above.
             lean_code = artifact.lean_code
@@ -473,6 +487,11 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                     conversation,
                     system_prompt=system_prompt.content,
                 )
+                log.add_exchange(
+                    conversation[-1].content,
+                    writeup_response.content,
+                    writeup_response.usage,
+                )
                 total_tokens += (
                     writeup_response.usage.total_tokens if writeup_response.usage else 0
                 )
@@ -484,6 +503,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                     outcome="writeup",
                 )
                 writeup, writeup_title = self._extract_writeup(writeup_response.content)
+                log.success = True
 
                 return IterativeResponse(
                     attempts=attempts,
@@ -495,6 +515,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 )
 
             # Failed - add error feedback for next attempt
+            log.errors_encountered.append(error or "Unknown error")
             if attempt_num < max_attempts:
                 conversation.append(
                     Message(
@@ -519,6 +540,11 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 writeup_response = await self.provider.generate(
                     conversation,
                     system_prompt=system_prompt.content,
+                )
+                log.add_exchange(
+                    conversation[-1].content,
+                    writeup_response.content,
+                    writeup_response.usage,
                 )
                 total_tokens += (
                     writeup_response.usage.total_tokens if writeup_response.usage else 0
@@ -740,11 +766,14 @@ Include error messages and how you fixed them. Be detailed - this helps future a
         re.DOTALL,
     )
 
-    async def review(self, pending: PendingReview) -> ReviewResult:
+    async def review(
+        self, pending: PendingReview, trace_store: TraceStore | None = None
+    ) -> ReviewResult:
         """Review another agent's artifact before LEAN verification.
 
         Args:
             pending: The pending review containing the artifact to review
+            trace_store: Optional store the exchange is transcribed into
 
         Returns:
             ReviewResult with decision, reasoning, and optional modified code
@@ -770,6 +799,9 @@ Include error messages and how you fixed them. Be detailed - this helps future a
             messages,
             system_prompt=system_prompt.content,
         )
+        open_conversation(
+            trace_store, self.id, self.generation, "review", system_prompt.content
+        ).add_exchange(user_content, response.content, response.usage)
 
         # Parse review from response
         return self._parse_review(response.content, response.usage)
