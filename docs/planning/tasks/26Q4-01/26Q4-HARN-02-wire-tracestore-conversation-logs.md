@@ -15,7 +15,7 @@ in committee transcripts buried in `textbook.json`.
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | MEDIUM |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-02-wire-tracestore-conversation-logs` |
 | **Dependencies** | None |
 | **PR Size Target** | <500 lines (max 1000) |

@@ -82,7 +82,7 @@ worked during the box runs because the runs are the user's to execute.
 |------|--------|--------|----|-------|
 | 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | ✅ DONE | #68, merged 2026-10-30 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
 | 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | ✅ DONE | #70, merged 2026-10-30 | Two of its checks read an untracked archive, so it failed on every clean checkout |
-| 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | 🔄 IN REVIEW | #72 | Threads the store beside the cost ledger (the user's choice): one `ConversationLog` per ledgered exchange. Not blocking R6: committee transcripts already land in `textbook.json` |
+| 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | ✅ DONE | #72, merged 2026-10-30 | Threads the store beside the cost ledger (the user's choice): one `ConversationLog` per ledgered exchange. Not blocking R6: committee transcripts already land in `textbook.json` |
 
 ## Pulled forward: Phase C preparation (2026-10-30)
 
@@ -147,6 +147,9 @@ the planning tooling). Cards for this sprint live under
 
 ## Sync Log
 
+- **2026-10-30 (later)** — #72 (`26Q4-HARN-02`) merged, so all three
+  found-work cards are done and no PR is open. This frees `lms/society.py`
+  for `26Q4-HARN-04`.
 - **2026-10-30** — #68 (`26Q4-HARN-01`) and #70 (`26Q4-CHORE-01`) merged;
   `26Q4-HARN-02` is in review as #72. Five Phase C preparation cards were
   pulled forward from the Sprint 5 pre-lock and #71 (the reset flag and the
