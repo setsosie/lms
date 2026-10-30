@@ -21,15 +21,18 @@ from tests.test_accounting import (
 )
 
 
-class FailsOnceVerifier(LeanVerifier):
-    """Rejects the first submission and accepts every later one."""
+class FailingVerifier(LeanVerifier):
+    """Rejects the first `failures` submissions and accepts every later one."""
 
     verifier_kind: VerifierKind = "real"
-    calls = 0
+
+    def __init__(self, failures: int = 1) -> None:
+        self.failures = failures
+        self.calls = 0
 
     async def verify(self, code: str) -> VerificationResult:
         self.calls += 1
-        if self.calls == 1:
+        if self.calls <= self.failures:
             return self._result(
                 success=False, code=code, error="unknown identifier 'foo'"
             )
@@ -90,6 +93,8 @@ async def test_iterative_session_is_one_log_holding_every_turn(tmp_path):
         True,
     )
     assert log.metadata["kind"] == "iterative"
+    # each request's prompt tokens on the turn that sent it, completion on the reply
+    assert [t.tokens for t in log.turns] == [0, 100, 50, 100, 50]
     assert transcript_tokens(society) == society.ledger.total_tokens
 
 
@@ -108,7 +113,7 @@ async def test_iterative_log_keeps_artifact_ids_and_verifier_errors(tmp_path):
     society = make_society(
         n_agents=1,
         responses=[ARTIFACT_RESPONSE],
-        verifier=FailsOnceVerifier(),
+        verifier=FailingVerifier(failures=1),
         tmp_path=tmp_path,
     )
     society.iterative_mode = True
@@ -120,3 +125,58 @@ async def test_iterative_log_keeps_artifact_ids_and_verifier_errors(tmp_path):
     # one artifact per attempt: the rejected one and the verified retry
     assert len(log.artifacts_produced) == 2
     assert transcript_tokens(society) == society.ledger.total_tokens
+
+
+@pytest.mark.asyncio
+async def test_iterative_log_records_a_session_that_never_verifies(tmp_path):
+    society = make_society(
+        n_agents=1,
+        responses=[ARTIFACT_RESPONSE],
+        verifier=FailingVerifier(failures=99),
+        tmp_path=tmp_path,
+    )
+    society.iterative_mode = True
+    society.max_attempts = 2
+    await society.run_generation(0)
+
+    [log] = society.trace_store.conversations
+    # two failed attempts, then the writeup the last failure asks for
+    assert [t.role for t in log.turns] == ["system"] + ["user", "assistant"] * 3
+    assert log.success is False
+    assert log.errors_encountered == ["unknown identifier 'foo'"] * 2
+    assert len(log.artifacts_produced) == 2
+    assert transcript_tokens(society) == society.ledger.total_tokens
+
+
+@pytest.mark.asyncio
+async def test_iterative_log_records_retries_that_produce_no_artifact(tmp_path):
+    society = make_society(n_agents=1, verifier=StubLeanVerifier(), tmp_path=tmp_path)
+    society.iterative_mode = True
+    society.max_attempts = 2
+    await society.run_generation(0)
+
+    [log] = society.trace_store.conversations
+    assert [t.role for t in log.turns] == ["system"] + ["user", "assistant"] * 2
+    assert (log.success, log.artifacts_produced, log.errors_encountered) == (
+        False,
+        [],
+        [],
+    )
+    assert transcript_tokens(society) == society.ledger.total_tokens
+
+
+@pytest.mark.asyncio
+async def test_committee_transcripts_carry_the_generation_the_ledger_does(tmp_path):
+    society = make_committee_society(
+        tmp_path,
+        PANEL_RESPONSES + GROUP_RESPONSES + [REVIEW_APPROVE],
+        use_planning_panel=True,
+    )
+    await society.run_generation(3)
+
+    by_kind = {
+        (log.metadata["kind"], log.generation)
+        for log in society.trace_store.conversations
+    }
+    assert {generation for _, generation in by_kind} == {3}, by_kind
+    assert {r.generation for r in society.ledger.records} == {3}

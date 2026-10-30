@@ -1146,6 +1146,11 @@ class Society:
                 f"Token budget exceeded: {self.total_tokens_used}/{self.max_tokens}"
             )
 
+        # Agents serve as the review committee here, and a reviewer stamps
+        # its records with its own generation.
+        for agent in self.agents:
+            agent.generation = generation
+
         # Initialize dependency graph from goal if not already done
         if self.dependency_graph is None and self.goal:
             self.dependency_graph = DependencyGraph.from_goal(self.goal)
