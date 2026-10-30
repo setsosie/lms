@@ -232,6 +232,9 @@ def test_a_run_that_verified_nothing_does_not_set_the_pooled_kind(tmp_path):
     assert i9.denominator_kind == "verified_novel"
     c9 = arm_report("C9", [write_run(tmp_path / "c", [novel("t1")], tags=TAGS)])
     assert paired_comparison(i9, c9, shared_statements(i9, c9)).both == 1
+    # An arm that verified nothing counts nothing under either rule.
+    zero = arm_report("Z", [empty])
+    assert paired_comparison(zero, c9, shared_statements(zero, c9)).b_only == 1
 
     # The goal makes a run unmeasurable whether or not it verified anything.
     barred = write_run(tmp_path / "b", [], tags=TAGS, forbidden=["Mathlib"])
