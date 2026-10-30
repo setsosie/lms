@@ -8,7 +8,7 @@ something on committee runs.
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | MEDIUM |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE (#50, merged 2026-08-20) |
 | **Branch** | `26Q3-HARN-16-committee-reuse-invisible` |
 | **Dependencies** | None |
 | **PR Size Target** | <300 lines |
