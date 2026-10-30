@@ -124,6 +124,18 @@ def test_novelty_labels_filter_and_their_absence_is_flagged(tmp_path):
     assert report.denominator_kind == "verified_lean_unfiltered"
 
 
+def test_a_goal_forbidding_mathlib_makes_the_arm_unmeasurable(tmp_path):
+    run = write_run(tmp_path / "r", [novel("0013")])
+    goal = json.loads((run / "goal.json").read_text())
+    goal["forbidden_imports"] = ["Mathlib"]
+    (run / "goal.json").write_text(json.dumps(goal))
+
+    report = arm_report("C9", [run])
+    assert report.denominator_kind == "unmeasurable"
+    assert report.cvfn_tokens_per_statement is None
+    assert "unmeasurable" in report.format()
+
+
 TAGS = [f"t{i}" for i in range(1, 11)]
 
 
