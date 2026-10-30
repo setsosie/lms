@@ -80,9 +80,27 @@ worked during the box runs because the runs are the user's to execute.
 
 | Task | Points | Status | PR | Notes |
 |------|--------|--------|----|-------|
-| 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | 🔄 IN REVIEW | #68 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
-| 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | 🔄 IN REVIEW | #70 | Two of its checks read an untracked archive, so it failed on every clean checkout |
-| 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | 🔲 PENDING | — | Needs its AC first: seven LLM call sites, and a choice between a provider wrapper and threading a store like the cost ledger. Not blocking R6: committee transcripts already land in `textbook.json` |
+| 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | ✅ DONE | #68, merged 2026-10-30 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
+| 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | ✅ DONE | #70, merged 2026-10-30 | Two of its checks read an untracked archive, so it failed on every clean checkout |
+| 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | 🔄 IN REVIEW | #72 | Threads the store beside the cost ledger (the user's choice): one `ConversationLog` per ledgered exchange. Not blocking R6: committee transcripts already land in `textbook.json` |
+
+## Pulled forward: Phase C preparation (2026-10-30)
+
+The user waived the risk register's "no new card until R4 has run" rule for
+these five cards on 2026-10-30. The box runs are the user's to execute, and
+code finished now makes the Phase C arms runnable as soon as R4 picks the slice.
+None of them is a DoD item and none blocks R4–R6. Rows are ordered so that the
+file-disjoint cards come first: HARN-25 shares `society.py` with `26Q4-HARN-04`
+and `dependency.py` with HARN-27, and HARN-28 depends on HARN-25.
+`26Q4-HARN-03` and `-04` are carded in #71 (ADR 0003).
+
+| Task | Points | Status | PR | Notes |
+|------|--------|--------|----|-------|
+| 26Q4-HARN-04: Reset the foundation to its seed at every generation (the R9 arm) | 2 | 🔲 PENDING | — | ADR 0003's R9 arm; the flag defaults off |
+| 26Q4-HARN-03: Arm-comparison report: pooled isolated arm, distinct statements, paired tests | 3 | 🔲 PENDING | — | Reads saved run directories; reports C9 − I9 and C9 − R9 |
+| 26Q3-HARN-27: Source-anchored dependency edges | 3 | 🔲 PENDING | — | Every goal graph is a chain today; the 9-agent arm needs more than one AVAILABLE task |
+| 26Q3-HARN-25: Proof sketches become open leaves | 5 | 🔲 PENDING | — | Prerequisite for HARN-28's `statement` field |
+| 26Q3-HARN-28: Theorem cards and statement pinning | 5 | 🔲 PENDING | — | Depends on HARN-25. Holds the ANT arc → goal converter; no ANT goal exists without it |
 
 ## Definition of Done
 
@@ -107,7 +125,7 @@ Read the gate histogram's *shape*, not its total.
 
 | Risk | Mitigation | Task |
 |------|------------|------|
-| Found-work displaces the runs again, as it did all of Sprint 3 | No new card enters this sprint until R4 has run. New defects card to Sprint 5 unless they block R4 or R5 | — |
+| Found-work displaces the runs again, as it did all of Sprint 3 | No new card enters this sprint until R4 has run. New defects card to Sprint 5 unless they block R4 or R5. **Waived 2026-10-30 for the five Phase C preparation cards**: the runs are the user's, and the code work does not compete with them for box time | — |
 | The restored box is missing pieces (home contents, toolchain, library cache) | R0 is read-only and comes first. Re-provision from R1–R3, not from memory | R0–R3 |
 | Arc drafts fail to elaborate at the pin | 28/41 elaborated against a newer build; every failure was already SCHEMATIC. Repair any non-SCHEMATIC failure in one PR and re-run R4 | R4 |
 | Both arcs measure ~zero N1 | **That is the sprint succeeding.** CVFN is undefined at current scope; go to Phase E early. Do not widen the slice until something scores | DoD 5 |
@@ -119,7 +137,7 @@ Read the gate histogram's *shape*, not its total.
 | Task | Points | Why |
 |------|--------|-----|
 | Gate B + Phase C (two-arm calibration run, ADR 0001) | TBD | Sprint 5 pre-lock. Entry-gated on DoD 1 |
-| 26Q3-HARN-25 / -26 / -27 / -28: proof sketches and the DAG phase | 5 / 5 / 3 / 5 | Sprint 5 pre-lock (`docs/planning/dag-phase.md`) |
+| 26Q3-HARN-26: close leaves and auto-resolve parents | 5 | Sprint 5 pre-lock (`docs/planning/dag-phase.md`). HARN-25, -27 and -28 were pulled forward on 2026-10-30 |
 | 26Q3-HARN-06: D4 side-by-side review view | 3 | Needed before Phase D, whose dates are TBD |
 | 26Q3-HARN-08: agents emit Lean 3, not Lean 4 | 2 | **Re-evidence or close.** Still no evidence the defect exists |
 
@@ -128,6 +146,12 @@ the planning tooling). Cards for this sprint live under
 `docs/planning/tasks/26Q3-01/`.
 
 ## Sync Log
+
+- **2026-10-30** — #68 (`26Q4-HARN-01`) and #70 (`26Q4-CHORE-01`) merged;
+  `26Q4-HARN-02` is in review as #72. Five Phase C preparation cards were
+  pulled forward from the Sprint 5 pre-lock and #71 (the reset flag and the
+  arm report from ADR 0003, plus HARN-25, -27 and -28), so the arms are
+  runnable once R4 picks the slice.
 
 - **2026-10-20** — The box is up; the user starts the runbook. #66
   (`26Q3-HARN-20` Part 2, DoD 4) and #67 (R6 + sbatch knobs) merged, so R4
@@ -143,4 +167,4 @@ the planning tooling). Cards for this sprint live under
 
 ---
 
-*Last Updated: 2026-10-20*
+*Last Updated: 2026-10-30*
