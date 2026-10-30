@@ -465,6 +465,7 @@ class Society:
                 goal=self.goal,
                 textbook=self.textbook,
                 foundation=self.foundation,
+                trace_store=self.trace_store,
             )
             return response, time.monotonic() - start
 
@@ -894,7 +895,7 @@ class Society:
     ) -> tuple[ReviewResult, float]:
         """Run one review and measure its wall-clock."""
         start = time.monotonic()
-        result = await agent.review(pending)
+        result = await agent.review(pending, trace_store=self.trace_store)
         return result, time.monotonic() - start
 
     def _ledger_propose_response(
@@ -985,6 +986,7 @@ class Society:
                 max_attempts=self.max_attempts,
                 foundation=self.foundation,
                 ledger=self.ledger,
+                trace_store=self.trace_store,
             )
             for agent in self.agents
         ]
@@ -1144,6 +1146,11 @@ class Society:
                 f"Token budget exceeded: {self.total_tokens_used}/{self.max_tokens}"
             )
 
+        # Agents serve as the review committee here, and a reviewer stamps
+        # its records with its own generation.
+        for agent in self.agents:
+            agent.generation = generation
+
         # Initialize dependency graph from goal if not already done
         if self.dependency_graph is None and self.goal:
             self.dependency_graph = DependencyGraph.from_goal(self.goal)
@@ -1182,6 +1189,7 @@ class Society:
                 foundation_summary=foundation_summary,
                 n_groups=self.n_working_groups,
                 ledger=self.ledger,
+                trace_store=self.trace_store,
             )
             assignments = await panel.run_session(generation)
             # Panel spend used to be dropped on the floor: not in the ledger,
@@ -1231,6 +1239,7 @@ class Society:
                 foundation_summary=foundation_summary,
                 ledger=self.ledger,
                 generation=generation,
+                trace_store=self.trace_store,
             )
             groups.append(group)
 

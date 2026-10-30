@@ -13,11 +13,13 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from lms.providers.base import Message
+from lms.traces import open_conversation
 
 if TYPE_CHECKING:
     from lms.accounting import CostLedger
     from lms.dependency import DependencyGraph, DependencyNode
     from lms.textbook import Textbook
+    from lms.traces import TraceStore
 
 
 class Vote(Enum):
@@ -196,6 +198,7 @@ class PlanningPanel:
         foundation_summary: str = "",
         n_groups: int = 3,
         ledger: CostLedger | None = None,
+        trace_store: TraceStore | None = None,
     ):
         """Initialize the planning panel.
 
@@ -206,6 +209,7 @@ class PlanningPanel:
             foundation_summary: Summary of what's in Foundation.lean
             n_groups: Number of working groups to assign tasks to
             ledger: Cost ledger to record panel spend into (as overhead)
+            trace_store: Optional store each panel call is transcribed into
         """
         self.provider = provider
         self.graph = graph
@@ -213,6 +217,7 @@ class PlanningPanel:
         self.foundation_summary = foundation_summary
         self.n_groups = n_groups
         self.ledger = ledger
+        self.trace_store = trace_store
         self.tokens_used = 0  # Session total, for the society's aggregates
 
     async def run_session(self, generation: int) -> list[WorkingGroupAssignment]:
@@ -412,7 +417,11 @@ class PlanningPanel:
                 wall_clock_s=elapsed,
                 outcome="planning",
             )
-        return self._extract_content(response)
+        content = self._extract_content(response)
+        open_conversation(
+            self.trace_store, member_id, generation, "planning", system_prompt
+        ).add_exchange(prompt, content, usage)
+        return content
 
     async def _get_chair_proposal(self, session: PlanningSession) -> PlanningProposal:
         """Get the Chair's initial proposal."""

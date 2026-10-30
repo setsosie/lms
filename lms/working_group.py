@@ -15,9 +15,11 @@ from typing import TYPE_CHECKING, Any
 
 from lms.accounting import AttemptRecord, statement_key
 from lms.providers.base import Message
+from lms.traces import open_conversation
 
 if TYPE_CHECKING:
     from lms.accounting import CostLedger
+    from lms.traces import TraceStore
 
 
 class Role(Enum):
@@ -251,6 +253,7 @@ class WorkingGroup:
         foundation_summary: str = "",
         ledger: CostLedger | None = None,
         generation: int = 0,
+        trace_store: TraceStore | None = None,
     ):
         """Initialize a working group.
 
@@ -260,12 +263,14 @@ class WorkingGroup:
             foundation_summary: Summary of what's in Foundation.lean
             ledger: Cost ledger to record the session's spend into
             generation: Generation number stamped on ledger records
+            trace_store: Optional store each group call is transcribed into
         """
         self.config = config
         self.provider = provider
         self.foundation_summary = foundation_summary
         self.ledger = ledger
         self.generation = generation
+        self.trace_store = trace_store
         self.tokens_used = 0  # Session total, for the society's aggregates
         self.state = WorkingGroupState(config=config)
 
@@ -501,7 +506,11 @@ references, and notes fields."""
                     outcome=outcome,
                 )
             )
-        return self._extract_content(response)
+        content = self._extract_content(response)
+        open_conversation(
+            self.trace_store, member_id, self.generation, outcome, system_prompt
+        ).add_exchange(prompt, content, usage)
+        return content
 
     def _extract_content(self, response) -> str:
         """Extract content string from provider response.

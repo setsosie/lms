@@ -8,7 +8,10 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from lms.providers.base import TokenUsage
 
 
 @dataclass
@@ -38,15 +41,25 @@ class ConversationLog:
     artifacts_produced: list[str] = field(default_factory=list)
     errors_encountered: list[str] = field(default_factory=list)
 
-    def add_turn(
-        self, role: str, content: str, tokens: int = 0
-    ) -> None:
+    def add_turn(self, role: str, content: str, tokens: int = 0) -> None:
         """Add a conversation turn."""
-        self.turns.append(ConversationTurn(
-            role=role,
-            content=content,
-            tokens=tokens,
-        ))
+        self.turns.append(
+            ConversationTurn(
+                role=role,
+                content=content,
+                tokens=tokens,
+            )
+        )
+
+    def add_exchange(self, prompt: str, reply: str, usage: "TokenUsage | None") -> None:
+        """Add one request and its reply.
+
+        The prompt turn carries the call's input tokens and the reply its
+        output tokens, so a log totals what the cost ledger records for the
+        same calls.
+        """
+        self.add_turn("user", prompt, tokens=usage.input_tokens if usage else 0)
+        self.add_turn("assistant", reply, tokens=usage.output_tokens if usage else 0)
 
     def total_tokens(self) -> int:
         """Total tokens across all turns."""
@@ -80,7 +93,8 @@ class ReasoningTrace:
     Captures breakthroughs, error diagnoses, strategy shifts, etc.
     """
 
-    trace_type: str  # "breakthrough", "error_fix", "strategy_shift", "reference_success"
+    # "breakthrough", "error_fix", "strategy_shift", "reference_success"
+    trace_type: str
     agent_id: str
     generation: int
     description: str
@@ -184,17 +198,21 @@ class TraceStore:
         """Save all traces to JSON files."""
         # Save conversations
         conversations_path = path / "conversations.json"
-        conversations_path.write_text(json.dumps(
-            [c.to_dict() for c in self.conversations],
-            indent=2,
-        ))
+        conversations_path.write_text(
+            json.dumps(
+                [c.to_dict() for c in self.conversations],
+                indent=2,
+            )
+        )
 
         # Save reasoning traces
         traces_path = path / "reasoning_traces.json"
-        traces_path.write_text(json.dumps(
-            [t.to_dict() for t in self.traces],
-            indent=2,
-        ))
+        traces_path.write_text(
+            json.dumps(
+                [t.to_dict() for t in self.traces],
+                indent=2,
+            )
+        )
 
     @classmethod
     def load(cls, path: Path) -> "TraceStore":
@@ -214,34 +232,42 @@ class TraceStore:
                     metadata=conv_data.get("metadata", {}),
                 )
                 for turn_data in conv_data.get("turns", []):
-                    log.turns.append(ConversationTurn(
-                        role=turn_data["role"],
-                        content=turn_data["content"],
-                        timestamp=turn_data.get("timestamp", ""),
-                        tokens=turn_data.get("tokens", 0),
-                    ))
+                    log.turns.append(
+                        ConversationTurn(
+                            role=turn_data["role"],
+                            content=turn_data["content"],
+                            timestamp=turn_data.get("timestamp", ""),
+                            tokens=turn_data.get("tokens", 0),
+                        )
+                    )
                 store.conversations.append(log)
 
         traces_path = path / "reasoning_traces.json"
         if traces_path.exists():
             data = json.loads(traces_path.read_text())
             for trace_data in data:
-                store.traces.append(ReasoningTrace(
-                    trace_type=trace_data["trace_type"],
-                    agent_id=trace_data["agent_id"],
-                    generation=trace_data["generation"],
-                    description=trace_data["description"],
-                    context=trace_data["context"],
-                    outcome=trace_data["outcome"],
-                    related_artifacts=trace_data.get("related_artifacts", []),
-                    timestamp=trace_data.get("timestamp", ""),
-                ))
+                store.traces.append(
+                    ReasoningTrace(
+                        trace_type=trace_data["trace_type"],
+                        agent_id=trace_data["agent_id"],
+                        generation=trace_data["generation"],
+                        description=trace_data["description"],
+                        context=trace_data["context"],
+                        outcome=trace_data["outcome"],
+                        related_artifacts=trace_data.get("related_artifacts", []),
+                        timestamp=trace_data.get("timestamp", ""),
+                    )
+                )
 
         return store
 
     def get_breakthroughs(self) -> list[ReasoningTrace]:
         """Get all breakthrough traces."""
-        return [t for t in self.traces if t.trace_type in ("breakthrough", "reference_success")]
+        return [
+            t
+            for t in self.traces
+            if t.trace_type in ("breakthrough", "reference_success")
+        ]
 
     def get_by_generation(self, generation: int) -> list[ConversationLog]:
         """Get all conversations from a specific generation."""
@@ -257,3 +283,24 @@ class TraceStore:
             "breakthroughs": len(self.get_breakthroughs()),
             "total_tokens": sum(c.total_tokens() for c in self.conversations),
         }
+
+
+def open_conversation(
+    store: TraceStore | None,
+    agent_id: str,
+    generation: int,
+    kind: str,
+    system_prompt: str,
+) -> ConversationLog:
+    """Start a conversation log, kept in `store` when one is given.
+
+    Without a store the log is built and dropped, so call sites record into
+    it without None checks of their own.
+    """
+    log = ConversationLog(
+        agent_id=agent_id, generation=generation, metadata={"kind": kind}
+    )
+    log.add_turn("system", system_prompt)
+    if store is not None:
+        store.add_conversation(log)
+    return log

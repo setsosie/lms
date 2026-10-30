@@ -74,7 +74,12 @@ correct `IsPullback` plus a uniqueness-up-to-iso theorem, on
 **Fix:** wrap candidates in the same preamble the foundation uses. One line.
 Weaker models omit boilerplate more often, so this taxes Qwen hardest.
 
-### 2. Conversations are never recorded
+### 2. Conversations are never recorded ✅ FIXED
+
+> **Fixed in PR #72.** Every exchange the cost ledger records now lands in
+> `conversations.json`: one log per propose, review, panel and group call,
+> and one per iterative session, with a token total equal to the ledger's.
+> `reasoning_traces.json` is still empty; breakthrough detection is not wired.
 
 `TraceStore.add_conversation()` and `add_trace()` exist and are **never called
 anywhere in `lms/`**. The only reference is `trace_store.save()` at
