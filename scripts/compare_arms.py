@@ -33,6 +33,9 @@ def _parse_arm(spec: str) -> tuple[str, list[Path]]:
     name, sep, dirs = spec.partition("=")
     if not sep or not name or not dirs:
         raise argparse.ArgumentTypeError(f"expected NAME=DIR[,DIR...], got {spec!r}")
+    for d in dirs.split(","):
+        if not d or not Path(d).is_dir():
+            raise argparse.ArgumentTypeError(f"no run directory {d!r} in {spec!r}")
     return name, [Path(d) for d in dirs.split(",")]
 
 
