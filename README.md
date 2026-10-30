@@ -6,12 +6,15 @@ mathematics, and does what they accumulate ratchet or merely pile up?
 
 ## What changed in September 2026
 
-On 2026-09-03 Anthropic reported that a swarm of frontier-model agents produced
+On 2026-09-04 Anthropic reported that dozens of frontier-model agents produced
 a Lean 4 proof of Fermat's Last Theorem in 11 days (13M lines, ~30K theorems,
-Lean's three standard axioms). Their first harness — a Claude Code multi-agent
-loop — failed the way this project's runs fail: agents lost track of the
-project's state. The same model succeeded once the work moved onto Prove2Me's
-immutable statement DAG, with proof sketches and search-before-propose.
+Lean's three standard axioms). Its initial attempts failed the way this
+project's runs fail: agents "quickly lost track of the project's state and
+stopped collaborating effectively". The effort succeeded after the switch to
+Prove2Me's statement DAG, run with a Claude Code-based multi-agent harness. The
+sources do not say whether the failed attempts used the same model or harness,
+so the switch is suggestive, not a controlled harness comparison
+(`docs/planning/org-structures.md`).
 
 Whether LLM collectives with a proof assistant *can* formalize research
 mathematics is therefore no longer this project's question. See

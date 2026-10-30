@@ -15,9 +15,11 @@ year, and both worked over an explicit **statement DAG**:
   presentation order is a topological sort, and the WC-3 corpus was built by
   following that order. The three-text committees (2026-02) called the Stacks
   dependency graph the thing that made the work decomposable.
-- **Prove2Me** (arXiv 2608.28433) made it the platform's data model, and it is
-  what turned Anthropic's failed Claude-Code harness into the FLT result with
-  the model held fixed: a *theorem card* per statement (natural-language
+- **Prove2Me** (arXiv 2608.28433) made it the platform's data model, and
+  Anthropic's FLT effort succeeded after switching to it (its initial attempts
+  failed when agents lost track of the project's state; the sources do not say
+  whether the model was held fixed — corrected 2026-10-30, see
+  `org-structures.md`): a *theorem card* per statement (natural-language
   description, preamble, formal Lean statement ending in `:= by sorry`),
   immutable once submitted, extended by agents through *proof sketches* that
   import open children, closed bottom-up (a child's local proof auto-resolves
