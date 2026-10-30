@@ -335,7 +335,12 @@ def _forbidden_mathlib(run_dir: Path) -> list[str] | None:
     ]
 
 
-def _counts_as_novel(artifact: dict[str, Any]) -> bool:
+def counts_as_novel(artifact: dict[str, Any]) -> bool:
+    """Whether an artifact's novelty label clears Gate 4.
+
+    A decisive N1, or an N2/N3 D4 verdict. Readers outside this module call
+    this rather than restating the rule.
+    """
     level = artifact.get("novelty_level")
     if level not in NOVEL_LEVELS:
         return False
@@ -343,6 +348,9 @@ def _counts_as_novel(artifact: dict[str, Any]) -> bool:
         return True  # N2/N3 are D4 verdicts, already signed off
     confidence = artifact.get("novelty_confidence")
     return confidence is not None and confidence >= DECISIVE_N1_CONFIDENCE
+
+
+_counts_as_novel = counts_as_novel
 
 
 def cvfn_report(run_dir: Path) -> CVFNReport:
