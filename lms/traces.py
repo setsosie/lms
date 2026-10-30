@@ -93,9 +93,8 @@ class ReasoningTrace:
     Captures breakthroughs, error diagnoses, strategy shifts, etc.
     """
 
-    trace_type: (
-        str  # "breakthrough", "error_fix", "strategy_shift", "reference_success"
-    )
+    # "breakthrough", "error_fix", "strategy_shift", "reference_success"
+    trace_type: str
     agent_id: str
     generation: int
     description: str
@@ -291,7 +290,7 @@ def open_conversation(
     agent_id: str,
     generation: int,
     kind: str,
-    system_prompt: str | None = None,
+    system_prompt: str,
 ) -> ConversationLog:
     """Start a conversation log, kept in `store` when one is given.
 
@@ -301,8 +300,7 @@ def open_conversation(
     log = ConversationLog(
         agent_id=agent_id, generation=generation, metadata={"kind": kind}
     )
-    if system_prompt:
-        log.add_turn("system", system_prompt)
+    log.add_turn("system", system_prompt)
     if store is not None:
         store.add_conversation(log)
     return log

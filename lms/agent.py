@@ -392,6 +392,8 @@ Include error messages and how you fixed them. Be detailed - this helps future a
 """
 
         conversation.append(Message(role="user", content=initial_content))
+        # Stored before the first call, so a provider error mid-session keeps
+        # the turns the ledger has already been charged for.
         log = open_conversation(
             trace_store, self.id, self.generation, "iterative", system_prompt.content
         )
