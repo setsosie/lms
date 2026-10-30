@@ -66,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
 
     arms: dict[str, ArmReport] = {}
     for name, dirs in args.arm:
+        if name in arms:
+            parser.error(f"--arm {name!r} given twice")
         arms[name] = arm_report(name, dirs)
     for a, b in args.pair:
         for missing in {a, b} - arms.keys():
@@ -79,11 +81,11 @@ def main(argv: list[str] | None = None) -> int:
         print()
         try:
             statements = shared_statements(arms[a], arms[b])
+            result = paired_comparison(arms[a], arms[b], statements)
         except ValueError as exc:
             print(f"{a} vs {b}: refused, {exc}")
             pairs.append({"a": a, "b": b, "refused": str(exc)})
             continue
-        result = paired_comparison(arms[a], arms[b], statements)
         print(result.format())
         pairs.append(asdict(result))
 
