@@ -214,8 +214,22 @@ could not fit, then runs the calibration itself. Detail in
 - Carries `26Q3-HARN-06` (D4 side-by-side review view) — Phase D opens
   2026-09-21 under the revised calendar, and a bad review format would make
   Phase D measure the wrong thing.
+- **Amended 2026-10-30 (`decisions/0003-*.md`, Accepted)** — Phase C's local
+  arm becomes S1 / C9 / I9 / R9 at 2M each (8M, up from 4M), run sequentially.
+  Two cards enter this pre-lock:
+  - **`26Q4-HARN-03`** (3) — arm-comparison report: pooled isolated arm,
+    distinct-statement denominators, paired per-statement tests. Report-only.
+  - **`26Q4-HARN-04`** (2) — `--reset-each-generation`, producing R9. Defaults
+    off, so the other arms run the frozen behaviour.
+  Queued behind Phase C, not in this pre-lock: the organization sweep's cards
+  `26Q4-HARN-05` (best-of-k), `-06` (coordinator–worker), `-07` (swarm, 2
+  parts) and `-08` (provider pool), staged in `org-structures.md`.
+  Card amendments the same day, not Phase C blockers: `26Q4-EVO-03`
+  (survivors re-evaluated; winner vs control on fresh confirmation runs;
+  repeatability gate) and `26Q3-HARN-06` (blinded D4 decoys and a
+  per-statement correspondence record).
 
-**Sizing note**: `-03` + Gate B + Phase C exceeds a lighter-sprint budget.
+**Sizing note**: `26Q3-HARN-03` + Gate B + Phase C exceeds a lighter-sprint budget.
 The 3-agent local config is already cut (ADR 0001) — 1 and 9 test the
 population-size hypothesis at its extremes. Decide any further cut at Sprint 5
 planning with Sprint 4's N1 numbers in hand.

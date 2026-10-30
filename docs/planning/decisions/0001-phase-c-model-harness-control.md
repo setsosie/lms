@@ -78,3 +78,11 @@ the execution path.
 - Anthropic, "Formalizing Fermat's Last Theorem" (2026-09); Chen, Marwaha, Lu,
   Yuen, Peng, "Prove2Me: An Open Collaborative Platform for Scaling Math
   Formalization" (arXiv 2608.28433)
+- Amended by [[0003]] (arm set and analysis)
+
+Amended by [[0003]] on 2026-10-30. Corrected 2026-10-30: the Prove2Me sentence
+quoted in Context is in §5, not §7; the FLT sources do not name the failed
+attempts' harness or say the model was held fixed ("Claude Code-based
+multi-agent harness" describes the successful run, with Prove2Me); the page is
+dated 2026-09-04. The decision stands: Prove2Me §5 itself calls model and
+harness confounded (`docs/planning/org-structures.md`).

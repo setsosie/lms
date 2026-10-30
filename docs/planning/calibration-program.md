@@ -99,13 +99,25 @@ pre-commitment, not a decision to make in the moment.
   accounting. *Local arm*: Qwen3.6-27B-FP8 at 1 and 9 agents. *Control arm*:
   one frontier API model at 9 agents, then 1 if budget remains. This yields
   CVFN, the population-size comparison, **and** the model-vs-harness
-  attribution the Prove2Me paper (arXiv 2608.28433 §7) leaves to future work.
+  attribution the Prove2Me paper (arXiv 2608.28433 §5) leaves to future work.
   ~~1 / 3 / 9 agents on one model~~ — a Qwen-only result cannot say whether a
   bad number is the model or the harness.
 - **Budget**: 2M tokens per local config (4M total, hard-capped); the control
   arm is capped at $300 with tokens recorded, so the arms compare on tokens
   too. If a config exhausts its budget at zero verified statements, that is a
   result — record and stop.
+
+> **Amended 2026-10-30 (`decisions/0003-phase-c-isolated-reset-single-arms.md`,
+> Accepted; amends ADR 0001).** Committee `--agents 1` is nine role sessions
+> plus a panel and a reviewer, not one loop, and no arm removes the shared
+> foundation. The local arm becomes four configs at 2M each (8M): **S1**
+> single loop (flat `--iterative --agents 1`, replacing committee-1), **C9**
+> collective, **I9** nine S1 runs at 2M/9 each pooled, **R9** C9 with the
+> foundation reset every generation. C9 − I9 is the collective's gain over
+> the same compute in isolation; C9 − R9 is the ratchet. Every denominator
+> counts distinct statements, and arms are compared statement by statement
+> (`26Q4-HARN-03`). R9 needs `26Q4-HARN-04`. **No two runs execute
+> concurrently** against one `lean/` tree: `Foundation.lean` is a fixed path.
 
 **Gate C**: ≥1 statement clears all five machine gates in at least one config.
 If zero across all three, the finding is "the pipeline cannot produce novel

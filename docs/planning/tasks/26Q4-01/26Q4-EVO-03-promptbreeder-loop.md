@@ -40,6 +40,17 @@ The genome is the JSON object `--prompt-file` accepts — in v0, override
 role prompts) stays at base so fitness differences are attributable to the
 one prompt under selection.
 
+**Amended 2026-10-30 — selection inflates the scores it selects on.** As first
+written, the loop evaluated only unevaluated genomes, so a survivor kept the
+single score it was selected for. The maximum of several noisy scores
+overstates its genome's true fitness, so survivors carried an upward bias into
+every later generation, and the final "evolution beat the hand-written prompt"
+comparison was made on those same inflated scores. The criteria below now
+separate the **selection pool** (evaluations used to choose) from **fresh
+confirmation** (evaluations never used to choose), and the decision gates add a
+repeatability check: if run-to-run noise is as large as the differences between
+genomes, selection acts on noise, which the ~0-score gate below does not catch.
+
 ---
 
 #### Acceptance Criteria
@@ -58,10 +69,22 @@ one prompt under selection.
       (`create_provider("anthropic", ...)`) — no new client code, and the
       breeder's token spend is tracked and reported per generation
 - [ ] `scripts/breeder/breed.py`: one *breeding generation* per invocation —
-      evaluate unevaluated genomes (via `26Q4-EVO-02`, sequential is fine in
-      v0), truncation-select survivors, breed replacements, write the
-      population file, print a one-screen generation report (best/median
-      fitness, spend). Loop = invoke repeatedly; cron/sbatch-friendly
+      evaluate every genome in the population once more (via `26Q4-EVO-02`,
+      sequential is fine in v0) **including survivors**, rank on the mean of
+      each genome's selection-pool evaluations, truncation-select survivors,
+      breed replacements, write the population file, print a one-screen
+      generation report (best/median mean fitness, evaluations per genome,
+      spend). Loop = invoke repeatedly; cron/sbatch-friendly
+- [ ] Every fitness record carries `pool: "selection" | "confirmation"`;
+      ranking reads only `selection` records
+- [ ] `scripts/breeder/breed.py --confirm K` runs K fresh evaluations each of
+      the current best genome and the hand-written control, on a token budget
+      stated separately from the breeding budget, records them as
+      `confirmation`, and reports both genomes' selection-pool mean beside
+      their confirmation mean. "Evolution beat the control" is claimed only
+      from the confirmation means
+- [ ] Tests: ranking ignores `confirmation` records; a survivor's mean updates
+      when it is re-evaluated; `--confirm` never changes the ranking
 - [ ] Seed population: current `agent_system_goal` base content plus N-1
       breeder-generated variants of it, so generation 0 contains the
       hand-written prompt as the control that evolution must beat
@@ -95,6 +118,11 @@ one prompt under selection.
   outcome, and the honest response is to shrink the evaluation slice or
   improve the base prompt by hand first, not to burn budget on selection
   with no gradient.
+- **Repeatability gate** (before breeding generation 1): run EVO-02's
+  `--repeats 2` on every generation-0 genome. If the variance between genome
+  means does not exceed the mean within-genome (run-to-run) variance, stop and
+  report: the scores carry no heritable signal at this evaluation size, and the
+  response is a larger or more uniform evaluation, not more generations.
 - If the breeder model starts producing prompts that game partial credit
   (e.g. maximizing trivially-compilable output), that is a fitness-shaping
   bug in EVO-02's weights — fix it there, do not patch operators.

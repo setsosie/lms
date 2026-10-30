@@ -8,9 +8,10 @@
 
 ## Research question (revised 2026-09-04)
 
-On 2026-09-03 Anthropic reported a Lean 4 proof of Fermat's Last Theorem by a
-swarm of frontier-model agents in 11 days via the Prove2Me statement DAG; their
-own Claude-Code multi-agent harness had failed first, with the same model.
+On 2026-09-04 Anthropic reported a Lean 4 proof of Fermat's Last Theorem by
+dozens of frontier-model agents in 11 days via the Prove2Me statement DAG; their
+initial attempts had failed when agents lost track of the project's state. The
+sources do not say whether the model or harness changed between attempts.
 "Can LLM collectives + Lean formalize" is answered elsewhere. What this project
 measures, on open models and owned hardware:
 
