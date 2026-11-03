@@ -196,8 +196,9 @@ uv run python -c "from pathlib import Path; from lms.goals import Goal; from lms
 ```
 **Expect**: `Available: 18 | In Progress: 0 | Blocked: 22`; a list of 18 tags
 that includes `003Y`, `02XK`, `02XN` and excludes `02XO`; and
-`['02XK', '02XL']`. On the box, the next committee run's planning-panel
-output shows three distinct tags assigned in generation 0 for the first time.
+`['02XK', '02XL']`. On the box, runbook step R7 (a committee run on this goal)
+shows the planning panel assigning three distinct tags in generation 0 for the
+first time. R6 can't show this, because its goal has no edges.
 
 ---
 

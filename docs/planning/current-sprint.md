@@ -71,6 +71,7 @@ Sprint 3. They are still what this sprint is for.
 | R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 3 | 🔲 PENDING | Expect some non-SCHEMATIC drafts to fail at the pin; repair them in one PR and re-run |
 | R5 | CVFN denominator from a real run | 4 | 🔲 PENDING | R5a if a run's `attempts.json` survived the restore, else R5b (a small real run) |
 | R6 | Committee re-run, `committee_fix_c` config at TP=2 | — | 🔲 PENDING | Not a DoD item: the first post-box experiment (#67, merged 2026-10-20). Resuming after a walltime needs #68 |
+| R7 | Three groups on three tags: one committee generation on `stacks-kernel-track-b` | — | 🔲 PENDING | Not a DoD item: the box half of HARN-27's Outcome Demo. R6's goal has no edges, so it can't show this |
 
 ## Found-work (unpointed)
 
