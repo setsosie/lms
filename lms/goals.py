@@ -114,6 +114,9 @@ class StacksDefinition:
     content: str  # The actual mathematical content
     formalized: bool = False  # Has this been formalized?
     artifact_ids: list[str] = field(default_factory=list)  # Artifacts addressing this
+    # Tags this statement is built from, as the source states them. None means
+    # the goal states no edges and the dependency graph infers them instead.
+    requires: list[str] | None = None
 
 
 @dataclass
@@ -241,6 +244,9 @@ class Goal:
                 for d in self.definitions
             ],
         }
+        for entry, d in zip(data["definitions"], self.definitions):
+            if d.requires is not None:
+                entry["requires"] = d.requires
         if self.allowed_imports is not None:
             data["allowed_imports"] = self.allowed_imports
         # Always written, even as null: a goal.json without the key predates
@@ -255,7 +261,8 @@ class Goal:
         """Load goal state from JSON.
 
         The three policy fields are optional (`data.get`) so goal files saved
-        before they were serialized stay loadable.
+        before they were serialized stay loadable; a definition without
+        `requires` takes the field's None default the same way.
         """
         data = json.loads(path.read_text())
         return cls(

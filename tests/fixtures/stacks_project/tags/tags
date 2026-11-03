@@ -1,0 +1,9 @@
+# Fixture tags file, same shape as the Stacks Project's tags/tags
+#	tag,full_label
+0A01,alpha-section-intro
+0A02,alpha-definition-thing
+0A03,alpha-lemma-thing-basic
+0A04,alpha-definition-other
+0A05,alpha-lemma-uses-later
+0A06,alpha-lemma-later
+0B01,beta-definition-descent

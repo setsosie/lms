@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import Enum
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -183,9 +184,10 @@ class DependencyGraph:
     def from_goal(cls, goal: Goal) -> DependencyGraph:
         """Build a DependencyGraph from a Goal's definitions.
 
-        This infers dependencies from section ordering within chapters,
-        and makes first nodes of later chapters depend on last nodes of
-        earlier chapters.
+        When any definition states `requires`, those edges are the graph
+        (explicit mode). Otherwise dependencies are inferred from section
+        ordering within chapters, and first nodes of later chapters depend on
+        last nodes of earlier chapters.
         """
         graph = cls()
 
@@ -207,11 +209,42 @@ class DependencyGraph:
             )
             graph.add_node(node)
 
-        # Second pass: infer dependencies from chapter/section ordering
-        graph._infer_dependencies()
+        if any(defn.requires is not None for defn in goal.definitions):
+            graph._apply_explicit_edges(goal)
+        else:
+            # Second pass: infer dependencies from chapter/section ordering
+            graph._infer_dependencies()
         graph._recalculate_availability()
 
         return graph
+
+    def _apply_explicit_edges(self, goal: Goal) -> None:
+        """Use the edges the goal states instead of inferring them.
+
+        A listed tag the goal does not contain is dropped and named, rather
+        than leaving its dependent blocked forever. A cycle raises
+        `ValueError`: no order of work satisfies it, so the goal file is
+        defective and a run on it would be meaningless.
+        """
+        unknown: list[str] = []
+        for defn in goal.definitions:
+            node = self.nodes[defn.tag]
+            for dep in defn.requires or []:
+                if dep not in self.nodes:
+                    unknown.append(dep)
+                elif dep not in node.requires:
+                    node.requires.append(dep)
+                    self.nodes[dep].unlocks.append(node.tag)
+        if unknown:
+            print(f"  [graph] dropping unknown required tags: {', '.join(unknown)}")
+        try:
+            TopologicalSorter({t: n.requires for t, n in self.nodes.items()}).prepare()
+        except CycleError as err:
+            # graphlib lists each tag before the one that requires it.
+            cycle = " -> ".join(reversed(err.args[1]))
+            raise ValueError(
+                f"dependency cycle in goal: {cycle} (each tag requires the next)"
+            ) from err
 
     def _infer_dependencies(self) -> None:
         """Infer dependencies based on chapter/section ordering.

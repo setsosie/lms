@@ -6,6 +6,11 @@ exact schema ``lms.goals.Goal.save``/``Goal.load`` use. Every statement is the
 verbatim TeX of the tagged definition/lemma, so the goal content is
 source-anchored rather than paraphrased.
 
+Dependency edges are source-anchored too: each definition's ``requires`` lists
+the in-track tags its statement or proof cites with ``\\ref``. Only edges to
+entries earlier in the curation order are kept; a forward reference is printed
+and dropped, so a mis-ordered curation table shows up at regeneration time.
+
 Usage:
     uv run python scripts/goals/extract_stacks_goal.py
 
@@ -29,7 +34,9 @@ STACKS = Path(
 )
 OUT = REPO / "goals"
 
-MAX_BODY_LINES = 40  # statement bodies are trimmed, never proofs (not extracted)
+MAX_BODY_LINES = 40  # statement bodies are trimmed; proofs are read for refs only
+
+REF_RE = re.compile(r"\\ref\{([^}]+)\}")
 
 # ---------------------------------------------------------------------------
 # Track curation: (tag, milestone) in dependency order. Dependency order is the
@@ -133,8 +140,28 @@ def load_tags() -> dict[str, str]:
     return out
 
 
+def resolve_refs(text: str, stem: str, label_to_tag: dict[str, str]) -> set[str]:
+    """Tags of the statements ``text`` cites with ``\\ref``.
+
+    Within a file the Stacks source writes labels without the file stem
+    (``definition-fibred-category``); across files it writes the full label
+    (``categories-definition-fibred-category``), which is the tags file's key.
+    Labels the tags file does not know are dropped.
+    """
+    tags: set[str] = set()
+    for label in REF_RE.findall(text):
+        tag = label_to_tag.get(f"{stem}-{label}") or label_to_tag.get(label)
+        if tag:
+            tags.add(tag)
+    return tags
+
+
 def extract_file(fname: str, chapter: int) -> dict[str, dict]:
-    """tag -> {section, name, content} for every tagged statement in fname."""
+    """tag -> {section, name, content, refs} for every tagged statement in fname.
+
+    ``refs`` resolves the references in the statement and in the proof that
+    immediately follows it; nothing from the proof enters ``content``.
+    """
     label_to_tag = load_tags()
     stem = fname.removesuffix(".tex")
     lines = (STACKS / fname).read_text().splitlines()
@@ -162,6 +189,15 @@ def extract_file(fname: str, chapter: int) -> dict[str, dict]:
                 elif not lines[j].startswith("\\reference"):
                     body.append(lines[j])
                 j += 1
+            k = j + 1
+            while k < len(lines) and not lines[k].strip():
+                k += 1
+            proof: list[str] = []
+            if k < len(lines) and lines[k].startswith("\\begin{proof}"):
+                while k < len(lines) and not lines[k].startswith("\\end{proof}"):
+                    proof.append(lines[k])
+                    k += 1
+            refs = resolve_refs("\n".join(body + proof), stem, label_to_tag)
             if label:
                 tag = label_to_tag.get(f"{stem}-{label}", "")
                 if tag:
@@ -170,6 +206,7 @@ def extract_file(fname: str, chapter: int) -> dict[str, dict]:
                             "[... statement trimmed; see the tag online ...]"
                         ]
                     results[tag] = {
+                        "refs": refs,
                         "section": f"{chapter}.{sec_no}",
                         "name": f"{env.capitalize()}: {label.replace('-', ' ')} ({sec_title})",
                         "content": "\n".join(body).strip()
@@ -188,6 +225,7 @@ def build_goal(
     preamble: str,
 ) -> dict:
     definitions = []
+    position = {tag: i for i, (tag, _) in enumerate(t for tr, _ in picks for t in tr)}
     for track, extracted in picks:
         for tag, milestone in track:
             if tag not in extracted:
@@ -195,6 +233,10 @@ def build_goal(
                     f"tag {tag} not found in source — check the curation table"
                 )
             e = extracted[tag]
+            cited = sorted(r for r in e["refs"] if r in position)
+            for ref in cited:
+                if position[ref] > position[tag]:
+                    print(f"{tag}: dropped forward reference to {ref}")
             definitions.append(
                 {
                     "tag": tag,
@@ -203,6 +245,7 @@ def build_goal(
                     "content": e["content"],
                     "formalized": False,
                     "artifact_ids": [],
+                    "requires": [r for r in cited if position[r] < position[tag]],
                 }
             )
     return {

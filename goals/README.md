@@ -1,15 +1,31 @@
 # goals/ — data-defined formalization goals
 
 Goal files in this directory are JSON in the exact schema `lms.goals.Goal.save`
-/ `Goal.load` use (`lms/goals.py:174-205`): top-level `name`, `description`,
-`source`, and a `definitions` list of
-`{tag, section, name, content, formalized, artifact_ids}`.
+/ `Goal.load` use: top-level `name`, `description`, `source`, and a
+`definitions` list of
+`{tag, section, name, content, formalized, artifact_ids, requires}`.
+`requires` is optional; a file without it still loads.
 
 `Goal.load(Path("goals/stacks_kernel_track_b.json"))` works today — verified
 against the current `lms.goals` module. Statement `content` is the **verbatim
 TeX of the tagged Stacks Project statement** (statements only, never proofs),
 so every goal entry is source-anchored and auditable against
 `https://stacks.math.columbia.edu/tag/<tag>`.
+
+## Dependency edges (`requires`)
+
+`requires` lists the tags in the same goal that a statement is built from;
+`[]` marks a root. When any definition carries `requires`, the dependency graph
+uses those edges as stated (unknown tags are dropped with a printed line, and a
+cycle is an error). When none does, it falls back to inferring a chain from
+section order.
+
+In the Stacks goal files, the edges are the `\ref`s in each statement and in the
+proof that follows it, resolved through `tags/tags`. Only references to entries
+**earlier in the curation order** are kept. A forward reference (Track B:
+`02XN → 02XW`, `026D → 026E`) is dropped and printed at regeneration, so a
+mis-ordered curation table shows up there rather than as a cycle. Proofs are
+read for their references only; no proof text enters `content`.
 
 ## Files
 
