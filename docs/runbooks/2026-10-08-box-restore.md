@@ -37,6 +37,7 @@ Sprint 3's Definition of Done has three open items, all of them server work:
 | 3 | Gate A novelty control | R4 (runs first) | no |
 | 4 | CVFN denominator on one real run | R5 | only if no ledger survived the restore |
 | — | Committee re-run: harness vs model (not DoD) | R6 | yes |
+| — | Three groups on three tags, on a goal with real edges (not DoD) | R7 | yes |
 
 ---
 
@@ -365,6 +366,10 @@ on a foundation API mismatch. Three "verified" artifacts were the scribe's
 prompt scaffold, and Gate 4 never ran. All of that is fixed on `main`.
 Re-running the same configuration separates the two explanations.
 
+This goal has no dependency edges, so it offers one available node at a time.
+Don't expect three different tags here. It stays on this goal so the run
+remains comparable with `committee_fix_c`; R7 checks the different tags.
+
 Same configuration as `committee_fix_c` (3 agents, 3 groups,
 `stacks-ch4-phase1`), 10 generations. It ran at TP=4; on a shared node, TP=2
 serves 3 agents (about 1.1M tokens of KV cache). That changes wall-clock, not
@@ -435,12 +440,89 @@ them the scaffold), generations 5–9 at 0 of 33, `novelty_level` unset on all
 
 ---
 
+## R7 — Three groups on three tags (after R6)
+
+Not a DoD item. #75 gave `stacks-kernel-track-a` and `stacks-kernel-track-b`
+dependency edges from the Stacks source, so they start with 16 and 18 available
+nodes. R6's goal has no edges and can't exercise this. This short run checks
+that generation 0 of a committee run puts three groups on three different tags.
+
+Start it after R6 finishes, not alongside it. Both jobs rewrite and then restore
+`lean/LMS/Foundation.lean` in the same checkout.
+
+First check the checkout. This needs no GPU and no Lean:
+
+```bash
+cd ~/code/lms && git pull --ff-only origin main && uv run python -c "from lms.goals import get_goal; from lms.dependency import DependencyGraph; print(DependencyGraph.from_goal(get_goal('stacks-kernel-track-b')).progress_summary())"
+```
+
+It must show `Available: 18`. `Available: 1` means the checkout predates #75,
+so don't submit.
+
+One generation answers the question. The two-hour walltime is an estimate: R6
+allows eight hours for ten generations, and this job also has to load vLLM.
+Substitute `GPU_PARTITION`, `GPU_GRES` and `MODEL` as in R5b:
+
+```bash
+cd ~/code/lms && mkdir -p logs && sbatch -p GPU_PARTITION --gres=GPU_GRES:2 --time=02:00:00 --export=ALL,TP_SIZE=2,AGENTS=3,N_GROUPS=3,ITERATIVE=0,GENERATIONS=1,GOAL=stacks-kernel-track-b,RUN_TAG=committee_dag_a,MODEL_REPO=MODEL scripts/slurm/lms_run.sbatch
+```
+
+```bash
+grep -m1 '^agents=' ~/code/lms/logs/lms-run-JOBID.out
+```
+
+It must show `goal=stacks-kernel-track-b` and end `n_groups=3`.
+
+After the job finishes, read back what the panel's chair proposed. It prints one
+line per chair turn, and the last line with tags is the one that counts:
+
+```bash
+cd ~/code/lms && uv run python -c "import json,re; [print(re.findall(r'task=\"([^\"]+)\"', t['content'])) for x in json.load(open('experiments/committee_dag_a/conversations.json')) if x['generation']==0 and x['agent_id']=='panel-chair' for t in x['turns'] if t['role']=='assistant']"
+```
+
+Then read back what the groups worked on. The ledger records every group call,
+including calls that produced no artifact:
+
+```bash
+cd ~/code/lms && uv run python -c "import json; r=json.load(open('experiments/committee_dag_a/attempts.json'))['records']; t=sorted({x['statement_key'] for x in r if x['generation']==0 and x['statement_key'].startswith('tag:')}); print(len(t), t)"
+```
+
+Harness corrections to the panel's assignments, and the failure histogram:
+
+```bash
+grep 'Planning panel:' ~/code/lms/logs/lms-run-JOBID.out
+```
+
+```bash
+cd ~/code/lms && uv run python -m lms.accounting experiments/committee_dag_a
+```
+
+**Checkpoint R7.** Both read-backs are needed. If the chair's output doesn't
+parse, the harness silently assigns the first three available tags, and the
+ledger still reads `3`.
+
+- **The chair lists three different tags and the ledger shows the same three.**
+  Pass: the panel chose them and the groups worked them.
+- **The chair lists fewer than three, or none, and the ledger reads `3`.** The
+  graph is fine, but the harness made some or all of the choice. Report this as
+  a partial result, not a pass.
+- **The ledger reads below `3`.** Not a pass. Two groups shared a tag, or a group
+  never called the model.
+
+Keep `experiments/committee_dag_a/` whatever the result. This is the first run
+with groups on different nodes in one generation. Its failed artifacts show
+whether groups fail on their own Lean or on disagreeing with the foundation.
+
+---
+
 ## What to paste back
 
 R0 in full; the R1 echo; R2a/R2b versions, cache wall-clock and the build
 tail; R3's tail; R4's summary lines, elaboration list and job logs; R5a's two
-outputs; R6's `agents=` line and three read-backs. Paste after each checkpoint
-rather than at the end, so a failure stops the sequence where it happened.
+outputs; R6's `agents=` line and three read-backs; R7's checkout check, `agents=`
+line, two read-backs, `Planning panel:` lines and accounting report. Paste after
+each checkpoint rather than at the end, so a failure stops the sequence where it
+happened.
 
 ## What not to do
 
