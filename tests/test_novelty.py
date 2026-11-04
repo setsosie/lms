@@ -267,6 +267,67 @@ class TestExactProbe:
         backend = ExactProbeBackend(project_dir=tmp_path)
         assert backend.is_available() is False
 
+    def test_probe_keeps_the_preamble_the_statement_needs(self):
+        lines = ExactProbeBackend.probe_source(ARTIFACT).splitlines()
+        preamble = lines[
+            : next(i for i, s in enumerate(lines) if s.startswith("example"))
+        ]
+        for kept in (
+            "namespace Stacks",
+            "open CategoryTheory",
+            "universe v₁ u₁",
+            "variable {C : Type u₁} [Category.{v₁} C]",
+            "  {D : Type u₁} [Category.{v₁} D]",
+        ):
+            assert kept in preamble
+
+    def test_probe_imports_the_whole_library_and_nothing_narrower(self):
+        lines = ExactProbeBackend.probe_source(ARTIFACT).splitlines()
+        assert [s for s in lines if s.startswith("import")] == ["import Mathlib"]
+
+    def test_probe_does_not_mistake_comment_text_for_a_preamble(self):
+        src = ExactProbeBackend.probe_source(ARTIFACT)
+        assert "open questions" not in src
+        assert "Functors preserve" not in src
+
+    def test_probe_leaves_out_what_follows_the_declaration(self):
+        assert "open Later" not in ExactProbeBackend.probe_source(ARTIFACT)
+
+    def test_probes_built_without_a_preamble_are_not_replayed_from_cache(self):
+        query = StatementQuery.from_lean(THEOREM)
+        assert ExactProbeBackend().cache_query(query).startswith("exact_probe/v3:")
+
+
+# A control artifact as agents write it: its names resolve only under its preamble.
+ARTIFACT = """import Mathlib.CategoryTheory.Functor.Basic
+
+/-!
+open questions about this file go here
+-/
+
+namespace Stacks
+
+open CategoryTheory
+
+universe v₁ u₁
+
+variable {C : Type u₁} [Category.{v₁} C]
+  {D : Type u₁} [Category.{v₁} D]
+
+/-- Functors preserve isomorphisms. -/
+theorem functor_preserves_iso (F : C ⥤ D) {X Y : C} (f : X ⟶ Y) [IsIso f] :
+    IsIso (F.map f) :=
+  inferInstance
+
+open Later
+"""
+
+# Lean output recorded 2026-11-04 (toolchain v4.27.0-rc1): `exact?` itself ran out
+# of heartbeats, at the column of the tactic, on a statement that elaborated.
+HEARTBEAT_LIMIT = (
+    "probe.lean:3:105: error: (deterministic) timeout at `whnf`, "
+    "maximum number of heartbeats (200000) has been reached\n"
+)
 
 # Lean output recorded 2026-10-08 (toolchain v4.32.1) for three probes: one
 # that `exact?` closes, one it cannot, and one whose statement names a type
@@ -309,6 +370,13 @@ class TestExactProbeOutput:
         assert outcome.available is False
         assert outcome.closed_by is None
         assert (outcome.error or "").startswith("statement did not elaborate")
+
+    def test_a_heartbeat_timeout_is_not_called_an_elaboration_failure(self):
+        outcome = ExactProbeBackend.read_output(HEARTBEAT_LIMIT)
+        assert outcome.available is False
+        assert outcome.closed_by is None
+        assert "heartbeat" in (outcome.error or "")
+        assert not (outcome.error or "").startswith("statement did not elaborate")
 
     def test_it_cannot_lift_n1_to_decisive(self):
         # Three name/semantic stages empty: N1 below the decisive line. Before
@@ -723,6 +791,69 @@ class TestMeasureDensity:
     def test_four_stages_can_reach_decisive(self):
         report = measure_density(arc_doc(), NoveltyClassifier(four_empty_stages()))
         assert report["max_n1_confidence"] >= DECISIVE_CONFIDENCE
+
+    def test_report_states_the_ceiling_its_statements_actually_reached(self):
+        # Four stages configured, but the probe never ran, so decisive N1 was
+        # impossible on this arc however empty the searches came back.
+        stages = [
+            empty_backend("name"),
+            empty_backend("loogle"),
+            RecordedBackend("exact_probe", {}, available=False),
+            empty_backend("semantic"),
+        ]
+        report = measure_density(arc_doc(), NoveltyClassifier(stages))
+        assert report["max_n1_confidence"] == pytest.approx(0.9)
+        assert report["max_n1_confidence_reached"] == pytest.approx(0.75)
+        assert report["statements_by_stages_run"] == {"3": 2}
+
+    def test_stage_counts_include_statements_that_stopped_early(self):
+        name = RecordedBackend(
+            "name",
+            {
+                "Functor.comp_obj": StageOutcome(
+                    "name", True, hits=[hit("CategoryTheory.Functor.comp_obj")]
+                )
+            },
+        )
+        stages = [name, *four_empty_stages()[1:]]
+        report = measure_density(arc_doc(), NoveltyClassifier(stages))
+        assert report["max_n1_confidence_reached"] == pytest.approx(0.9)
+        assert report["statements_by_stages_run"] == {"1": 1, "4": 1}
+
+
+class TestLabelNames:
+    """A label says nothing about the mathematics, so it must not dilute a match."""
+
+    STATEMENT = (
+        "theorem {label} (I : Ideal R) (P : Ideal S) : "
+        "Ideal.ramificationIdx I P = 1 := sorry"
+    )
+
+    def classify(self, label: str, **kwargs):
+        match = hit("Ideal.ramificationIdx", sig="(I : Ideal R) (P : Ideal S)")
+        semantic = RecordedBackend(
+            "semantic", {label: StageOutcome("semantic", True, hits=[match])}
+        )
+        stages = [empty_backend("exact_probe"), semantic]
+        statement = self.STATEMENT.format(label=label)
+        return NoveltyClassifier(stages, **kwargs).classify(statement)
+
+    def test_a_long_label_does_not_hide_a_match(self):
+        label = "ant_c17_some_long_label_words_here"
+        result = self.classify(label, names_are_labels=True)
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert any("ramificationIdx" in e for e in result.evidence)
+
+    def test_the_verdict_does_not_depend_on_the_label(self):
+        short = self.classify("ant_c1", names_are_labels=True)
+        long = self.classify(
+            "ant_c17_some_long_label_words_here", names_are_labels=True
+        )
+        assert (short.level, short.confidence) == (long.level, long.confidence)
+
+    def test_real_names_still_count_by_default(self):
+        result = self.classify("ant_c17_some_long_label_words_here")
+        assert result.level is NoveltyLevel.N1
 
 
 # ------------------------------------------------- recorded live fixtures

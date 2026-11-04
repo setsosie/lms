@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lms.novelty.mathlib_search import parse_declaration
+from lms.novelty.mathlib_search import RecordedBackend, parse_declaration
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -40,6 +40,42 @@ class TestBuildClassifier:
             "exact_probe",
             "semantic",
         ]
+
+    def test_label_names_reach_the_classifier(self, tmp_path):
+        classifier = mnd.build_classifier(args(tmp_path), names_are_labels=True)
+        assert classifier.names_are_labels is True
+
+
+class TestUnreachableMessage:
+    def test_it_reads_the_ceiling_statements_reached_not_the_configured_one(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        statement = {
+            "id": "a",
+            "name": "n",
+            "lean_statement": "theorem n : True := sorry",
+        }
+        arc = tmp_path / "arc.json"
+        arc.write_text(json.dumps({"arc": "t", "statements": [statement]}))
+        stages = [
+            RecordedBackend("name", {}),
+            RecordedBackend("loogle", {}),
+            RecordedBackend("exact_probe", {}, available=False),
+            RecordedBackend("semantic", {}),
+        ]
+        monkeypatch.setattr(mnd, "default_backends", lambda _: stages)
+        mnd.main(
+            [
+                str(arc),
+                "--lean-project",
+                str(tmp_path),
+                "--cache-dir",
+                str(tmp_path / "c"),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "Decisive N1 is unreachable" in out
+        assert "0.75" in out
 
 
 @pytest.mark.parametrize("path", ARCS, ids=lambda p: p.stem)
