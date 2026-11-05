@@ -8,6 +8,7 @@ network or the Lean toolchain.
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -299,6 +300,28 @@ class TestExactProbe:
         ]
         assert [s for s in kept if s] == statement.splitlines()[:7]
 
+    def test_probe_refuses_a_header_with_no_type(self):
+        assert ExactProbeBackend.probe_source("theorem foo (n : Nat)") is None
+
+    def test_probe_does_not_stop_at_a_word_containing_where(self):
+        src = ExactProbeBackend.probe_source(
+            "theorem foo : elsewhere x ∧ where_ok y := sorry"
+        )
+        assert ": elsewhere x ∧ where_ok y := by exact?" in src
+
+    def test_a_blank_line_ends_a_preamble_command(self):
+        src = ExactProbeBackend.probe_source(
+            "variable (a : Nat)\n\n  stray text\n\ntheorem foo : a = a := rfl\n"
+        )
+        assert "variable (a : Nat)" in src
+        assert "stray text" not in src
+
+    def test_a_command_name_later_in_a_line_is_not_a_preamble(self):
+        src = ExactProbeBackend.probe_source(
+            'notation "open" => 1\n\ntheorem foo : True := trivial\n'
+        )
+        assert "notation" not in src
+
     def test_probe_source_rejects_structure(self):
         assert (
             ExactProbeBackend.probe_source("structure Category where\n  Obj : Type")
@@ -436,6 +459,17 @@ class TestExactProbeOutput:
         assert outcome.closed_by is None
         assert (outcome.error or "").startswith("statement did not elaborate")
 
+    @pytest.mark.parametrize(
+        "output",
+        ["", "INTERNAL PANIC: out of memory\n", "uncaught exception: boom\n"],
+        ids=["killed", "out-of-memory", "other"],
+    )
+    def test_no_answer_from_lean_is_not_a_miss(self, output):
+        outcome = ExactProbeBackend.read_output(output)
+        assert outcome.available is False
+        assert outcome.closed_by is None
+        assert (outcome.error or "").startswith("probe gave no answer")
+
     def test_a_kernel_timeout_is_a_heartbeat_limit_too(self):
         outcome = ExactProbeBackend.read_output(KERNEL_TIMEOUT)
         assert outcome.available is False
@@ -475,6 +509,139 @@ class TestExactProbeOutput:
 
 
 NAMELESS = "-- a payload with no named declaration\nexample : True := trivial"
+
+
+class TestSeveralDeclarations:
+    """A close on the first of several declarations says nothing about the rest."""
+
+    FILE = (
+        "open Nat\n\nlemma aux (n : Nat) : succ n = n + 1 := rfl\n\n"
+        "theorem novel_main (p : Nat → Prop) : p 0 := sorry\n"
+    )
+
+    @staticmethod
+    def stages(lean: str, closed_by: str = "exact Nat.foo") -> list[RecordedBackend]:
+        key = StatementQuery.from_lean(lean).display_name
+        probe = RecordedBackend(
+            "exact_probe",
+            {key: StageOutcome("exact_probe", True, closed_by=closed_by)},
+        )
+        return [empty_backend("name"), empty_backend("loogle"), probe]
+
+    def classify(self, lean: str):
+        return NoveltyClassifier(
+            [*self.stages(lean), empty_backend("semantic")]
+        ).classify(lean)
+
+    def test_it_reads_inconclusive_and_names_the_helper(self):
+        result = self.classify(self.FILE)
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert result.needs_review is True
+        assert any(
+            "`aux`" in e and "first of 2 declarations" in e for e in result.evidence
+        )
+
+    def test_the_ladder_goes_on_to_semantic_search(self):
+        result = self.classify(self.FILE)
+        assert "semantic" in result.stages_available
+
+    def test_a_single_declaration_still_reads_n0(self):
+        lean = "open Nat\n\ntheorem foo (n : Nat) : succ n = n + 1 := rfl\n"
+        result = self.classify(lean)
+        assert result.level is NoveltyLevel.N0
+        assert result.confidence >= DECISIVE_CONFIDENCE
+
+    def test_a_declaration_named_in_a_comment_does_not_count(self):
+        lean = (
+            "/-- We extend the\ntheorem of Dedekind to this setting. -/\n"
+            "theorem foo (n : Nat) : n = n := rfl\n"
+            "-- theorem bar : True := trivial\n"
+        )
+        assert self.classify(lean).level is NoveltyLevel.N0
+
+    @pytest.mark.parametrize(
+        "later",
+        [
+            "theorem π_x : True := trivial",
+            "theorem «two words» : True := trivial",
+            "nonrec theorem x : True := trivial",
+            "private lemma x : True := trivial",
+            "@[simp] theorem x : True := trivial",
+            "noncomputable def x : Nat := 0",
+            "instance : Inhabited Foo := ⟨0⟩",
+            "example : True := trivial",
+            "  theorem indented : True := trivial",
+            "structure Foo where\n  x : Nat",
+        ],
+    )
+    def test_any_later_declaration_counts(self, later):
+        lean = f"lemma aux (n : Nat) : n = n := rfl\n\n{later}\n"
+        assert self.classify(lean).level is NoveltyLevel.INCONCLUSIVE
+
+    def test_a_proof_body_is_not_a_declaration(self):
+        lean = (
+            "theorem foo (n : Nat) : n = n := by\n  have h : n = n := rfl\n  exact h\n"
+        )
+        assert self.classify(lean).level is NoveltyLevel.N0
+
+    def test_it_cannot_fail_a_novel_artifact_at_the_gate(self):
+        artifact = make_artifact(self.FILE)
+        classifier = NoveltyClassifier(
+            [*self.stages(self.FILE), empty_backend("semantic")]
+        )
+        decision = apply_novelty_gate(artifact, classifier)
+        assert artifact.novelty_level == "INCONCLUSIVE"
+        assert decision.counts_as_novel is False
+        assert decision.needs_human_review is True
+
+
+class TestLoogleAnswers:
+    """An error from Loogle is a search that did not run, not an empty one."""
+
+    @staticmethod
+    def search(monkeypatch, answer) -> StageOutcome:
+        backend = LoogleBackend()
+        monkeypatch.setattr(backend, "_get_json", lambda *_: answer)
+        return backend.search(StatementQuery.from_lean(NOVEL))
+
+    # Both answer shapes recorded from the live service on 2026-11-05.
+    def test_an_error_answer_is_not_an_empty_search(self, monkeypatch):
+        answer = {"error": "<input>:1:20: unexpected end of input", "heartbeats": 0}
+        outcome = self.search(monkeypatch, answer)
+        assert outcome.available is False
+        assert "unexpected end of input" in (outcome.error or "")
+
+    def test_an_empty_answer_is_an_empty_search(self, monkeypatch):
+        answer = {"count": 0, "header": "Found 0", "heartbeats": 0, "hits": []}
+        outcome = self.search(monkeypatch, answer)
+        assert outcome.available is True
+        assert outcome.hits == []
+
+    @pytest.mark.parametrize("answer", [{}, [], "busy", {"count": 0}])
+    def test_an_answer_with_no_hits_field_is_not_an_empty_search(
+        self, monkeypatch, answer
+    ):
+        outcome = self.search(monkeypatch, answer)
+        assert outcome.available is False
+        assert outcome.error == "unexpected response shape"
+
+
+class TestNameSearchFailure:
+    def test_a_grep_failure_is_not_an_empty_search(self, tmp_path, monkeypatch):
+        (tmp_path / ".lake/packages/mathlib/Mathlib").mkdir(parents=True)
+        failed = subprocess.CompletedProcess([], 2, stdout="", stderr="grep: boom")
+        monkeypatch.setattr(subprocess, "run", lambda *_, **__: failed)
+        outcome = MathlibNameSearch(tmp_path).search(StatementQuery.from_lean(NOVEL))
+        assert outcome.available is False
+        assert outcome.error == "grep: boom"
+
+    def test_no_matches_is_an_empty_search(self, tmp_path, monkeypatch):
+        (tmp_path / ".lake/packages/mathlib/Mathlib").mkdir(parents=True)
+        none = subprocess.CompletedProcess([], 1, stdout="", stderr="")
+        monkeypatch.setattr(subprocess, "run", lambda *_, **__: none)
+        outcome = MathlibNameSearch(tmp_path).search(StatementQuery.from_lean(NOVEL))
+        assert outcome.available is True
+        assert outcome.hits == []
 
 
 class TestLeanSearchAnswers:
