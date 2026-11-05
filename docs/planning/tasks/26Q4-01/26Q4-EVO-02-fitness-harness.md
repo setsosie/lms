@@ -11,7 +11,7 @@ on a proxy.
 | **Priority** | HIGH |
 | **Status** | 🔲 PENDING |
 | **Branch** | `26Q4-EVO-02-fitness-harness` |
-| **Dependencies** | 26Q4-EVO-01 (landed); a slice choice from Sprint 3's N1-density measurement (for the default goal); 26Q3-HARN-05 `attempts.json` (landed) |
+| **Dependencies** | 26Q4-EVO-01 (landed); 26Q4-HARN-11 (probe set and PAR-2 cost) |
 | **PR Size Target** | <400 lines |
 
 ---
@@ -20,54 +20,47 @@ on a proxy.
 
 Fitness is the expensive and the fragile half of promptbreeding here:
 
-- **Expensive**: one evaluation = one LMS run, and measured runs ranged
-  446K–8.99M tokens. The harness must make evaluations *small and uniform*:
-  1 agent, a fixed statement slice, a hard token cap
-  (`--max-tokens`, plus `LMS_OPENAI_MAX_TOKENS` per request via
-  `26Q3-INFRA-02`).
+- **Expensive**: measured whole runs ranged 446K–8.99M tokens. The harness must
+  make evaluations *small and uniform*: 1 agent, fixed probes, a hard
+  output-token cap.
 - **Fragile**: at a ~3% per-statement verified rate, raw verified-count
   fitness is ~0 for most genomes — the same flat-landscape argument that
-  deferred the SPG arm. The score must carry partial credit so selection has
-  a gradient before the first full success.
+  deferred the SPG arm.
 
-Everything the score needs is already on disk after a run:
-
-- `metadata.json` — `analysis.verified_artifacts`, `prompt_overrides`
-  (which genome actually ran — refuse to score a run whose recorded
-  overrides don't match the genome being evaluated).
-- `artifacts.json` — per-artifact status and gate verdicts (T2/T4,
-  `26Q3-HARN-03`) for partial credit.
-- `attempts.json` — the `26Q3-HARN-05` cost ledger: per-statement tokens and
-  wall-clock including failed attempts. **This is the denominator.**
+**Amended 2026-11-05 — the score has no partial credit.** This card first
+scored gated statements per million tokens, with weights for compiling short of
+the gates. Weights can be gamed, and the human gate cannot run inside a loop.
+The score is now `26Q4-HARN-11`'s PAR-2 cost on fixed pinned probes: output
+tokens to the first verified proof, or twice the cap if unsolved. The gradient
+comes from probes of graded difficulty, each one pass or fail. Novelty is not
+scored, so fitness works even where CVFN is undefined. Budgets are in output
+tokens, so the score uses `completion_tokens`, not `CostLedger.total_tokens`,
+which includes prompts. An artifact can keep `verified_lean` after a gate
+failure, so solves read `gate_results`.
 
 ---
 
 #### Acceptance Criteria
 
 - [ ] `lms/breeder/fitness.py` exists with `FitnessRecord` (dataclass,
-      JSON round-trip) carrying at minimum: genome id/hash, run dir,
-      tokens spent, statements attempted, compile successes, gate passes,
-      gated-verified count, and a scalar `fitness`
-- [ ] The scalar is gated-verified statements per million tokens, with
-      documented partial-credit weights for compiles-short-of-gates —
-      weights in one place, trivially editable, recorded in the output so
-      two records are comparable only when scored the same way
-- [ ] `scripts/breeder/evaluate_genome.py` runs
-      `python -m lms.run --prompt-file <genome> ...` as a subprocess with
-      pinned evaluation settings (1 agent, fixed goal slice, fixed
-      generation count, hard token cap — all overridable by flags, all
-      recorded in the output), then scores the run dir
-- [ ] Scoring a run dir is a separate entry point from running one
-      (`--score-only <run_dir>`), so existing runs can be re-scored when
-      weights change without re-spending tokens
-- [ ] The harness refuses to score a run whose `metadata.json`
-      `prompt_overrides` hash does not match the genome file (provenance
-      check, loud error)
+      JSON round-trip) carrying at minimum: genome hash, probe file hash,
+      split, cap, per-probe solved and output tokens, and a scalar `fitness`
+- [ ] The scalar is the negative mean of `lms/probes.py::par2_cost` over the
+      probes; `tests/test_breeder_fitness.py::test_fitness_is_negative_mean_cost`
+      passes, and records with a different cap or probe hash refuse to compare
+- [ ] Compiling short of the gates earns nothing:
+      `tests/test_breeder_fitness.py::test_no_partial_credit` passes
+- [ ] `scripts/breeder/evaluate_genome.py` runs one genome over a split as a
+      subprocess, through `26Q4-HARN-11`'s attempt runner, with its settings
+      recorded in the output, and scores the result
+- [ ] Scoring saved attempts is a separate entry point from running them
+      (`--score-only <dir>`), so results can be re-scored without new tokens
+- [ ] The harness refuses to score attempts whose recorded `prompt_overrides`
+      hash does not match the genome file (provenance check, loud error)
 - [ ] `--repeats N` runs the same genome N times and reports per-run scores
       plus the mean — run-to-run variance is the noise floor selection has
       to clear, and it must be visible, not averaged away silently
-- [ ] Tests use fixture run dirs (checked-in miniature `metadata.json` /
-      `artifacts.json` / `attempts.json`), no live runs or GPUs
+- [ ] Tests use fixture attempt records, no live runs or GPUs
 
 ---
 
@@ -76,31 +69,28 @@ Everything the score needs is already on disk after a run:
 | File | Action | Purpose |
 |------|--------|---------|
 | `lms/breeder/__init__.py` | CREATE | Package |
-| `lms/breeder/fitness.py` | CREATE | `FitnessRecord`, scoring from run dirs |
+| `lms/breeder/fitness.py` | CREATE | `FitnessRecord`, scoring from attempt records |
 | `scripts/breeder/evaluate_genome.py` | CREATE | Run + score one genome |
-| `tests/test_breeder_fitness.py` | CREATE | Scoring on fixture run dirs |
+| `tests/test_breeder_fitness.py` | CREATE | Scoring on fixture attempt records |
 | `scripts/verify/26Q4-01/verify_26Q4-EVO-02.sh` | CREATE | Verification script |
 
 ---
 
 #### Decision Gates
 
-- If the Sprint 3 N1-density measurement has not landed by the time this is
-  built, default the slice to the Gate A control arc — a known corpus is
-  fine for *relative* fitness; do not block on the slice decision.
-- Do not put the evaluation loop inside `Society`. The harness invokes runs
-  as subprocesses precisely so a genome cannot leak state between
-  evaluations and a crashed run cannot take the breeder with it.
-- If partial-credit weighting turns into a research question, stop — ship
-  the simplest monotone version (gated > compiled > attempted) and card the
-  ablation.
+- Do not put the evaluation loop inside `Society`. The harness invokes
+  subprocesses precisely so a genome cannot leak state between evaluations and
+  a crashed run cannot take the breeder with it.
+- If a genome needs partial credit to show any signal, stop and report it: that
+  is the flat-landscape result, not a reason to add weights.
 
 ---
 
 #### Out of Scope
 
 - Selection, mutation, population state — `26Q4-EVO-03`.
-- Any change to how runs execute — the harness only invokes and reads them.
+- Probes and PAR-2 cost — `26Q4-HARN-11`.
+- Any change to how attempts execute — the harness only invokes and reads them.
 
 ---
 

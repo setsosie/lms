@@ -47,6 +47,13 @@ next-sprint pre-lock. Generated 2026-06-18.
 | 5 | Gate B + the calibration run | TBD | C | TBD | — | 🔲 Pre-locked |
 | 6 | Human D4 review | TBD | D | TBD | — | 🔲 Planned |
 | 7 | Verdict | TBD | E | TBD | — | 🔲 Planned |
+| 8 | Probe set, baseline, washout probe | TBD | After E | 10 | — | 🔲 Proposed |
+| 9 | Best-of-k and coordinator–worker arms | TBD | After E | 8 | — | 🔲 Proposed |
+| 10 | Promptbreeder | TBD | After E | 8 | — | 🔲 Proposed |
+| 11 | Bred prompt × organization | TBD | After E | TBD | — | 🔲 Proposed |
+| 12+ | Soft-prompt evolution | TBD | After E | TBD | — | 🔲 Proposed |
+
+See [After Sprint 7](#after-sprint-7-proposed-2026-11-05).
 
 **Re-plan pending (2026-10-09).** Sprint 3 closed 35 days late with its server
 runs unrun, and the 2026-09-30 verdict date passed with Phases C–E not started.
@@ -244,6 +251,47 @@ Phase E and write up "CVFN undefined at current scope."
 **The 2026-08-21 API-fallback pre-commitment is resolved (2026-09-04,
 `decisions/0001-phase-c-model-harness-control.md`).** It does not fire as a
 swap; the $300 funds the frontier control arm above.
+
+## After Sprint 7 (proposed 2026-11-05)
+
+Provisional: the order depends on Phase E's verdict, and no dates are set. Phase
+C now compares model and organization; this adds the prompt as a third factor.
+
+| Sprint | Work | Server run | Why here |
+|---|---|---|---|
+| 8 | `26Q4-HARN-11` probe set (5), `26Q4-HARN-12` committee prompts (2), `26Q4-SPG-01` washout probe (3) | Hand-written prompt on every probe, including Yoneda; washout probe | Several experiments score on the probes, and the washout probe can stop the soft-prompt arm cheaply |
+| 9 | `26Q4-HARN-05` K9 (3), `26Q4-HARN-06` W9 (5) | Stage 1 of `org-structures.md` | Cheap, and retries that Lean selects among may explain much of any gain |
+| 10 | `26Q4-EVO-02` (3), `26Q4-EVO-03` (5) | Repeatability gate, first breeding generations | Needs the probes |
+| 11 | Hand-written vs bred prompt × S1 vs best organization | The 2×2 comparison | What a better prompt buys compared with better structure |
+| 12+ | `26Q2-SPG-03`, `26Q4-SPG-02`, `26Q2-SPG-01`, `26Q2-SPG-02`, `26Q4-SPG-03`; optionally `26Q4-SPG-04` | Serving, diversity, then evolution on the probes | Reuses the probes and fitness harness |
+
+Fixed so far:
+- **Probes come from the Stacks category chapter.** This does not settle Phase
+  C's slice.
+- **The token cap comes from Sprint 8's baseline.**
+- **The breeder is the strongest open model that fits on the server, with a
+  documented training cutoff before 2026-11-04,** the day Axiom's Stacks library
+  was released. The rule covers evaluated models on Stacks slices too. A release
+  date alone does not establish a cutoff.
+- **Evolution is the main soft-prompt experiment.** Gradient tuning
+  (`26Q4-SPG-04`) is an optional comparison and start population, not a gate.
+
+Branches:
+- **If Gate C is zero:** that may only mean nothing novel was verified. Probes
+  need no novelty, so Sprint 8 can still run. If even easy probes fail, stop as
+  `calibration-program.md` §7 says.
+- **If C9 does not beat I9:** P9 moves up beside K9, per `org-structures.md`.
+- **If the washout probe fails:** the soft-prompt arm stops before serving work,
+  and the choice is per-layer prompts, steering vectors or a write-up.
+
+Later, on results: the budget ladder, population studies, P9, H9, islands, and
+the text × soft comparison.
+
+**Merging soft prompts** (`scripts/research/soft_prompt_merge_sim.py`, synthetic
+embeddings): repeated averaging collapses unrelated parents to one point but
+holds its size among relatives, and in a toy search 3–5 parents beat 2. Genome
+size mattered more than any operator: at 32,768 values, 500 noisy evaluations
+found essentially nothing. Detail in `26Q4-SPG-02`.
 
 ### Superseded pre-lock (Sprint 2 — draft) — ✅ RESOLVED 2026-07-24
 

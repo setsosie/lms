@@ -113,7 +113,7 @@ grep -n "numpy" pyproject.toml                              # → (none)
 
 - `26Q2-SPG-01` owns serving (`inputs_embeds`/`prompt_embeds`) — no engine code here.
 - `26Q2-SPG-02` owns the diversity measurement — no LEAN/agent-run code here.
-- SPG Phase 3 owns evolution (selection, fitness, crossover) — `mutate` only here.
+- `26Q4-SPG-02` owns merge operators and `26Q4-SPG-03` owns selection and fitness — `mutate` only here.
 - No activation-steering genome (the robustness-hedge phenotype) in this PR.
 
 ---
