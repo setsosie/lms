@@ -7,10 +7,12 @@ network or the Lean toolchain.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 
+from lms.accounting import counts_as_novel
 from lms.artifacts import Artifact, ArtifactType
 from lms.gates.novelty import apply_novelty_gate
 from lms.novelty import (
@@ -22,6 +24,7 @@ from lms.novelty import (
 from lms.novelty.mathlib_search import (
     DiskCache,
     ExactProbeBackend,
+    LeanSearchBackend,
     LoogleBackend,
     MathlibNameSearch,
     RateLimiter,
@@ -256,7 +259,45 @@ class TestExactProbe:
         src = ExactProbeBackend.probe_source(
             "theorem foo (n : Nat) : n + 0 = n := by simp"
         )
-        assert src == "import Mathlib\n\nexample (n : Nat) : n + 0 = n := by exact?\n"
+        assert src == (
+            "import Mathlib\n\n"
+            "theorem lms_novelty_probe (n : Nat) : n + 0 = n := by exact?\n"
+        )
+
+    def test_probe_stops_before_a_where_body(self):
+        src = ExactProbeBackend.probe_source(
+            "theorem foo : A ≃ B where\n  toFun := f\n  invFun := g\n"
+        )
+        assert src.endswith("theorem lms_novelty_probe : A ≃ B := by exact?\n")
+
+    def test_probe_keeps_a_default_valued_binder(self):
+        src = ExactProbeBackend.probe_source(
+            "theorem foo (n : Nat) (h : 0 < n := by decide) : n ≠ 0 := sorry"
+        )
+        assert "(h : 0 < n := by decide) : n ≠ 0 := by exact?" in src
+
+    def test_probe_carries_an_explicit_universe_list(self):
+        src = ExactProbeBackend.probe_source(
+            "theorem foo.{u} (X : Type u) : X = X := rfl"
+        )
+        assert "theorem lms_novelty_probe.{u} (X : Type u) : X = X :=" in src
+
+    def test_probe_keeps_every_scope_command_ahead_of_the_declaration(self):
+        statement = (
+            "section Closed\n"
+            "variable (p : Prop)\n"
+            "end Closed\n"
+            "noncomputable section\n"
+            "variable (q : Prop) (h : q) (k : q)\n"
+            "include h\n"
+            "omit k\n"
+            "theorem foo : q := h\n"
+        )
+        lines = ExactProbeBackend.probe_source(statement).splitlines()
+        kept = lines[
+            1 : next(i for i, s in enumerate(lines) if s.startswith("theorem"))
+        ]
+        assert [s for s in kept if s] == statement.splitlines()[:7]
 
     def test_probe_source_rejects_structure(self):
         assert (
@@ -323,6 +364,8 @@ theorem functor_preserves_iso (F : C ⥤ D) {X Y : C} (f : X ⟶ Y) [IsIso f] :
 open Later
 """
 
+KERNEL_TIMEOUT = "probe.lean:3:0: error: (kernel) deterministic timeout\n"
+
 # Lean output recorded 2026-11-04 (toolchain v4.27.0-rc1): `exact?` itself ran out
 # of heartbeats, at the column of the tactic, on a statement that elaborated.
 HEARTBEAT_LIMIT = (
@@ -379,6 +422,17 @@ class TestExactProbeOutput:
         assert "heartbeat" in (outcome.error or "")
         assert not (outcome.error or "").startswith("statement did not elaborate")
 
+    def test_a_kernel_timeout_is_a_heartbeat_limit_too(self):
+        outcome = ExactProbeBackend.read_output(KERNEL_TIMEOUT)
+        assert outcome.available is False
+        assert "heartbeat" in (outcome.error or "")
+
+    def test_a_real_error_outranks_a_heartbeat_limit_after_it(self):
+        # Once the statement has failed, a later timeout is on a recovered goal.
+        outcome = ExactProbeBackend.read_output(DID_NOT_ELABORATE + HEARTBEAT_LIMIT)
+        assert outcome.available is False
+        assert (outcome.error or "").startswith("statement did not elaborate")
+
     def test_it_cannot_lift_n1_to_decisive(self):
         # Three name/semantic stages empty: N1 below the decisive line. Before
         # the probe stopped counting elaboration failures, it made the fourth
@@ -407,6 +461,39 @@ class TestExactProbeOutput:
 
 
 NAMELESS = "-- a payload with no named declaration\nexample : True := trivial"
+
+
+class TestLeanSearchAnswers:
+    """An answer nobody can read is a search that did not run, not an empty one."""
+
+    @staticmethod
+    def search(monkeypatch, answer) -> StageOutcome:
+        backend = LeanSearchBackend()
+        monkeypatch.setattr(backend, "_post_json", lambda *_: answer)
+        return backend.search(StatementQuery.from_lean(NOVEL))
+
+    @pytest.mark.parametrize(
+        "answer",
+        [{"error": "busy"}, [], [None], "busy", [[{"result": {}}]], [[{"other": 1}]]],
+        ids=["dict", "empty", "null", "text", "nameless-result", "no-result"],
+    )
+    def test_a_malformed_answer_is_not_an_empty_search(self, monkeypatch, answer):
+        outcome = self.search(monkeypatch, answer)
+        assert outcome.available is False
+        assert outcome.error == "unexpected response shape"
+
+    def test_a_genuinely_empty_answer_is_an_empty_search(self, monkeypatch):
+        outcome = self.search(monkeypatch, [[]])
+        assert outcome.available is True
+        assert outcome.hits == []
+
+    def test_a_malformed_answer_cannot_lift_n1_to_decisive(self, monkeypatch):
+        backend = LeanSearchBackend()
+        monkeypatch.setattr(backend, "_post_json", lambda *_: [None])
+        stages = [empty_backend(s) for s in ("name", "loogle", "exact_probe")]
+        result = NoveltyClassifier([*stages, backend]).classify(NOVEL)
+        assert result.level is NoveltyLevel.N1
+        assert result.needs_review is True
 
 
 class TestExplicitUniverses:
@@ -821,9 +908,57 @@ class TestMeasureDensity:
         assert report["max_n1_confidence_reached"] == pytest.approx(0.9)
         assert report["statements_by_stages_run"] == {"1": 1, "4": 1}
 
+    def test_report_counts_the_statements_the_decisive_check_could_read(self):
+        # Three ran all four stages. One found nothing, one has a near hit that
+        # holds it back from decisive, and one matched, so it never could be.
+        def statement(name: str) -> dict:
+            lean = f"theorem {name} (I : Ideal R) (P : Ideal S) : True := sorry"
+            return {"id": name, "name": name, "lean_statement": lean}
+
+        semantic = RecordedBackend(
+            "semantic",
+            {
+                "near": StageOutcome(
+                    "semantic",
+                    True,
+                    hits=[hit("Ideal.ramificationIdx.of_Thing", sig="(p : Ideal R)")],
+                ),
+                "matched": StageOutcome(
+                    "semantic", True, hits=[hit("Ideal.Ideal.Ideal.Ideal")]
+                ),
+            },
+        )
+        stages = [empty_backend(s) for s in ("name", "loogle", "exact_probe")]
+        doc = {
+            "arc": "t",
+            "statements": [statement(n) for n in ("absent", "near", "matched")],
+        }
+        report = measure_density(doc, NoveltyClassifier([*stages, semantic]))
+        assert report["statements_by_stages_run"] == {"4": 3}
+        assert report["counts"] == {"N0": 0, "N1": 2, "INCONCLUSIVE": 1}
+        assert report["n1_with_decisive_stages"] == 2
+        assert report["n1_density_decisive"] == pytest.approx(1 / 3)
+
+    def test_report_states_density_with_inconclusive_included(self):
+        semantic = RecordedBackend(
+            "semantic",
+            {
+                "Functor.comp_obj": StageOutcome(
+                    "semantic",
+                    True,
+                    hits=[hit("Functor.comp_obj", sig="(F : Functor)")],
+                )
+            },
+        )
+        stages = [empty_backend(s) for s in ("name", "loogle", "exact_probe")]
+        report = measure_density(arc_doc(), NoveltyClassifier([*stages, semantic]))
+        assert report["counts"] == {"N0": 0, "N1": 1, "INCONCLUSIVE": 1}
+        assert report["n1_density"] == pytest.approx(0.5)
+        assert report["n1_or_inconclusive_density"] == pytest.approx(1.0)
+
 
 class TestLabelNames:
-    """A label says nothing about the mathematics, so it must not dilute a match."""
+    """A label says nothing about the mathematics, so it takes no part in a match."""
 
     STATEMENT = (
         "theorem {label} (I : Ideal R) (P : Ideal S) : "
@@ -851,6 +986,22 @@ class TestLabelNames:
             "ant_c17_some_long_label_words_here", names_are_labels=True
         )
         assert (short.level, short.confidence) == (long.level, long.confidence)
+
+    def test_a_label_cannot_create_a_match(self):
+        # The hit's tokens appear only in the label, under its full name.
+        name = "Ideal.ramificationIdx_label"
+        statement = f"theorem {name} : True := sorry"
+        match = hit("Ideal.ramificationIdx")
+
+        def classify(**kwargs):
+            semantic = RecordedBackend(
+                "semantic", {name: StageOutcome("semantic", True, hits=[match])}
+            )
+            stages = [empty_backend("exact_probe"), semantic]
+            return NoveltyClassifier(stages, **kwargs).classify(statement)
+
+        assert classify().level is NoveltyLevel.INCONCLUSIVE
+        assert classify(names_are_labels=True).level is NoveltyLevel.N1
 
     def test_real_names_still_count_by_default(self):
         name = "ramificationIdx_eq_one"
@@ -905,6 +1056,13 @@ class TestSemanticMatch:
         match = hit("CategoryTheory.Category.assoc_of_comp")
         assert self.classify(statement, "foo", match).level is NoveltyLevel.N1
 
+    def test_a_bare_two_token_definition_is_not_a_match(self):
+        statement = (
+            "theorem foo {C : Type} [CategoryTheory.Category C] (X : C) : True := sorry"
+        )
+        match = hit("CategoryTheory.Category")
+        assert self.classify(statement, "foo", match).level is NoveltyLevel.N1
+
     def test_no_semantic_hit_can_produce_n0(self):
         statement = "theorem yonedaLemma (C : CategoryTheory.Cat) : True := sorry"
         match = hit("CategoryTheory.yonedaLemma", sig="(C : CategoryTheory.Cat)")
@@ -927,6 +1085,268 @@ class TestSemanticMatch:
         result = NoveltyClassifier(four_empty_stages()).classify(NOVEL)
         assert result.level is NoveltyLevel.N1
         assert result.needs_review is False
+
+    def test_candidates_keep_every_hit_in_order(self):
+        hits = [hit(f"Library.result_number_{i}") for i in range(8)]
+        semantic = RecordedBackend(
+            "semantic",
+            {
+                "sameDenom_eq_iff_exists_postcomp_W": StageOutcome(
+                    "semantic", True, hits=hits
+                )
+            },
+        )
+        result = NoveltyClassifier([semantic]).classify(NOVEL)
+        assert result.candidates == [f"semantic: {h.name} (Mathlib.X)" for h in hits]
+
+    def test_candidates_come_from_semantic_search_only(self):
+        loogle = RecordedBackend(
+            "loogle",
+            {
+                "sameDenom_eq_iff_exists_postcomp_W": StageOutcome(
+                    "loogle", True, hits=[hit("Library.from_loogle")]
+                )
+            },
+        )
+        result = NoveltyClassifier([loogle, empty_backend("semantic")]).classify(NOVEL)
+        assert result.candidates == []
+
+
+# A concise restatement of a library result, recorded by a reviewer: the hit is too
+# long for a share of 0.8, and shares more than half the tokens of the pair.
+RESTATEMENT = (
+    "theorem right_adjoint_preserves_limits (adj : Adjunction F G) : "
+    "PreservesLimits G := sorry"
+)
+RESTATED = SearchHit(
+    name="CategoryTheory.Adjunction.rightAdjoint_preservesLimits",
+    type_signature=": PreservesLimitsOfSize.{v, u} G",
+)
+
+
+def restatement_stages() -> list[RecordedBackend]:
+    semantic = RecordedBackend(
+        "semantic",
+        {
+            "right_adjoint_preserves_limits": StageOutcome(
+                "semantic", True, hits=[RESTATED]
+            )
+        },
+    )
+    return [*(empty_backend(s) for s in ("name", "loogle", "exact_probe")), semantic]
+
+
+class TestNearHit:
+    """A near hit leaves a statement N1, and takes the N1 out of automatic counting."""
+
+    def test_it_stays_n1_but_needs_review(self):
+        result = NoveltyClassifier(restatement_stages()).classify(RESTATEMENT)
+        assert result.level is NoveltyLevel.N1
+        assert result.confidence < DECISIVE_CONFIDENCE
+        assert result.needs_review is True
+
+    def test_its_evidence_names_the_hit(self):
+        result = NoveltyClassifier(restatement_stages()).classify(RESTATEMENT)
+        assert result.evidence[0].startswith("not found by:")
+        assert f"near hit: semantic: {RESTATED.name}" in result.evidence
+
+    def test_it_cannot_reach_cvfn(self):
+        # The gate and the CVFN report read different fields, and both must hold.
+        artifact = make_artifact(RESTATEMENT)
+        classifier = NoveltyClassifier(restatement_stages())
+        decision = apply_novelty_gate(artifact, classifier)
+        assert decision.counts_as_novel is False
+        assert decision.needs_human_review is True
+        assert counts_as_novel(artifact.to_dict()) is False
+
+    def test_a_decisive_n1_still_reaches_cvfn(self):
+        artifact = make_artifact(NOVEL)
+        decision = apply_novelty_gate(artifact, NoveltyClassifier(four_empty_stages()))
+        assert decision.counts_as_novel is True
+        assert counts_as_novel(artifact.to_dict()) is True
+
+    def test_the_gate_stamps_candidates_on_the_artifact(self):
+        artifact = make_artifact(RESTATEMENT)
+        apply_novelty_gate(artifact, NoveltyClassifier(restatement_stages()))
+        expected = [f"semantic: {RESTATED.name}"]
+        assert artifact.novelty_candidates == expected
+        assert artifact.to_dict()["novelty_candidates"] == expected
+        assert Artifact.from_dict(artifact.to_dict()).novelty_candidates == expected
+
+
+RECORDED_HITS = {
+    row["id"]: row
+    for row in json.loads((FIXTURES / "semantic_hits_2026-11-04.json").read_text())[
+        "statements"
+    ]
+}
+CONTROL_ARC = "gate_a_control_arc"
+ARC_FILES = {
+    "core_arc": ROOT / "data/ant_arcs/core_arc.json",
+    "ramification_arc": ROOT / "data/ant_arcs/ramification_arc.json",
+    CONTROL_ARC: ROOT / "data/novelty_control/gate_a_control_arc.json",
+}
+ARC_STATEMENTS = {
+    arc: {s["id"]: s for s in json.loads(path.read_text())["statements"]}
+    for arc, path in ARC_FILES.items()
+}
+ALL_FOUR = ["name", "loogle", "exact_probe"]
+
+
+def recorded(prefix: str) -> dict:
+    rows = [row for key, row in RECORDED_HITS.items() if key.startswith(prefix)]
+    assert len(rows) == 1, prefix
+    return rows[0]
+
+
+def replay(
+    row: dict,
+    hits: list[SearchHit] | None = None,
+    stages: list[str] | None = None,
+    lean: str | None = None,
+):
+    """Classify a recorded statement against recorded hits, offline."""
+    statement = ARC_STATEMENTS[row["arc"]][row["id"]]
+    lean = lean or statement["lean_statement"]
+    informal = statement.get("informal")
+    if hits is None:
+        hits = [SearchHit(name=h["name"], type_signature=h["sig"]) for h in row["hits"]]
+    key = StatementQuery.from_lean(lean, informal=informal).display_name
+    semantic = RecordedBackend(
+        "semantic", {key: StageOutcome("semantic", True, hits=hits)}
+    )
+    ladder = [empty_backend(s) for s in (row["stages"] if stages is None else stages)]
+    return NoveltyClassifier(
+        [*ladder, semantic], names_are_labels=row["arc"] != CONTROL_ARC
+    ).classify(lean, informal=informal)
+
+
+def replay_one_hit(prefix: str, name: str):
+    """A recorded statement at four stages, against one of its recorded hits."""
+    row = recorded(prefix)
+    found = next(h for h in row["hits"] if h["name"] == name)
+    only = SearchHit(name=found["name"], type_signature=found["sig"])
+    return replay(row, hits=[only], stages=ALL_FOUR)
+
+
+class TestSemanticRule:
+    """The chosen rule against the rejected ones, on pairs LeanSearch really returned."""
+
+    @pytest.mark.parametrize(
+        ("statement", "name"),
+        [
+            pytest.param(
+                "core-18", "NumberField.Units.torsion", id="share-exactly-0.8"
+            ),
+            pytest.param(
+                "lemma-yonedaEquiv_apply_id",
+                "CategoryTheory.yonedaEquiv",
+                id="share-0.8-jaccard-0.36",
+            ),
+            pytest.param("core-07", "NumberField.RingOfIntegers.rank", id="share-0.88"),
+            pytest.param("ram-06", "Ideal.ramificationIdx", id="exactly-three-tokens"),
+        ],
+    )
+    def test_these_pairs_match(self, statement, name):
+        result = replay_one_hit(statement, name)
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert any(name in e for e in result.evidence)
+
+    @pytest.mark.parametrize(
+        ("statement", "name"),
+        [
+            pytest.param("core-18", "subgroup_units_cyclic", id="share-0.75"),
+            pytest.param(
+                "theorem-yoneda_preserves_limits-264fd0",
+                "CategoryTheory.yoneda_preservesLimits",
+                id="share-0.71",
+            ),
+            pytest.param(
+                "ram-14",
+                "IsCyclotomicExtension.Rat.ramificationIdx_of_not_dvd",
+                id="smaller-set-0.92-share-0.5",
+            ),
+            pytest.param("core-18", "instIsCyclicUnitsOfFinite", id="jaccard-0.44"),
+        ],
+    )
+    def test_these_pairs_are_neither_a_match_nor_a_near_hit(self, statement, name):
+        result = replay_one_hit(statement, name)
+        assert result.level is NoveltyLevel.N1
+        assert result.needs_review is False
+        assert not any(name in e for e in result.evidence)
+
+    @pytest.mark.parametrize(
+        ("statement", "name"),
+        [
+            pytest.param("core-12", "IsZLattice.mk", id="jaccard-exactly-0.5"),
+            pytest.param(
+                "core-04",
+                "minpoly.isIntegrallyClosed_eq_field_fractions'",
+                id="jaccard-0.53-share-0.75",
+            ),
+        ],
+    )
+    def test_these_pairs_are_near_hits(self, statement, name):
+        result = replay_one_hit(statement, name)
+        assert result.level is NoveltyLevel.N1
+        assert result.needs_review is True
+        assert any(name in e and e.startswith("near hit") for e in result.evidence)
+
+    @pytest.mark.parametrize(
+        ("statement", "old", "new"),
+        [("core-18", "K", "F"), ("ram-20", "K", "F"), ("ram-20", "L", "E")],
+    )
+    def test_renaming_a_binder_letter_changes_nothing(self, statement, old, new):
+        row = recorded(statement)
+        lean = ARC_STATEMENTS[row["arc"]][row["id"]]["lean_statement"]
+        renamed = re.sub(rf"\b{old}\b", new, lean)
+        assert renamed != lean
+        written, after = replay(row), replay(row, lean=renamed)
+        assert (written.level, written.confidence) == (after.level, after.confidence)
+
+    def test_the_recorded_run_moves_exactly_these_statements_out_of_n1(self):
+        moved = {
+            row["id"]
+            for row in RECORDED_HITS.values()
+            if row["r4_level"] == "N1" and replay(row).level is not NoveltyLevel.N1
+        }
+        assert moved == {
+            "core-18",
+            "ram-06",
+            "definition-initial_terminal_def-b7579f3b",
+            "definition-initial_terminal_def_fixed-4b346e5d",
+            "definition-mono_epi_def-b8cb5f94",
+            "definition-representable_transformation_def-7cd6ca30",
+            "lemma-equalizer_def-fd1cc105",
+            "lemma-equivalence_of_categories-d0ff5d5a",
+            "lemma-functor_preserves_iso-9a0fdc91",
+            "lemma-natural_iso_components_iso-b02cff20",
+            "lemma-pullback_comparison_iso-45b77643",
+            "lemma-pullback_of_mono_is_mono-d8bb9f5e",
+            "lemma-representable_functor_preserves_products-47afce45",
+            "lemma-representable_morphism_pullback_exists-be32bec1",
+            "theorem-fully_faithful_reflects_iso-55b16f1b",
+            "theorem-functor_category_def-ecca97d1",
+            "theorem-right_adjoint_preserves_limits-0a6a19e1",
+        }
+
+    def test_the_recorded_run_has_exactly_these_near_hits(self):
+        near = {
+            row["id"]
+            for row in RECORDED_HITS.values()
+            if row["r4_level"] == "N1"
+            and any(e.startswith("near hit") for e in replay(row).evidence)
+        }
+        assert near == {"core-04", "core-12", "ram-04", "ram-14"}
+
+    def test_statements_the_old_tier_held_stay_out_of_n1(self):
+        rows = [r for r in RECORDED_HITS.values() if r["r4_level"] == "INCONCLUSIVE"]
+        assert len(rows) == 12
+        assert all(replay(row).level is NoveltyLevel.INCONCLUSIVE for row in rows)
+
+    def test_no_recorded_hit_reaches_n0(self):
+        levels = {replay(row).level for row in RECORDED_HITS.values()}
+        assert NoveltyLevel.N0 not in levels
 
 
 # ------------------------------------------------- recorded live fixtures

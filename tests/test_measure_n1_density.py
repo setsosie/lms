@@ -77,6 +77,33 @@ class TestUnreachableMessage:
         assert "Decisive N1 is unreachable" in out
         assert "0.75" in out
 
+    def test_it_does_not_call_the_n1_share_an_upper_bound(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        arc = tmp_path / "arc.json"
+        statement = {
+            "id": "a",
+            "name": "n",
+            "lean_statement": "theorem n : True := sorry",
+        }
+        arc.write_text(json.dumps({"arc": "t", "statements": [statement]}))
+        stages = [RecordedBackend(s, {}) for s in ("name", "loogle", "exact_probe")]
+        stages.append(RecordedBackend("semantic", {}))
+        monkeypatch.setattr(mnd, "default_backends", lambda _: stages)
+        mnd.main(
+            [
+                str(arc),
+                "--lean-project",
+                str(tmp_path),
+                "--cache-dir",
+                str(tmp_path / "c"),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "upper" not in out
+        assert "N1 at four stages: 1" in out
+        assert "with INCONCLUSIVE: 1.00" in out
+
 
 @pytest.mark.parametrize("path", ARCS, ids=lambda p: p.stem)
 class TestArcFiles:

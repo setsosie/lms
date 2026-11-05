@@ -1,8 +1,12 @@
 """Tests for real LEAN 4 verifier."""
 
+import shutil
+import subprocess
+
 import pytest
 
 from lms.lean.real import RealLeanVerifier
+from lms.novelty.mathlib_search import ExactProbeBackend, StageOutcome
 from tests._lean_env import LEAN_MISSING, LEAN_MISSING_REASON
 
 
@@ -106,3 +110,60 @@ theorem add_one_succ (n : Nat) : add_one n = n + 1 := rfl
         code = "theorem nat_zero : (0 : Nat) = 0 := rfl"
         result = await verifier.verify(code)
         assert result.success is True
+
+
+class TestExactProbeContext:
+    """A probe sees what the statement's own context gives it, and no more.
+
+    Core Lean has `exact?` and these goals need nothing from the library, so the
+    probes run without their import. A wrong close here reads as a false N0.
+    """
+
+    @staticmethod
+    def run_probe(tmp_path, statement: str) -> StageOutcome:
+        source = ExactProbeBackend.probe_source(statement)
+        assert source is not None
+        path = tmp_path / "probe.lean"
+        path.write_text(source.replace("import Mathlib\n", ""))
+        proc = subprocess.run(
+            [shutil.which("lean") or "lean", "-DautoImplicit=false", str(path)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            timeout=120,
+        )
+        return ExactProbeBackend.read_output(proc.stdout + proc.stderr)
+
+    def test_it_cannot_use_a_variable_the_statement_leaves_out(self, tmp_path):
+        outcome = self.run_probe(
+            tmp_path, "variable (p : Prop) (h : p)\n\ntheorem t : p := sorry\n"
+        )
+        assert outcome.available is True
+        assert outcome.closed_by is None
+
+    def test_it_can_use_a_variable_the_statement_includes(self, tmp_path):
+        outcome = self.run_probe(
+            tmp_path,
+            "variable (p : Prop) (h : p)\ninclude h\n\ntheorem t : p := sorry\n",
+        )
+        assert outcome.closed_by == "exact h"
+
+    def test_it_cannot_close_a_goal_by_calling_itself(self, tmp_path):
+        outcome = self.run_probe(tmp_path, "theorem t (n : Nat) : n = n + 1 := sorry\n")
+        assert outcome.available is True
+        assert outcome.closed_by is None
+
+    def test_an_explicit_universe_list_elaborates(self, tmp_path):
+        outcome = self.run_probe(
+            tmp_path, "theorem t.{u} (α : Type u) (a : α) : a = a := sorry\n"
+        )
+        assert outcome.closed_by is not None
+
+    def test_scopes_closed_before_the_statement_still_parse(self, tmp_path):
+        outcome = self.run_probe(
+            tmp_path,
+            "noncomputable section\nend\n\nsection A\nend A\n\n"
+            "theorem t : True := sorry\n",
+        )
+        assert outcome.available is True
+        assert outcome.closed_by is not None
