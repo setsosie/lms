@@ -239,7 +239,7 @@ control's 52 statements. The walltime is 4 h.
 Summary, one line per report:
 
 ```bash
-cd ~/code/lms && uv run python -c "import json,glob; [print(p.split('/')[-1], r['counts'], 'upper=%.2f decisive=%.2f reached=%.2f stages=%s review=%d' % (r['n1_density'], r['n1_density_decisive'], r['max_n1_confidence_reached'], r['statements_by_stages_run'], len(r['needs_review']))) for p in sorted(glob.glob('experiments/n1_density/*.report.json')) for r in [json.load(open(p))]]"
+cd ~/code/lms && uv run python -c "import json,glob; [print(p.split('/')[-1], r['counts'], 'n1=%.2f with_inconclusive=%.2f decisive=%.2f reached=%.2f stages=%s n1_at_four=%d review=%d' % (r['n1_density'], r['n1_or_inconclusive_density'], r['n1_density_decisive'], r['max_n1_confidence_reached'], r['statements_by_stages_run'], r['n1_with_decisive_stages'], len(r['needs_review']))) for p in sorted(glob.glob('experiments/n1_density/*.report.json')) for r in [json.load(open(p))]]"
 ```
 
 Drafts that did not elaborate at the pin:
@@ -250,25 +250,40 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
 
 **Checkpoint R4 — read it in this order.**
 
-1. **Control.** Read `reached` and `stages` first. The check can only fail if
-   some statements ran four stages, which means `reached=0.90`. A lower value
-   means `decisive=0.00` is empty, not a pass. Inspect every decisive N1 by
-   hand: each one is either a classifier defect or a genuinely new result in a
-   run designed to have none. If more than a couple appear, **the arc
-   densities are void**; stop and paste. `decisive` should otherwise be low.
-   Expect a large INCONCLUSIVE share: a semantic match reads INCONCLUSIVE and
-   never N0, so N0 stays well short of the 52. 11 of the 52 have no parseable
-   name and 31 are not theorems, so for many of them only semantic search can
-   run. That is the instrument declining to guess, not failing. The N0 count is
-   the control's *recall*; record it.
+1. **Control.** Read `stages` and `n1_at_four` first. A statement reads decisive
+   N1 only if it ran all four stages and nothing matched, so `reached=0.90` is
+   necessary and not sufficient. `stages` shows how many statements the check
+   had to work with, and `n1_at_four` how many of those matched nothing. Few
+   of either means `decisive=0.00` is weak evidence, so report it with those
+   counts rather than as a pass. Expect few: a local forecast on a library build
+   newer than the pin has 2 statements at four stages, both matching a hit.
+   Inspect every decisive N1 by hand: each one is
+   either a classifier defect or a genuinely new result in a run designed to
+   have none. If more than a couple appear, **the arc densities are void**;
+   stop and paste. Expect a large INCONCLUSIVE share: a semantic match reads
+   INCONCLUSIVE and never N0, so N0 stays well short of the 52. 11 of the 52
+   have no parseable name and 31 are not theorems, so for many of them only
+   semantic search can run. That is the instrument declining to guess, not
+   failing. The N0 count is the control's *recall*; record it.
+
+   **A low control N1 does not validate the arcs.** Control statements are
+   whole files and arc statements are one declaration, and a hit's tokens are
+   far easier to find in a whole file. Replaying the 2026-11-04 hits, the match
+   rule moved 15 of the control's 19 N1s, but none when scoring only each
+   statement's first declaration header. It moved 1 of core's 7 and 1 of
+   ramification's 8.
 2. **Arcs.** `reached=0.60` and `decisive=0.00` are expected **by construction**.
    The drafts' names are labels, so only `exact?` and semantic search run, and
-   two stages cannot reach the 0.8 decisive line. **`upper` is only a ceiling.**
-   The semantic rule is conservative: re-scoring the 2026-11-04 hits moved 1 of
-   core's 7 N1s and 2 of ramification's 8, while hand reading finds most of them
-   in the library. What decides the slice is D4 review of the queue, reading each
-   statement's `candidates`, which list what semantic search returned whether or
-   not it counted as a match. Cross-check against each
+   two stages cannot reach the 0.8 decisive line. **`n1` bounds nothing, in
+   either direction.** It overstates, because most N1s hand-read at 2026-11-04
+   are in the library and the match rule moved few of them. It also leaves out
+   INCONCLUSIVE statements, which may be novel: `with_inconclusive` was 11/20
+   for core and 18/21 for ramification, and all 10 of ramification's
+   INCONCLUSIVE statements did not elaborate, so that run measured nothing about
+   them. What decides the slice is D4 review of the queue, reading each
+   statement's `candidates`, which list every hit semantic search returned. A
+   `near hit:` line in `evidence` marks a hit worth reading first, one that also
+   keeps the statement from counting without review. Cross-check against each
    statement's `notes`: one the drafter marked "Expected N0" that reads N1 is
    a classifier miss worth a look. Since #66, core-13 and core-14 (Minkowski)
    and core-20 (Dirichlet) can read INCONCLUSIVE with a semantic hit carrying
