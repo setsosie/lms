@@ -23,7 +23,7 @@
 
 - `default_novelty_classifier` (`lms/gates/novelty.py`) runs all four stages with `names_are_labels=False`, and `counts_as_novel` (`lms/accounting.py`) counts any N1 at confidence 0.8 or above without D4 review.
 - Replaying recorded hits in that configuration, with the name, Loogle and `exact?` stages empty, core-13, -15, -17, -20 and ram-04, -05, -14, -17 all read N1 at 0.90 with no review. Those are arc statements under their label names, used here as stand-ins for an artifact whose name matches nothing. By hand reading (not D4), 6 of the 8 are in the library, ram-14 is close and ram-04 is open. core-13's own `notes` say "Expected N0".
-- Label tokens enlarge the Jaccard union, so ram-04 and ram-14, which are near hits under the arc configuration, are not near hits here. A near hit still can't count, but fewer statements qualify as one.
+- Label tokens enlarge the Jaccard union, so ram-04 and ram-14, which are near hits under the arc configuration, are not near hits here. A near hit still can't count, but fewer statements qualify as one. Docstrings and imports enlarge it too, because `_statement_tokens` reads the unstripped source: adding a capitalised docstring moved a near hit from N1 0.75 to N1 0.9, counted without review. None of the control's 19 N1s, all whole files, has a near hit.
 - `data/ant_arcs/README.md` says name and Loogle silence on label names "is not evidence". Gate 4 counts both toward the four stages for any artifact.
 - This is not a regression from `26Q4-HARN-09`. On `main`, the same statements read the same way or worse.
 

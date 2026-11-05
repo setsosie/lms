@@ -267,7 +267,7 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
    semantic search can run. That is the instrument declining to guess, not
    failing. The N0 count is the control's *recall*; record it. Expect it near
    10: `exact?` tests only a file's first declaration, so a close on a file with
-   several reads INCONCLUSIVE, and all 11 closes in that forecast were on such
+   several reads INCONCLUSIVE, and all 9 closes in that forecast were on such
    files.
 
    **A low control N1 does not validate the arcs.** Control statements are
