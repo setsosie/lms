@@ -42,7 +42,8 @@ stages search by declaration name, so on these files they can never match and
 their silence is not evidence; `measure_n1_density.py` leaves them out and the
 ladder is `exact_probe` + `semantic`. Two stages cap N1 confidence at 0.6, below
 the 0.8 decisive line, so **every N1 here routes to D4** and the decisive
-density is 0 by construction. Read the upper density and the review queue.
+density is 0 by construction. The N1 density bounds nothing, so read D4 review of
+the queue, using each statement's `candidates`.
 
 `mathlib_rev` is pinned to `lean/lake-manifest.json`'s mathlib entry at drafting
 time (`fe3134f0`). A novelty verdict is only meaningful relative to a Mathlib

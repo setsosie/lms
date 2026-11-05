@@ -255,8 +255,9 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
    necessary and not sufficient. `stages` shows how many statements the check
    had to work with, and `n1_at_four` how many of those matched nothing. Few
    of either means `decisive=0.00` is weak evidence, so report it with those
-   counts rather than as a pass. Expect few: a local forecast on a library build
-   newer than the pin has 2 statements at four stages, both matching a hit.
+   counts rather than as a pass. Expect none to read decisive: a local forecast
+   on a library build newer than the pin has 11 statements at four stages and no
+   N1 among them.
    Inspect every decisive N1 by hand: each one is
    either a classifier defect or a genuinely new result in a run designed to
    have none. If more than a couple appear, **the arc densities are void**;
@@ -264,7 +265,10 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
    INCONCLUSIVE and never N0, so N0 stays well short of the 52. 11 of the 52
    have no parseable name and 31 are not theorems, so for many of them only
    semantic search can run. That is the instrument declining to guess, not
-   failing. The N0 count is the control's *recall*; record it.
+   failing. The N0 count is the control's *recall*; record it. Expect it near
+   10: `exact?` tests only a file's first declaration, so a close on a file with
+   several reads INCONCLUSIVE, and all 11 closes in that forecast were on such
+   files.
 
    **A low control N1 does not validate the arcs.** Control statements are
    whole files and arc statements are one declaration, and a hit's tokens are
@@ -288,7 +292,11 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
    a classifier miss worth a look. Since #66, core-13 and core-14 (Minkowski)
    and core-20 (Dirichlet) can read INCONCLUSIVE with a semantic hit carrying
    the eponym as `evidence[0]`. That is the instrument working; their notes
-   expect N0.
+   expect N0. At the 2026-11-04 run core-13 and core-20 read N1 all the same, and
+   they stay N1 when their hits are replayed. Every arc statement is a single
+   declaration, so an `exact?` close still reads N0 here. A miss is weaker than
+   it looks: `exact?` can run out of budget and report a miss, and how often that
+   happens at the default budget is unmeasured.
 3. **Elaboration at the pin.** The 2026-10-08 pre-screen against a newer
    library build expects only SCHEMATIC drafts here (13 of them). Paste any
    non-SCHEMATIC id: it gets repaired in one pass through a PR, and a re-run

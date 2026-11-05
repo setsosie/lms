@@ -12,7 +12,9 @@ either means a decisive count of zero is weak evidence. `max_n1_confidence_reach
 at 0.9 is necessary for the check to fire and says no more than that. The expected
 reading is some N0, a large INCONCLUSIVE share and few N1s. It is not "all N0": a
 semantic match only ever reads INCONCLUSIVE, with the hit as evidence, so that a
-search result can't label novel work a re-derivation.
+search result can't label novel work a re-derivation. `exact?` adds little to N0
+here: it tests only a file's first declaration, so a close on a file with several
+reads INCONCLUSIVE, and most of these files have several.
 
 What it cannot show: that the arc densities are right. Its statements are whole
 files, with imports, comments and every later declaration, and the arcs' are one

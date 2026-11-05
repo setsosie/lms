@@ -9,6 +9,10 @@ grep -q "_SEMANTIC_MATCH_MIN_TOKENS" lms/novelty/__init__.py
 grep -q "_NEAR_HIT_N1_CONFIDENCE" lms/novelty/__init__.py
 grep -q "n1_with_decisive_stages" lms/novelty/__init__.py
 grep -q "novelty_candidates" lms/gates/novelty.py
+grep -q "_FIRST_OF_SEVERAL_CLOSE" lms/novelty/__init__.py
+grep -q "probe gave no answer" lms/novelty/mathlib_search.py
+test -f docs/planning/tasks/26Q4-01/26Q4-HARN-11-decisive-n1-meaning-gate-4.md
+test -f docs/planning/tasks/26Q4-01/26Q4-HARN-12-exhausted-exact-probe-vs-miss.md
 test -f tests/fixtures/novelty/semantic_hits_2026-11-04.json
 grep -q "max_n1_confidence_reached" lms/novelty/__init__.py
 grep -q "exact_probe/v3" lms/novelty/mathlib_search.py
