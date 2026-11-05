@@ -92,6 +92,7 @@ def apply_novelty_gate(
     artifact.novelty_level = result.level.value
     artifact.novelty_confidence = result.confidence
     artifact.novelty_evidence = list(result.evidence)
+    artifact.novelty_candidates = list(result.candidates)
 
     counts = result.level is NoveltyLevel.N1 and not result.needs_review
     if counts:

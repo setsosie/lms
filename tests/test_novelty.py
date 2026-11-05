@@ -312,7 +312,7 @@ class TestExactProbe:
     def test_probe_keeps_the_preamble_the_statement_needs(self):
         lines = ExactProbeBackend.probe_source(ARTIFACT).splitlines()
         preamble = lines[
-            : next(i for i, s in enumerate(lines) if s.startswith("example"))
+            : next(i for i, s in enumerate(lines) if s.startswith("theorem"))
         ]
         for kept in (
             "namespace Stacks",
@@ -365,6 +365,14 @@ open Later
 """
 
 KERNEL_TIMEOUT = "probe.lean:3:0: error: (kernel) deterministic timeout\n"
+
+# Lean output recorded 2026-11-05 (toolchain v4.32.1) for a control statement written
+# as a `lemma` of data type: `exact?` answers, then Lean rejects the declaration.
+NOT_A_PROPOSITION = (
+    "Try this:\n  [apply] exact hI.uniqueUpToIso hJ\n"
+    "probe.lean:8:0: error: type of theorem `Stacks.lms_novelty_probe` "
+    "is not a proposition\n"
+)
 
 # Lean output recorded 2026-11-04 (toolchain v4.27.0-rc1): `exact?` itself ran out
 # of heartbeats, at the column of the tactic, on a statement that elaborated.
@@ -421,6 +429,12 @@ class TestExactProbeOutput:
         assert outcome.closed_by is None
         assert "heartbeat" in (outcome.error or "")
         assert not (outcome.error or "").startswith("statement did not elaborate")
+
+    def test_a_close_on_a_data_goal_does_not_count(self):
+        outcome = ExactProbeBackend.read_output(NOT_A_PROPOSITION)
+        assert outcome.available is False
+        assert outcome.closed_by is None
+        assert (outcome.error or "").startswith("statement did not elaborate")
 
     def test_a_kernel_timeout_is_a_heartbeat_limit_too(self):
         outcome = ExactProbeBackend.read_output(KERNEL_TIMEOUT)
@@ -893,6 +907,8 @@ class TestMeasureDensity:
         assert report["max_n1_confidence"] == pytest.approx(0.9)
         assert report["max_n1_confidence_reached"] == pytest.approx(0.75)
         assert report["statements_by_stages_run"] == {"3": 2}
+        assert report["counts"]["N1"] == 2
+        assert report["n1_with_decisive_stages"] == 0
 
     def test_stage_counts_include_statements_that_stopped_early(self):
         name = RecordedBackend(
@@ -912,19 +928,17 @@ class TestMeasureDensity:
         # Three ran all four stages. One found nothing, one has a near hit that
         # holds it back from decisive, and one matched, so it never could be.
         def statement(name: str) -> dict:
-            lean = f"theorem {name} (I : Ideal R) (P : Ideal S) : True := sorry"
+            lean = f"theorem {name} : Ideal.ramificationIdx I P = 1 := sorry"
             return {"id": name, "name": name, "lean_statement": lean}
 
         semantic = RecordedBackend(
             "semantic",
             {
                 "near": StageOutcome(
-                    "semantic",
-                    True,
-                    hits=[hit("Ideal.ramificationIdx.of_Thing", sig="(p : Ideal R)")],
+                    "semantic", True, hits=[hit("Ideal.ramificationIdx.other")]
                 ),
                 "matched": StageOutcome(
-                    "semantic", True, hits=[hit("Ideal.Ideal.Ideal.Ideal")]
+                    "semantic", True, hits=[hit("Ideal.ramificationIdx")]
                 ),
             },
         )
@@ -996,6 +1010,20 @@ class TestLabelNames:
         def classify(**kwargs):
             semantic = RecordedBackend(
                 "semantic", {name: StageOutcome("semantic", True, hits=[match])}
+            )
+            stages = [empty_backend("exact_probe"), semantic]
+            return NoveltyClassifier(stages, **kwargs).classify(statement)
+
+        assert classify().level is NoveltyLevel.INCONCLUSIVE
+        assert classify(names_are_labels=True).level is NoveltyLevel.N1
+
+    def test_a_label_equal_to_a_hit_name_is_not_a_match(self):
+        statement = "theorem mk : True := sorry"
+        match = hit("IsZLattice.mk")
+
+        def classify(**kwargs):
+            semantic = RecordedBackend(
+                "semantic", {"mk": StageOutcome("semantic", True, hits=[match])}
             )
             stages = [empty_backend("exact_probe"), semantic]
             return NoveltyClassifier(stages, **kwargs).classify(statement)
@@ -1108,7 +1136,8 @@ class TestSemanticMatch:
                 )
             },
         )
-        result = NoveltyClassifier([loogle, empty_backend("semantic")]).classify(NOVEL)
+        semantic = RecordedBackend("semantic", {}, available=False)
+        result = NoveltyClassifier([loogle, semantic]).classify(NOVEL)
         assert result.candidates == []
 
 
@@ -1244,6 +1273,11 @@ class TestSemanticRule:
                 id="share-0.8-jaccard-0.36",
             ),
             pytest.param("core-07", "NumberField.RingOfIntegers.rank", id="share-0.88"),
+            pytest.param(
+                "lemma-functor_preserves_iso",
+                "CategoryTheory.Functor.mapIso_hom",
+                id="share-0.83",
+            ),
             pytest.param("ram-06", "Ideal.ramificationIdx", id="exactly-three-tokens"),
         ],
     )
@@ -1255,11 +1289,21 @@ class TestSemanticRule:
     @pytest.mark.parametrize(
         ("statement", "name"),
         [
+            pytest.param(
+                "theorem-fully_faithful_reflects_iso",
+                "CategoryTheory.Functor.FullyFaithful.casesOn",
+                id="share-0.78",
+            ),
             pytest.param("core-18", "subgroup_units_cyclic", id="share-0.75"),
             pytest.param(
-                "theorem-yoneda_preserves_limits-264fd0",
-                "CategoryTheory.yoneda_preservesLimits",
-                id="share-0.71",
+                "lemma-product_symmetric",
+                "CategoryTheory.Prod.braiding",
+                id="share-0.75-long-statement",
+            ),
+            pytest.param(
+                "core-07",
+                "NumberField.RingOfIntegers.isIntegral_coe",
+                id="share-0.63",
             ),
             pytest.param(
                 "ram-14",

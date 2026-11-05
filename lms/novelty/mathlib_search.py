@@ -510,9 +510,14 @@ _EXACT_MISS = "could not close the goal"
 # Newer toolchains print the suggestion on its own line behind an `[apply]`
 # tag; older ones print it inline. Either way the payload starts at `exact`.
 _TRY_THIS_RE = re.compile(r"Try this:\s*(?:\[apply\]\s*)?(exact\b.+)")
-_HEARTBEAT_LIMIT = "(deterministic) timeout"
-# The commands a statement's names and notation can depend on.
-_PREAMBLE_COMMANDS = frozenset({"open", "variable", "universe", "namespace"})
+# Matches both `(deterministic) timeout at ...` and `(kernel) deterministic timeout`.
+_HEARTBEAT_LIMIT_RE = re.compile(r"deterministic\)? timeout")
+# The commands that set the scope a statement's names and notation resolve in.
+_PREAMBLE_RE = re.compile(
+    r"(?:noncomputable\s+)?"
+    r"(?:open|variable|universe|namespace|section|end|include|omit)\b"
+)
+_PROBE_NAME = "lms_novelty_probe"
 
 
 def _probe_preamble(source: str) -> list[str]:
@@ -523,7 +528,7 @@ def _probe_preamble(source: str) -> list[str]:
         if not line.strip():
             keeping = False
         elif not line[0].isspace():
-            keeping = line.split()[0] in _PREAMBLE_COMMANDS
+            keeping = _PREAMBLE_RE.match(line) is not None
         if keeping:
             kept.append(line)
     return kept
@@ -564,23 +569,26 @@ class ExactProbeBackend:
     def probe_source(lean_statement: str) -> str | None:
         """Rewrite ``theorem foo ... := proof`` as an ``exact?`` probe.
 
-        The statement's ``open``, ``variable``, ``universe`` and ``namespace``
-        lines come along, since its names and notation may resolve only under
-        them. Its imports do not: the probe searches the whole library.
+        The scope commands ahead of the declaration come along, since its names
+        and notation may resolve only under them. Its imports do not: the probe
+        searches the whole library. It stays a ``theorem``, because an ``example``
+        also sees ``variable`` hypotheses the statement leaves out, and ``exact?``
+        would use them to close a goal the statement never claimed. Lean rejects a
+        ``theorem`` of data type, as it rejects the statement as written, which is
+        right here too: ``exact?`` on data only shows that some term exists.
         """
         source = strip_comments(lean_statement)
         m = _DECL_RE.search(source)
         if not m or m.group(1) not in ("theorem", "lemma"):
             return None
-        rest = source[m.end() :]
-        body_start = rest.find(":=")
-        header = rest[:body_start] if body_start != -1 else rest
-        header = header.strip()
+        header = (statement_header(source) or "").rstrip()
         if ":" not in header:
             return None
         preamble = _probe_preamble(source[: m.start()])
         opening = "\n".join(preamble) + "\n\n" if preamble else ""
-        return f"import Mathlib\n\n{opening}example {header} := by exact?\n"
+        return (
+            f"import Mathlib\n\n{opening}theorem {_PROBE_NAME}{header} := by exact?\n"
+        )
 
     def search(self, query: StatementQuery) -> StageOutcome:
         source = self.probe_source(query.lean_statement)
@@ -639,18 +647,15 @@ class ExactProbeBackend:
             for line in output.splitlines()
             if _LEAN_ERROR_RE.search(line) and _EXACT_MISS not in line
         ]
-        heartbeats = [e for e in elaboration_errors if _HEARTBEAT_LIMIT in e]
-        if heartbeats:
-            return StageOutcome(
-                cls.stage,
-                available=False,
-                error=f"probe hit the heartbeat limit: {heartbeats[0][:400]}",
-            )
         if elaboration_errors:
+            first = elaboration_errors[0]
+            reason = (
+                "probe hit the heartbeat limit"
+                if _HEARTBEAT_LIMIT_RE.search(first)
+                else "statement did not elaborate"
+            )
             return StageOutcome(
-                cls.stage,
-                available=False,
-                error=f"statement did not elaborate: {elaboration_errors[0][:400]}",
+                cls.stage, available=False, error=f"{reason}: {first[:400]}"
             )
         m = _TRY_THIS_RE.search(output)
         if m:
@@ -695,8 +700,12 @@ class LeanSearchBackend(_HttpBackend):
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             return StageOutcome(self.stage, available=False, error=str(exc)[:500])
         hits: list[SearchHit] = []
+        unreadable = StageOutcome(
+            self.stage, available=False, error="unexpected response shape"
+        )
         try:
-            for item in data[0][: self.num_results]:
+            items = data[0][: self.num_results]
+            for item in items:
                 result = item.get("result", {})
                 name_parts = result.get("name") or []
                 module_parts = result.get("module_name") or []
@@ -709,10 +718,10 @@ class LeanSearchBackend(_HttpBackend):
                         type_signature=result.get("signature") or result.get("type"),
                     )
                 )
-        except (IndexError, TypeError, AttributeError):
-            return StageOutcome(
-                self.stage, available=True, error="unexpected response shape"
-            )
+        except (IndexError, KeyError, TypeError, AttributeError):
+            return unreadable
+        if items and not hits:
+            return unreadable
         return StageOutcome(self.stage, available=True, hits=hits)
 
 

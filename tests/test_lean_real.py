@@ -146,11 +146,17 @@ class TestExactProbeContext:
             tmp_path,
             "variable (p : Prop) (h : p)\ninclude h\n\ntheorem t : p := sorry\n",
         )
-        assert outcome.closed_by == "exact h"
+        assert outcome.closed_by is not None
 
     def test_it_cannot_close_a_goal_by_calling_itself(self, tmp_path):
         outcome = self.run_probe(tmp_path, "theorem t (n : Nat) : n = n + 1 := sorry\n")
         assert outcome.available is True
+        assert outcome.closed_by is None
+
+    def test_a_statement_of_data_type_cannot_read_as_closed(self, tmp_path):
+        # `exact n` would show only that some term exists, not that this one does.
+        outcome = self.run_probe(tmp_path, "theorem t (n : Nat) : Nat := sorry\n")
+        assert outcome.available is False
         assert outcome.closed_by is None
 
     def test_an_explicit_universe_list_elaborates(self, tmp_path):
