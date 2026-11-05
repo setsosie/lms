@@ -39,10 +39,12 @@ from lms.novelty.mathlib_search import (
     SearchHit,
     StageOutcome,
     StatementQuery,
+    declaration_count,
     default_backends,
     detect_mathlib_rev,
     extract_identifiers,
     name_tokens,
+    probed_declaration_name,
 )
 from lms.novelty.vocabulary import (
     ProjectVocabulary,
@@ -71,6 +73,11 @@ _N1_CONFIDENCE_BY_STAGES = {4: 0.9, 3: 0.75, 2: 0.6, 1: 0.45, 0: 0.0}
 # Weakest N0 evidence still worth flagging for human eyes: below decisive but
 # above this floor the result is INCONCLUSIVE rather than N1.
 _N0_CANDIDATE_FLOOR = 0.5
+
+# A close on the first of several declarations. The probe tested only that one, so
+# it can't call the file a re-derivation: the rest may be novel. Below decisive, so
+# it reads INCONCLUSIVE and names what closed.
+_FIRST_OF_SEVERAL_CLOSE = 0.7
 
 # A semantic hit carrying the eponym the informal statement names. Plausible,
 # never decisive: prose can name a result the formal statement only resembles.
@@ -288,9 +295,16 @@ class NoveltyClassifier:
     ) -> tuple[float, list[str]]:
         """Map one stage's outcome to (N0 confidence, evidence strings)."""
         if outcome.stage == "exact_probe":
-            if outcome.closed_by:
-                return 0.95, [f"exact_probe: closed by `{outcome.closed_by}`"]
-            return 0.0, []
+            if not outcome.closed_by:
+                return 0.0, []
+            declarations = declaration_count(query.lean_statement)
+            if declarations > 1:
+                name = probed_declaration_name(query.lean_statement)
+                return _FIRST_OF_SEVERAL_CLOSE, [
+                    f"exact_probe: `{name}`, the first of {declarations} declarations, "
+                    f"closed by `{outcome.closed_by}`"
+                ]
+            return 0.95, [f"exact_probe: closed by `{outcome.closed_by}`"]
 
         if not outcome.hits:
             return 0.0, []
@@ -466,7 +480,8 @@ def measure_density(
         "n1_density": (counts[NoveltyLevel.N1] / total) if total else 0.0,
         # The share the classifier cannot rule out as already in the library.
         "n1_or_inconclusive_density": (n1_or_inconclusive / total) if total else 0.0,
-        # Lower bound: only N1 labels confident enough to stand without D4.
+        # Only N1 labels confident enough to stand without D4. That says the search
+        # found nothing, not that the statement is novel, so this bounds nothing.
         "n1_density_decisive": (decisive_n1 / total) if total else 0.0,
         # The ceiling on any N1 verdict this ladder can return. Below
         # DECISIVE_CONFIDENCE, a decisive density of 0 is a property of the

@@ -301,7 +301,7 @@ class TestExactProbe:
         assert [s for s in kept if s] == statement.splitlines()[:7]
 
     def test_probe_refuses_a_header_with_no_type(self):
-        assert ExactProbeBackend.probe_source("theorem foo (n : Nat)") is None
+        assert ExactProbeBackend.probe_source("theorem foo := trivial") is None
 
     def test_probe_does_not_stop_at_a_word_containing_where(self):
         src = ExactProbeBackend.probe_source(
@@ -540,6 +540,12 @@ class TestSeveralDeclarations:
         assert any(
             "`aux`" in e and "first of 2 declarations" in e for e in result.evidence
         )
+
+    def test_the_helper_it_names_is_not_one_from_a_comment(self):
+        lean = "/-- The\ntheorem of Dedekind. -/\n" + self.FILE
+        result = self.classify(lean)
+        assert any("`aux`" in e for e in result.evidence)
+        assert not any("`of`" in e for e in result.evidence)
 
     def test_the_ladder_goes_on_to_semantic_search(self):
         result = self.classify(self.FILE)

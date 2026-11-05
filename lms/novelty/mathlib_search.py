@@ -109,6 +109,26 @@ def parse_declaration(lean_code: str) -> tuple[str | None, str | None]:
     return m.group(1), m.group(2)
 
 
+# Any declaration, named or not: `_DECL_RE` needs a name it can parse, which
+# `theorem π_x`, `nonrec theorem x` and an anonymous `instance` don't give it.
+_ANY_DECL_RE = re.compile(
+    r"^\s*(?:(?:private|protected|noncomputable|nonrec|unsafe|partial)\s+"
+    r"|@\[[^\]]*\]\s*)*"
+    rf"(?:{'|'.join(_DECL_KEYWORDS)}|example|axiom|opaque)\b",
+    re.MULTILINE,
+)
+
+
+def declaration_count(lean_code: str) -> int:
+    """How many declarations a Lean file holds, leaving comments out."""
+    return len(_ANY_DECL_RE.findall(strip_comments(lean_code)))
+
+
+def probed_declaration_name(lean_code: str) -> str | None:
+    """Name of the declaration an ``exact?`` probe of this file tests."""
+    return parse_declaration(strip_comments(lean_code))[1]
+
+
 def declared_names(lean_code: str) -> list[str]:
     """Names of every declaration in a Lean snippet, in source order."""
     return [m.group(2) for m in _DECL_RE.finditer(lean_code)]
@@ -398,7 +418,7 @@ class MathlibNameSearch:
         # grep exits 1 on "no matches", which is a result, not a failure.
         if proc.returncode not in (0, 1):
             return StageOutcome(
-                self.stage, available=True, error=proc.stderr.strip()[:500]
+                self.stage, available=False, error=proc.stderr.strip()[:500]
             )
         hits = []
         for line in proc.stdout.splitlines()[:50]:
@@ -491,7 +511,11 @@ class LoogleBackend(_HttpBackend):
             return StageOutcome(self.stage, available=False, error=str(exc)[:500])
         if isinstance(data, dict) and data.get("error"):
             return StageOutcome(
-                self.stage, available=True, error=str(data["error"])[:500]
+                self.stage, available=False, error=str(data["error"])[:500]
+            )
+        if not isinstance(data, dict) or "hits" not in data:
+            return StageOutcome(
+                self.stage, available=False, error="unexpected response shape"
             )
         hits = [
             SearchHit(
@@ -640,7 +664,9 @@ class ExactProbeBackend:
         that is not the statement's — so a miss says nothing about Mathlib and
         a close is spurious (an unknown type can leave ``x = x``, which
         ``rfl`` closes). A heartbeat limit is neither: the search stopped
-        before it could answer.
+        before it could answer. A miss has to say so, because a probe killed
+        for memory prints nothing at all. ``exact?`` can also run out of budget
+        inside its search and report that as a miss, which this can't detect.
         """
         elaboration_errors = [
             line
@@ -660,11 +686,13 @@ class ExactProbeBackend:
         m = _TRY_THIS_RE.search(output)
         if m:
             return StageOutcome(cls.stage, available=True, closed_by=m.group(1).strip())
-        return StageOutcome(
-            cls.stage,
-            available=True,
-            error=output.strip()[:500] or None,
-        )
+        if _EXACT_MISS not in output:
+            return StageOutcome(
+                cls.stage,
+                available=False,
+                error=f"probe gave no answer: {output.strip()[:400]}",
+            )
+        return StageOutcome(cls.stage, available=True, error=output.strip()[:500])
 
 
 class LeanSearchBackend(_HttpBackend):
