@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from lms.gates.lean_source import strip_comments
+
 LOOGLE_URL = "https://loogle.lean-lang.org"
 LEANSEARCH_URL = "https://leansearch.net"
 
@@ -508,6 +510,23 @@ _EXACT_MISS = "could not close the goal"
 # Newer toolchains print the suggestion on its own line behind an `[apply]`
 # tag; older ones print it inline. Either way the payload starts at `exact`.
 _TRY_THIS_RE = re.compile(r"Try this:\s*(?:\[apply\]\s*)?(exact\b.+)")
+_HEARTBEAT_LIMIT = "(deterministic) timeout"
+# The commands a statement's names and notation can depend on.
+_PREAMBLE_COMMANDS = frozenset({"open", "variable", "universe", "namespace"})
+
+
+def _probe_preamble(source: str) -> list[str]:
+    """Lines of the preamble commands in ``source``, with their continuations."""
+    kept: list[str] = []
+    keeping = False
+    for line in source.splitlines():
+        if not line.strip():
+            keeping = False
+        elif not line[0].isspace():
+            keeping = line.split()[0] in _PREAMBLE_COMMANDS
+        if keeping:
+            kept.append(line)
+    return kept
 
 
 class ExactProbeBackend:
@@ -537,23 +556,31 @@ class ExactProbeBackend:
         )
 
     def cache_query(self, query: StatementQuery) -> str:
-        # v2: entries written before `read_output` cached elaboration failures
-        # as searches that ran; the version bump stops them being replayed.
-        return f"exact_probe/v2:{query.lean_statement}"
+        # v3: entries written before probes kept the statement's preamble failed
+        # to elaborate; the version bump stops them being replayed.
+        return f"exact_probe/v3:{query.lean_statement}"
 
     @staticmethod
     def probe_source(lean_statement: str) -> str | None:
-        """Rewrite ``theorem foo ... := proof`` as an ``exact?`` probe."""
-        m = _DECL_RE.search(lean_statement)
+        """Rewrite ``theorem foo ... := proof`` as an ``exact?`` probe.
+
+        The statement's ``open``, ``variable``, ``universe`` and ``namespace``
+        lines come along, since its names and notation may resolve only under
+        them. Its imports do not: the probe searches the whole library.
+        """
+        source = strip_comments(lean_statement)
+        m = _DECL_RE.search(source)
         if not m or m.group(1) not in ("theorem", "lemma"):
             return None
-        rest = lean_statement[m.end() :]
+        rest = source[m.end() :]
         body_start = rest.find(":=")
         header = rest[:body_start] if body_start != -1 else rest
         header = header.strip()
         if ":" not in header:
             return None
-        return f"import Mathlib\n\nexample {header} := by exact?\n"
+        preamble = _probe_preamble(source[: m.start()])
+        opening = "\n".join(preamble) + "\n\n" if preamble else ""
+        return f"import Mathlib\n\n{opening}example {header} := by exact?\n"
 
     def search(self, query: StatementQuery) -> StageOutcome:
         source = self.probe_source(query.lean_statement)
@@ -604,13 +631,21 @@ class ExactProbeBackend:
         ``exact?`` ran against whatever error recovery left behind — a goal
         that is not the statement's — so a miss says nothing about Mathlib and
         a close is spurious (an unknown type can leave ``x = x``, which
-        ``rfl`` closes).
+        ``rfl`` closes). A heartbeat limit is neither: the search stopped
+        before it could answer.
         """
         elaboration_errors = [
             line
             for line in output.splitlines()
             if _LEAN_ERROR_RE.search(line) and _EXACT_MISS not in line
         ]
+        heartbeats = [e for e in elaboration_errors if _HEARTBEAT_LIMIT in e]
+        if heartbeats:
+            return StageOutcome(
+                cls.stage,
+                available=False,
+                error=f"probe hit the heartbeat limit: {heartbeats[0][:400]}",
+            )
         if elaboration_errors:
             return StageOutcome(
                 cls.stage,
