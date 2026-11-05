@@ -85,8 +85,8 @@ worked during the box runs because the runs are the user's to execute.
 | 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | ✅ DONE | #70, merged 2026-10-30 | Two of its checks read an untracked archive, so it failed on every clean checkout |
 | 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | ✅ DONE | #72, merged 2026-10-30 | Threads the store beside the cost ledger (the user's choice): one `ConversationLog` per ledgered exchange. Not blocking R6: committee transcripts already land in `textbook.json` |
 | 26Q4-HARN-09: The novelty control can fail, and semantic hits stop reading as N1 | 3 | 🔲 PENDING | #82, in review | From the 2026-11-04 R4 run, whose densities were mostly classifier misses. R4 re-runs once this merges; the slice number comes from D4 reading `candidates` |
-| 26Q4-HARN-11: Decide what a decisive N1 means at Gate 4 | 2 | 🔲 PENDING | — | Before Phase C. From #82's review: library results can read decisive N1 at Gate 4. The choice of rule is the user's |
-| 26Q4-HARN-12: Tell an exhausted exact? from a miss | 2 | 🔲 PENDING | — | Before Phase C. From #82's review. Starts by measuring how often it happens, on the box |
+| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | 🔲 PENDING | — | Before Phase C. From #82's review: library results can read decisive N1 at Gate 4. The choice of rule is the user's |
+| 26Q4-HARN-14: Tell an exhausted exact? from a miss | 2 | 🔲 PENDING | — | Before Phase C. From #82's review. Starts by measuring how often it happens, on the box |
 
 ## Pulled forward: Phase C preparation (2026-10-30)
 

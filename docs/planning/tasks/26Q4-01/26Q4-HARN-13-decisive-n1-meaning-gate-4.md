@@ -1,4 +1,4 @@
-### 26Q4-HARN-11: Decide what a decisive N1 means at Gate 4
+### 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4
 
 **User Story**: As the person reading CVFN, I want a decisive N1 to mean something I can count without review, so that library results restated under an agent's own name don't inflate the denominator.
 
@@ -9,7 +9,7 @@
 | **Story Points** | 2 |
 | **Priority** | HIGH |
 | **Status** | 🔲 PENDING |
-| **Branch** | `26Q4-HARN-11-decisive-n1-meaning-gate-4` |
+| **Branch** | `26Q4-HARN-13-decisive-n1-meaning-gate-4` |
 | **Dependencies** | 26Q4-HARN-09 |
 | **Gate** | full |
 | **PR Size Target** | <500 lines (max 1000) |
@@ -69,7 +69,7 @@
 
 #### Out of Scope
 
-- `26Q4-HARN-12` owns telling an exhausted `exact?` from a miss.
+- `26Q4-HARN-14` owns telling an exhausted `exact?` from a miss.
 - The match rule itself, chosen in `26Q4-HARN-09`.
 - Name-stage false N0s.
 
@@ -77,7 +77,7 @@
 
 #### Verification Script
 
-See `scripts/verify/26Q4-01/verify_26Q4-HARN-11.sh`.
+See `scripts/verify/26Q4-01/verify_26Q4-HARN-13.sh`.
 
 ---
 
@@ -92,7 +92,7 @@ See `scripts/verify/26Q4-01/verify_26Q4-HARN-11.sh`.
 #### Definition of Done
 
 - [ ] All acceptance criteria checked off
-- [ ] `scripts/verify/26Q4-01/verify_26Q4-HARN-11.sh` exits 0
+- [ ] `scripts/verify/26Q4-01/verify_26Q4-HARN-13.sh` exits 0
 - [ ] `uv run ruff format`, `uv run ruff check`, `uv run mypy` clean
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
 - [ ] Tests included with implementation

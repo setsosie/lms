@@ -70,7 +70,7 @@ The first pre-merge review of this PR (2026-11-05) returned NO-GO, and the user 
 - [ ] The probe keeps `section`, `end`, `include` and `omit`, and an earlier real error outranks a later heartbeat limit
 - [ ] A search that failed leaves the stage unavailable and uncached, not an empty search: a malformed LeanSearch answer, a Loogle error, a grep failure, and a probe that gives no answer
 - [ ] A close on a file with several declarations reads INCONCLUSIVE and names what closed, and only a single-declaration close reads N0: `tests/test_novelty.py::TestSeveralDeclarations`
-- [ ] Findings not fixed here are carded before Phase C: `26Q4-HARN-11` and `26Q4-HARN-12`
+- [ ] Findings not fixed here are carded before Phase C: `26Q4-HARN-13` and `26Q4-HARN-14`
 - [ ] A `(deterministic) timeout` in probe output reports the heartbeat limit, not "did not elaborate", and the stage stays unavailable: `tests/test_novelty.py::TestExactProbeOutput` covers it
 - [ ] The `exact_probe` cache key version is bumped, so cached probes built without context are not replayed
 - [ ] `uv run pytest -q` passes, and `uv run ruff check .` and `uv run mypy lms/` are clean
@@ -90,10 +90,10 @@ The first pre-merge review of this PR (2026-11-05) returned NO-GO, and the user 
 | `scripts/measure_n1_density.py` | MODIFY | Pass `names_are_labels` to the classifier; message and printout use the reached ceiling |
 | `tests/test_novelty.py` | MODIFY | Tests above |
 | `data/ant_arcs/README.md` | MODIFY | How to read the arc densities |
-| `docs/planning/tasks/26Q4-01/26Q4-HARN-11-decisive-n1-meaning-gate-4.md` | CREATE | Card, before Phase C |
-| `docs/planning/tasks/26Q4-01/26Q4-HARN-12-exhausted-exact-probe-vs-miss.md` | CREATE | Card, before Phase C |
-| `scripts/verify/26Q4-01/verify_26Q4-HARN-11.sh` | CREATE | Stub for that card |
-| `scripts/verify/26Q4-01/verify_26Q4-HARN-12.sh` | CREATE | Stub for that card |
+| `docs/planning/tasks/26Q4-01/26Q4-HARN-13-decisive-n1-meaning-gate-4.md` | CREATE | Card, before Phase C |
+| `docs/planning/tasks/26Q4-01/26Q4-HARN-14-exhausted-exact-probe-vs-miss.md` | CREATE | Card, before Phase C |
+| `scripts/verify/26Q4-01/verify_26Q4-HARN-13.sh` | CREATE | Stub for that card |
+| `scripts/verify/26Q4-01/verify_26Q4-HARN-14.sh` | CREATE | Stub for that card |
 | `docs/planning/upcoming-sprints.md` | MODIFY | The two cards in the Phase C pre-lock |
 | `tests/test_measure_n1_density.py` | MODIFY | Labels reach the classifier; the script's printout |
 | `tests/test_lean_real.py` | MODIFY | Probe context on real Lean |
@@ -129,8 +129,8 @@ The first pre-merge review of this PR (2026-11-05) returned NO-GO, and the user 
 - The 12 statements that read INCONCLUSIVE from a semantic hit in that run all stay INCONCLUSIVE when their hits are re-fetched and re-scored, so dropping the old middle tier sends none of them to N1.
 - This ladder is also the live Gate 4. Artifacts that carry a preamble can now reach four stages, so CVFN can move on later runs.
 - **Rule chosen by the user on 2026-11-05:** the probe tests only a file's first declaration, so a close on a file with several reads INCONCLUSIVE and names what closed. All 41 arc statements are single declarations, so their N0s don't change. All 11 closes in a local control run were on files with several, so `exact?` adds no N0 on the control: the forecast is N0 10, INCONCLUSIVE 38, N1 4, where it would otherwise be N0 19.
-- **A decisive N1 still only means the search found nothing.** In Gate 4's configuration (four stages, names not labels) and with the other stages empty, core-13, -15, -17, -20 and ram-04, -05, -14, -17 read N1 0.90 with no review, and most are in the library by hand reading. Not a regression. `26Q4-HARN-11` owns it.
-- **A miss doesn't prove `exact?` finished.** It can run out of budget and report a miss, which this PR can't detect. Reproduced only at low budgets. `26Q4-HARN-12` owns it.
+- **A decisive N1 still only means the search found nothing.** In Gate 4's configuration (four stages, names not labels) and with the other stages empty, core-13, -15, -17, -20 and ram-04, -05, -14, -17 read N1 0.90 with no review, and most are in the library by hand reading. Not a regression. `26Q4-HARN-13` owns it.
+- **A miss doesn't prove `exact?` finished.** It can run out of budget and report a miss, which this PR can't detect. Reproduced only at low budgets. `26Q4-HARN-14` owns it.
 - Hit names always contribute tokens, but `extract_identifiers` drops lowercase names from the statement, so core-04 gets no `minpoly` token. Counting them would also match core-04, ram-20 and ram-21, and ram-21 is hand-read as open. The rule table the user chose from didn't show this, and the rule is unchanged.
 - Loogle errors were never recorded as an answer at R4 apart from "no declaration name", so no cached entry needs its key changed.
 - `names_are_labels` currently only filters backends in `build_classifier`. Pass it to `NoveltyClassifier` as an argument defaulting to False, so `lms/gates/novelty.py` is unchanged.
@@ -158,7 +158,7 @@ The first pre-merge review of this PR (2026-11-05) returned NO-GO, and the user 
 - Probing a later `theorem` when a statement's first declaration is a `def`.
 - `cvfn_report` counting gate-failed artifacts: that is a separate candidate card.
 - `26Q3-HARN-28` owns the ANT arc → goal converter.
-- `26Q4-HARN-11` owns what a decisive N1 means at Gate 4, and `26Q4-HARN-12` owns telling an exhausted `exact?` from a miss.
+- `26Q4-HARN-13` owns what a decisive N1 means at Gate 4, and `26Q4-HARN-14` owns telling an exhausted `exact?` from a miss.
 - Name search has no check against the statement, and can take its name from a comment. Both predate this card and can read N0.
 - `scripts/slurm/lms_run.sbatch`'s GRES default: a separate small change before R5b.
 

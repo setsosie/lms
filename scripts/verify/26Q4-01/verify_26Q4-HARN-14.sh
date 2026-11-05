@@ -1,6 +1,6 @@
 #!/bin/bash
-# Verification for 26Q4-HARN-11: Decide what a decisive N1 means at Gate 4
-# Run: bash scripts/verify/26Q4-01/verify_26Q4-HARN-11.sh
+# Verification for 26Q4-HARN-14: Tell an exhausted exact? from a miss
+# Run: bash scripts/verify/26Q4-01/verify_26Q4-HARN-14.sh
 #
 # This script checks that the work landed. It is NOT a test suite.
 #   Do:    test -f / grep -q / uv run pytest <file> / ruff / mypy / one-line import smoke
@@ -10,4 +10,4 @@ set -e
 
 # TODO: fill in checks once the card's choice is made.
 
-echo "26Q4-HARN-11: verification passed"
+echo "26Q4-HARN-14: verification passed"

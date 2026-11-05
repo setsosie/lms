@@ -173,7 +173,7 @@ could not fit, then runs the calibration itself. Detail in
   cannot go green without it**, so it comes first.
 - **Gate B** — one artifact through all five machine gates, end-to-end on the box.
   Was Sprint 3's goal; moved here by the capacity re-scope of 2026-08-12.
-- **`26Q4-HARN-11`** (2) and **`26Q4-HARN-12`** (2) — before the harness freezes:
+- **`26Q4-HARN-13`** (2) and **`26Q4-HARN-14`** (2) — before the harness freezes:
   what a decisive N1 means at Gate 4, and telling an exhausted `exact?` from a
   miss. CVFN counts decisive N1s, so both change the number Phase C reads.
 - **Slice**: ~20-statement contiguous arc from Neukirch ANT Ch. I, chosen from

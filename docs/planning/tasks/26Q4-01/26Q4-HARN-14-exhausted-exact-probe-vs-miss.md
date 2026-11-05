@@ -1,4 +1,4 @@
-### 26Q4-HARN-12: Tell an exhausted exact? from a miss
+### 26Q4-HARN-14: Tell an exhausted exact? from a miss
 
 **User Story**: As the person reading a decisive N1, I want a probe that ran out of budget to stop counting as a search that found nothing, so that "not found" means the search finished.
 
@@ -9,7 +9,7 @@
 | **Story Points** | 2 |
 | **Priority** | MEDIUM |
 | **Status** | 🔲 PENDING |
-| **Branch** | `26Q4-HARN-12-exhausted-exact-probe-vs-miss` |
+| **Branch** | `26Q4-HARN-14-exhausted-exact-probe-vs-miss` |
 | **Dependencies** | 26Q4-HARN-09 |
 | **Gate** | full |
 | **PR Size Target** | <500 lines (max 1000) |
@@ -66,14 +66,14 @@
 
 #### Out of Scope
 
-- `26Q4-HARN-11` owns what a decisive N1 means at Gate 4.
+- `26Q4-HARN-13` owns what a decisive N1 means at Gate 4.
 - A heartbeat limit that Lean does report, which `26Q4-HARN-09` labels already.
 
 ---
 
 #### Verification Script
 
-See `scripts/verify/26Q4-01/verify_26Q4-HARN-12.sh`.
+See `scripts/verify/26Q4-01/verify_26Q4-HARN-14.sh`.
 
 ---
 
@@ -88,7 +88,7 @@ See `scripts/verify/26Q4-01/verify_26Q4-HARN-12.sh`.
 #### Definition of Done
 
 - [ ] All acceptance criteria checked off
-- [ ] `scripts/verify/26Q4-01/verify_26Q4-HARN-12.sh` exits 0
+- [ ] `scripts/verify/26Q4-01/verify_26Q4-HARN-14.sh` exits 0
 - [ ] `uv run ruff format`, `uv run ruff check`, `uv run mypy` clean
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
 - [ ] Tests included with implementation
