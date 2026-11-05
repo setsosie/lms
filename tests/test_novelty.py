@@ -309,12 +309,27 @@ class TestExactProbe:
         )
         assert ": elsewhere x ∧ where_ok y := by exact?" in src
 
-    def test_a_blank_line_ends_a_preamble_command(self):
+    def test_a_comment_or_blank_line_does_not_end_a_preamble_command(self):
         src = ExactProbeBackend.probe_source(
-            "variable (a : Nat)\n\n  stray text\n\ntheorem foo : a = a := rfl\n"
+            "variable {R : Type} -- ring\n  -- module\n  [Inhabited R]\n\n"
+            "  variable (r : R)\n\ntheorem foo : r = r := rfl\n"
         )
-        assert "variable (a : Nat)" in src
-        assert "stray text" not in src
+        assert "[Inhabited R]" in src
+        assert "variable (r : R)" in src
+
+    @pytest.mark.parametrize(
+        ("name", "probe"),
+        [
+            ("Foo.bar", "Foo.lms_novelty_probe"),
+            ("_root_.Foo.bar", "_root_.Foo.lms_novelty_probe"),
+        ],
+    )
+    def test_probe_keeps_the_namespace_in_a_dotted_name(self, name, probe):
+        src = ExactProbeBackend.probe_source(f"theorem {name} : baz := sorry")
+        assert f"theorem {probe} : baz := by exact?" in src
+
+    def test_probe_refuses_a_def(self):
+        assert ExactProbeBackend.probe_source("def foo : Nat := 0") is None
 
     def test_a_command_name_later_in_a_line_is_not_a_preamble(self):
         src = ExactProbeBackend.probe_source(
@@ -578,6 +593,17 @@ class TestSeveralDeclarations:
             "example : True := trivial",
             "  theorem indented : True := trivial",
             "structure Foo where\n  x : Nat",
+            "open Nat in theorem x : True := trivial",
+            "set_option maxHeartbeats 0 in theorem x : True := trivial",
+            "@[aesop safe (rule_sets := [X])] theorem x : True := trivial",
+            "local instance : Inhabited Foo := ⟨0⟩",
+            "scoped instance : Inhabited Foo := ⟨0⟩",
+            "public theorem x : True := trivial",
+            "alias x := aux",
+            "irreducible_def x : Nat := 0",
+            "axiom x : True",
+            "opaque x : Nat",
+            "theorem x : True := trivial theorem y : True := trivial",
         ],
     )
     def test_any_later_declaration_counts(self, later):
@@ -587,6 +613,13 @@ class TestSeveralDeclarations:
     def test_a_proof_body_is_not_a_declaration(self):
         lean = (
             "theorem foo (n : Nat) : n = n := by\n  have h : n = n := rfl\n  exact h\n"
+        )
+        assert self.classify(lean).level is NoveltyLevel.N0
+
+    def test_a_word_containing_a_keyword_is_not_a_declaration(self):
+        lean = (
+            "theorem foo (my_def class_size : Nat) (h : Foo.class my_def) : "
+            "my_def = class_size := sorry\n"
         )
         assert self.classify(lean).level is NoveltyLevel.N0
 
@@ -623,13 +656,45 @@ class TestLoogleAnswers:
         assert outcome.available is True
         assert outcome.hits == []
 
-    @pytest.mark.parametrize("answer", [{}, [], "busy", {"count": 0}])
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            {},
+            [],
+            "busy",
+            {"count": 0},
+            {"hits": None},
+            {"hits": [1]},
+            {"hits": [{"x": 1}]},
+        ],
+    )
     def test_an_answer_with_no_hits_field_is_not_an_empty_search(
         self, monkeypatch, answer
     ):
         outcome = self.search(monkeypatch, answer)
         assert outcome.available is False
         assert outcome.error == "unexpected response shape"
+
+
+class TestCachedFailures:
+    """Failures used to be cached as searches that ran, so they must not replay."""
+
+    @staticmethod
+    def classify(tmp_path, stage: str, error: str):
+        cache = DiskCache(tmp_path)
+        query = StatementQuery.from_lean(NOVEL)
+        backend = RecordedBackend(stage, {})
+        key = DiskCache.key(stage, backend.cache_query(query), None)
+        cache.put(key, StageOutcome(stage, True, error=error))
+        NoveltyClassifier([backend], cache=cache).classify(NOVEL)
+        return backend.calls
+
+    def test_a_cached_search_failure_runs_again(self, tmp_path):
+        assert self.classify(tmp_path, "loogle", "boom")
+
+    def test_a_cached_probe_miss_still_replays(self, tmp_path):
+        # A miss records Lean's message as its error, and it is a real answer.
+        assert not self.classify(tmp_path, "exact_probe", "could not close the goal")
 
 
 class TestNameSearchFailure:
@@ -661,8 +726,16 @@ class TestLeanSearchAnswers:
 
     @pytest.mark.parametrize(
         "answer",
-        [{"error": "busy"}, [], [None], "busy", [[{"result": {}}]], [[{"other": 1}]]],
-        ids=["dict", "empty", "null", "text", "nameless-result", "no-result"],
+        [
+            {"error": "busy"},
+            [],
+            [None],
+            "busy",
+            [[{"result": {}}]],
+            [[{"other": 1}]],
+            [""],
+        ],
+        ids=["dict", "empty", "null", "text", "nameless-result", "no-result", "blank"],
     )
     def test_a_malformed_answer_is_not_an_empty_search(self, monkeypatch, answer):
         outcome = self.search(monkeypatch, answer)
@@ -673,6 +746,11 @@ class TestLeanSearchAnswers:
         outcome = self.search(monkeypatch, [[]])
         assert outcome.available is True
         assert outcome.hits == []
+
+    def test_one_nameless_item_does_not_spoil_the_answer(self, monkeypatch):
+        named = {"result": {"name": ["Lib", "thing"]}}
+        outcome = self.search(monkeypatch, [[named, {"result": {}}]])
+        assert [h.name for h in outcome.hits] == ["Lib.thing"]
 
     def test_a_malformed_answer_cannot_lift_n1_to_decisive(self, monkeypatch):
         backend = LeanSearchBackend()
@@ -1546,6 +1624,9 @@ class TestSemanticRule:
             "theorem-functor_category_def-ecca97d1",
             "theorem-right_adjoint_preserves_limits-0a6a19e1",
         }
+
+    def test_a_near_hit_never_raises_a_confidence(self):
+        assert replay(recorded("core-12")).confidence == pytest.approx(0.6)
 
     def test_the_recorded_run_has_exactly_these_near_hits(self):
         near = {
