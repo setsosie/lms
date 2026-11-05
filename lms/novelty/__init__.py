@@ -26,6 +26,7 @@ Every result records the Mathlib revision it was computed against. Mathlib
 moves; yesterday's N1 is today's N0.
 """
 
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -75,6 +76,13 @@ _N0_CANDIDATE_FLOOR = 0.5
 # never decisive: prose can name a result the formal statement only resembles.
 _INFORMAL_NAME_MATCH = 0.7
 
+# A semantic hit counts as a match when this share of its tokens appear in the
+# statement. On the 34 N1 statements of the 2026-11-04 density run, this moved 16
+# of 19 control statements and none of the 4 hand-read as open; at 0.6 it moved
+# 3 of those 4 as well, on words like `complete`. A match can only reach
+# INCONCLUSIVE, so the density still rests on human review of the candidates.
+_SEMANTIC_MATCH_SHARE = 0.8
+
 
 class NoveltyLevel(str, Enum):
     """Where a statement sits on the novelty ladder (machine-checkable part)."""
@@ -105,6 +113,8 @@ class NoveltyResult:
     stage_errors: dict[str, str] = field(default_factory=dict)
     # Names the statement takes from project modules, not Mathlib.
     outside_mathlib: list[str] = field(default_factory=list)
+    # What semantic search returned, matched or not, for a D4 reviewer to check.
+    candidates: list[str] = field(default_factory=list)
 
     @property
     def needs_review(self) -> bool:
@@ -124,6 +134,7 @@ class NoveltyResult:
             "stages_unavailable": self.stages_unavailable,
             "stage_errors": self.stage_errors,
             "outside_mathlib": self.outside_mathlib,
+            "candidates": self.candidates,
             "needs_review": self.needs_review,
         }
 
@@ -133,14 +144,24 @@ def _hit_evidence(stage: str, hit: SearchHit) -> str:
     return f"{stage}: {hit.name}{module}"
 
 
-def _token_overlap(a: set[str], b: set[str]) -> float:
-    if not a or not b:
+def _share_of_hit(hit_tokens: set[str], statement_tokens: set[str]) -> float:
+    """Share of a hit's tokens the statement uses.
+
+    Divides by the hit alone, because a long statement says nothing against a
+    match: a whole file has far more tokens than the declaration it restates.
+    """
+    if not hit_tokens:
         return 0.0
-    return len(a & b) / len(a | b)
+    return len(hit_tokens & statement_tokens) / len(hit_tokens)
 
 
 class NoveltyClassifier:
-    """Runs the search ladder and turns stage outcomes into a NoveltyResult."""
+    """Runs the search ladder and turns stage outcomes into a NoveltyResult.
+
+    ``names_are_labels`` marks declaration names a drafter chose as labels
+    (`ant_c06_discr_ne_zero`), which say nothing about the mathematics, so they
+    take no part in scoring a match.
+    """
 
     def __init__(
         self,
@@ -148,12 +169,14 @@ class NoveltyClassifier:
         cache: DiskCache | None = None,
         mathlib_rev: str | None = None,
         project_dir: Path | str | None = None,
+        names_are_labels: bool = False,
     ) -> None:
         self.backends = list(backends)
         self.cache = cache
         self.mathlib_rev = mathlib_rev
         # Where project modules a statement imports (`LMS.Foundation`) live.
         self.project_dir = project_dir
+        self.names_are_labels = names_are_labels
 
     def classify(
         self,
@@ -168,6 +191,7 @@ class NoveltyClassifier:
         stages_available: list[str] = []
         stages_unavailable: list[str] = []
         stage_errors: dict[str, str] = {}
+        candidates: list[str] = []
 
         for backend in self.backends:
             outcome = self._run_stage(backend, query)
@@ -177,6 +201,8 @@ class NoveltyClassifier:
                 stages_unavailable.append(backend.stage)
                 continue
             stages_available.append(backend.stage)
+            if backend.stage == "semantic":
+                candidates = [_hit_evidence("semantic", h) for h in outcome.hits[:5]]
             confidence, stage_evidence = self._score(outcome, query)
             evidence.extend(stage_evidence)
             if confidence > best_confidence:
@@ -185,7 +211,7 @@ class NoveltyClassifier:
             if best_confidence >= DECISIVE_CONFIDENCE:
                 break
 
-        return self._verdict(
+        result = self._verdict(
             best_confidence,
             evidence,
             decisive_stage,
@@ -194,6 +220,8 @@ class NoveltyClassifier:
             stage_errors,
             vocabulary,
         )
+        result.candidates = candidates
+        return result
 
     def _run_stage(self, backend: SearchBackend, query: StatementQuery) -> StageOutcome:
         key = None
@@ -223,11 +251,13 @@ class NoveltyClassifier:
         if not outcome.hits:
             return 0.0, []
 
-        last = (query.name or "").split(".")[-1]
-        query_tokens = set(name_tokens(query.name or ""))
+        name = "" if self.names_are_labels else (query.name or "")
+        last = name.split(".")[-1]
+        query_tokens = set(name_tokens(name))
         query_tokens.update(
             t.lower()
             for ident in extract_identifiers(query.lean_statement)
+            if not (self.names_are_labels and ident == query.name)
             for t in name_tokens(ident)
         )
 
@@ -258,13 +288,10 @@ class NoveltyClassifier:
                         for ident in extract_identifiers(hit.type_signature)
                         for t in name_tokens(ident)
                     )
-                overlap = _token_overlap(query_tokens, hit_tokens)
                 if hit_last == last:
                     score = 0.75
-                elif overlap >= 0.8:
+                elif _share_of_hit(hit_tokens, query_tokens) >= _SEMANTIC_MATCH_SHARE:
                     score = 0.7
-                elif overlap >= 0.5:
-                    score = 0.55
                 else:
                     score = 0.3
                 hit_name_tokens = set(name_tokens(hit.name))
@@ -391,6 +418,8 @@ def measure_density(
         low = int(c * 5) * 2
         buckets[f"{low / 10:.1f}-{(low + 2) / 10:.1f}"] += 1
 
+    stages_per_statement = [len(r["stages_available"]) for r in results]
+
     return {
         "arc": doc.get("arc"),
         "source": doc.get("source"),
@@ -408,6 +437,15 @@ def measure_density(
         "max_n1_confidence": _N1_CONFIDENCE_BY_STAGES.get(
             len(classifier.backends), 0.0
         ),
+        # A configured stage may not have run on any statement, so this is the
+        # ceiling that decides whether decisive N1 could have fired.
+        "max_n1_confidence_reached": max(
+            (_N1_CONFIDENCE_BY_STAGES.get(n, 0.0) for n in stages_per_statement),
+            default=0.0,
+        ),
+        "statements_by_stages_run": {
+            str(n): count for n, count in sorted(Counter(stages_per_statement).items())
+        },
         "confidence_distribution": buckets,
         "needs_review": review_queue,
         "statements": results,

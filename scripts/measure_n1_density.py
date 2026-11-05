@@ -76,6 +76,7 @@ def build_classifier(
         cache=cache,
         mathlib_rev=detect_mathlib_rev(args.lean_project),
         project_dir=args.lean_project,
+        names_are_labels=names_are_labels,
     )
 
 
@@ -131,11 +132,12 @@ def main(argv: list[str] | None = None) -> int:
         f"N1 density: {report['n1_density']:.2f} (upper) / "
         f"{report['n1_density_decisive']:.2f} (decisive)"
     )
-    if report["max_n1_confidence"] < DECISIVE_CONFIDENCE:
+    print(f"Statements by stages run: {report['statements_by_stages_run']}")
+    if report["max_n1_confidence_reached"] < DECISIVE_CONFIDENCE:
         print(
-            f"Decisive N1 is unreachable: {len(report['stages_run'])} stage(s) cap N1 "
-            f"confidence at {report['max_n1_confidence']:.2f}. Read the upper "
-            "density and the D4 queue, not the decisive one."
+            "Decisive N1 is unreachable: the stages that ran cap N1 confidence at "
+            f"{report['max_n1_confidence_reached']:.2f}. Read the upper density and "
+            "the D4 queue, not the decisive one."
         )
     print(f"Confidence distribution: {report['confidence_distribution']}")
     if report["needs_review"]:
