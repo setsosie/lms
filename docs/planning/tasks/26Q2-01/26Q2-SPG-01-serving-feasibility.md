@@ -11,7 +11,7 @@ build evolutionary machinery on top of it.
 | **Priority** | HIGH |
 | **Status** | 🔲 PENDING |
 | **Branch** | — (no code deliverable; runbook + recorded result) |
-| **Dependencies** | None |
+| **Dependencies** | `26Q4-SPG-01` green |
 | **PR Size Target** | n/a (investigation + version pins, no app code) |
 
 ---
@@ -26,6 +26,20 @@ build evolutionary machinery on top of it.
 **Current State**:
 - No engine selected / version-pinned for the genome arm.
 - Cost model (`scratch/cost_model.py`) assumes one frozen model, full-box batching.
+
+**Amended 2026-11-05.** Runs only if `26Q4-SPG-01` is green.
+- vLLM's current [docs](https://docs.vllm.ai/en/latest/features/prompt_embeds.html)
+  accept `prompt_embeds` parts in Chat Completions messages, in any position
+  relative to text, behind `--enable-prompt-embeds`. Confirm this at the version
+  we pin. Wrong shapes can crash the engine, so serve inside our own job only.
+- **Measure cached-token reuse, not just tokens/s.** An unverified
+  [forum answer](https://discuss.vllm.ai/t/customize-prefix-caching/2864) says
+  embeddings are not prefix-cached, and cached blocks chain on everything before
+  them. A per-agent prefix at the start may stop agents sharing cached context,
+  so the spec's "free in throughput" claim needs testing at both positions.
+- **Fallback to test if the caching loss matters:** reserve token rows in the
+  embedding table and write soft tokens there, as textual inversion does, so
+  requests stay ordinary token IDs. Untested.
 
 > **Execution boundary**: this runs on the user's self-hosted GPU box / cluster.
 > Claude does **not** execute it — Claude prepares the exact runbook and records

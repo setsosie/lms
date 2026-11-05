@@ -78,6 +78,11 @@ automatically, provided its version string is distinguishable from the base.
 - This card is the *only* injection point. Do not add per-agent or
   per-generation prompt parameters elsewhere — a second path would mean a
   prompt an agent saw that metadata cannot account for.
+  **Amended 2026-11-05:** `26Q4-SPG-03` adds per-agent soft prefixes, which a
+  whole-process text override cannot carry. That path is allowed only if run
+  metadata records each agent's prefix hash beside `prompt_overrides`. This
+  hook also did not reach committee prompts when it landed; `26Q4-HARN-12`
+  fixes that.
 - Genome file format stays a flat JSON object of name → content. Lineage,
   fitness, and operator history belong to the population file
   (`26Q4-EVO-03`), not to the genome handed to a run.
