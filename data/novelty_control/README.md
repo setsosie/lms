@@ -3,8 +3,15 @@
 `gate_a_control_arc.json` is the Gate A control for the N1-density
 measurement (`current-sprint.md` DoD item 3; runbook Step 7b). It holds the 52
 artifacts of the archived `stacks_ch4_phase1` run, which reimplement Mathlib's
-category theory, so a working classifier should read essentially all of them
-N0. A substantial **decisive** N1 count here voids the arc densities.
+category theory, so a working classifier should find almost none of them novel.
+
+What it can show: a substantial **decisive** N1 count voids the arc densities.
+That check needs statements that ran all four stages, so read
+`statements_by_stages_run` and `max_n1_confidence_reached` first; below 0.8, a
+decisive count of zero means the check could not fire. The expected reading is
+some N0, a large INCONCLUSIVE share and few N1s. It is not "all N0": a semantic
+match only ever reads INCONCLUSIVE, with the hit as evidence, so that a search
+result can't label novel work a re-derivation.
 
 Generated 2026-10-08 from the workstation's copy of the archive, which lives
 under the gitignored `experiments/` and so never reaches a fresh checkout:

@@ -84,7 +84,17 @@ Four changes to the classifier and its report, then one re-run of R4. The semant
 
 #### Implementation Notes
 
-- Keep the scoring change small. The likely shape is dividing by the smaller token set rather than the union. Compare any candidate rule on the recorded hits for all 34 N1 statements before choosing it, and report how many move out of N1.
+- **Rule chosen by the user on 2026-11-05:** a hit matches when at least 0.8 of its tokens (name and signature) appear in the statement, and a match only reaches INCONCLUSIVE. Every statement also keeps semantic search's top hits as `candidates`, whether they matched or not, so D4 can read them. The density comes from D4, not from this threshold.
+- Compared on the recorded hits for the 34 N1 statements (of 7 core, 8 ramification, 19 control; 4 statements were hand-read as open):
+
+| Rule | Core | Ramification | Control | Open statements left in N1 |
+|---|---:|---:|---:|---:|
+| Jaccard, as on `main` | 0 | 0 | 0 | 4 of 4 |
+| Share of hit ≥ 0.6 | 6 | 5 | 17 | 1 of 4 |
+| **Share of hit ≥ 0.8** | **1** | **2** | **16** | **4 of 4** |
+| Overlap over the smaller set ≥ 0.5 | 7 | 8 | 18 | 0 of 4 |
+
+- The 12 statements that read INCONCLUSIVE from a semantic hit in that run all stay above the floor when their hits are re-fetched and re-scored, so dropping the old middle tier sends none of them to N1.
 - `names_are_labels` currently only filters backends in `build_classifier`. Pass it to `NoveltyClassifier` as an argument defaulting to False, so `lms/gates/novelty.py` is unchanged.
 - An unclosed `namespace` at the end of a probe file is valid Lean, so the probe needs no matching `end`.
 - A statement whose first declaration is a `def` stays "not probeable". Such statements stop at three stages, and the new per-stage count makes that visible.
@@ -121,14 +131,14 @@ See `scripts/verify/26Q4-01/verify_26Q4-HARN-09.sh`.
 
 #### Outcome Demo
 
-**Where**: `mahpiya`, as a round folder Claude prepares; the user runs it.
+**Where**: the GPU server, as a round folder Claude prepares; the user runs it.
 **Run**: the round's `RUN_THIS.txt`, which re-runs `scripts/slurm/n1_density.sbatch` pinned to the merged commit in `~/code/lms-box`.
 **Expect**:
 - The control's stage counts show statements at four stages, and `exact_probe` ran on some of them.
 - The control's N1 count falls well below 19.
 - Any decisive N1 on the control is listed by name for hand inspection.
 - core-03 no longer reads "did not elaborate".
-- The arcs' upper densities move toward the hand reading above (about 1 of 20 and 2–4 of 21). That is a prediction, so report the numbers either way.
+- The arcs' upper densities fall only a little: re-scoring the recorded hits gives core 0.35 → 0.30 and ramification 0.38 → 0.29, against a hand reading of about 1 of 20 and 2–4 of 21. Those densities stay ceilings. The number for the slice decision comes from D4 review of the queue, reading each statement's `candidates`. Report the numbers either way.
 
 ---
 
