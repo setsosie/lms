@@ -35,6 +35,7 @@ from lms.novelty.mathlib_search import (
 )
 from lms.novelty.vocabulary import named_results, project_vocabulary
 
+ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures" / "novelty"
 
 THEOREM = "theorem Functor.comp_obj (F : Functor C D) (G : Functor D E) (x : C.Obj) :\n    (F.comp G).obj x = G.obj (F.obj x) := rfl"
@@ -852,8 +853,80 @@ class TestLabelNames:
         assert (short.level, short.confidence) == (long.level, long.confidence)
 
     def test_real_names_still_count_by_default(self):
-        result = self.classify("ant_c17_some_long_label_words_here")
+        name = "ramificationIdx_eq_one"
+        match = hit("Ideal.ramificationIdx")
+        statement = f"theorem {name} (I : Ideal R) : True := sorry"
+
+        def classify(**kwargs):
+            semantic = RecordedBackend(
+                "semantic", {name: StageOutcome("semantic", True, hits=[match])}
+            )
+            stages = [empty_backend("exact_probe"), semantic]
+            return NoveltyClassifier(stages, **kwargs).classify(statement)
+
+        assert classify().level is NoveltyLevel.INCONCLUSIVE
+        assert classify(names_are_labels=True).level is NoveltyLevel.N1
+
+
+class TestSemanticMatch:
+    """A LeanSearch match is a candidate for review: never N0, and not "not found"."""
+
+    @staticmethod
+    def classify(statement: str, name: str, match, informal: str | None = None):
+        semantic = RecordedBackend(
+            "semantic", {name: StageOutcome("semantic", True, hits=[match])}
+        )
+        stages = [empty_backend("name"), empty_backend("loogle"), semantic]
+        return NoveltyClassifier(stages).classify(statement, informal=informal)
+
+    def test_a_right_hit_in_a_long_statement_is_not_read_as_absent(self):
+        # Recorded 2026-11-04: Jaccard against this whole file scored the correct
+        # declaration 0.31, so the control read N1 on a result in the library.
+        control = json.loads(
+            (ROOT / "data/novelty_control/gate_a_control_arc.json").read_text()
+        )
+        statement = next(
+            s["lean_statement"]
+            for s in control["statements"]
+            if s["id"].startswith("theorem-right_adjoint_preserves_limits")
+        )
+        match = hit(
+            "CategoryTheory.Adjunction.rightAdjoint_preservesLimits",
+            sig=": PreservesLimitsOfSize.{v, u} G",
+        )
+        result = self.classify(statement, parse_declaration(statement)[1], match)
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert any("rightAdjoint_preservesLimits" in e for e in result.evidence)
+
+    def test_a_hit_sharing_only_generic_tokens_stays_below_the_floor(self):
+        statement = (
+            "theorem foo {C : Type} [CategoryTheory.Category C] (X : C) : True := sorry"
+        )
+        match = hit("CategoryTheory.Category.assoc_of_comp")
+        assert self.classify(statement, "foo", match).level is NoveltyLevel.N1
+
+    def test_no_semantic_hit_can_produce_n0(self):
+        statement = "theorem yonedaLemma (C : CategoryTheory.Cat) : True := sorry"
+        match = hit("CategoryTheory.yonedaLemma", sig="(C : CategoryTheory.Cat)")
+        result = self.classify(statement, "yonedaLemma", match, informal="Yoneda lemma")
+        assert result.level is NoveltyLevel.INCONCLUSIVE
+        assert result.confidence < DECISIVE_CONFIDENCE
+
+    def test_a_hit_below_the_floor_stays_as_a_candidate_for_review(self):
+        statement = (
+            "theorem foo {C : Type} [CategoryTheory.Category C] (X : C) : True := sorry"
+        )
+        match = hit("CategoryTheory.Category.assoc_of_comp", module="Mathlib.Cat")
+        result = self.classify(statement, "foo", match)
         assert result.level is NoveltyLevel.N1
+        expected = "semantic: CategoryTheory.Category.assoc_of_comp (Mathlib.Cat)"
+        assert result.candidates == [expected]
+        assert result.to_dict()["candidates"] == [expected]
+
+    def test_a_statement_with_all_four_stages_empty_is_decisive_n1(self):
+        result = NoveltyClassifier(four_empty_stages()).classify(NOVEL)
+        assert result.level is NoveltyLevel.N1
+        assert result.needs_review is False
 
 
 # ------------------------------------------------- recorded live fixtures
