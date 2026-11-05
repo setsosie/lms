@@ -273,7 +273,12 @@ class NoveltyClassifier:
                 backend.stage, backend.cache_query(query), self.mathlib_rev
             )
             cached = self.cache.get(key)
-            if cached is not None:
+            # A probe's miss carries Lean's message as an error and is a real answer.
+            # Elsewhere an error means a failed search, cached before those stopped
+            # counting as searches that ran.
+            if cached is not None and (
+                not cached.error or backend.stage == "exact_probe"
+            ):
                 return cached
         outcome = backend.search(query)
         # Only genuine answers are cached: an unavailable backend today may be

@@ -109,13 +109,13 @@ def parse_declaration(lean_code: str) -> tuple[str | None, str | None]:
     return m.group(1), m.group(2)
 
 
-# Any declaration, named or not: `_DECL_RE` needs a name it can parse, which
-# `theorem π_x`, `nonrec theorem x` and an anonymous `instance` don't give it.
+# Any declaration keyword, anywhere in the source. What can come ahead of one
+# (`open Nat in`, `local`, `@[...]`) is too open-ended to list, and these words
+# rarely mean anything else in code. An overcount only sends a statement to review.
 _ANY_DECL_RE = re.compile(
-    r"^\s*(?:(?:private|protected|noncomputable|nonrec|unsafe|partial)\s+"
-    r"|@\[[^\]]*\]\s*)*"
-    rf"(?:{'|'.join(_DECL_KEYWORDS)}|example|axiom|opaque)\b",
-    re.MULTILINE,
+    r"(?<![\w.'«])"
+    rf"(?:{'|'.join(_DECL_KEYWORDS)}|example|axiom|opaque|alias|irreducible_def)"
+    r"(?![\w.'»])"
 )
 
 
@@ -513,19 +513,22 @@ class LoogleBackend(_HttpBackend):
             return StageOutcome(
                 self.stage, available=False, error=str(data["error"])[:500]
             )
-        if not isinstance(data, dict) or "hits" not in data:
-            return StageOutcome(
-                self.stage, available=False, error="unexpected response shape"
-            )
+        unreadable = StageOutcome(
+            self.stage, available=False, error="unexpected response shape"
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("hits"), list):
+            return unreadable
         hits = [
             SearchHit(
-                name=h.get("name", ""),
+                name=h["name"],
                 module=h.get("module"),
                 type_signature=h.get("type"),
             )
-            for h in (data.get("hits") or [])[:20]
-            if h.get("name")
+            for h in data["hits"][:20]
+            if isinstance(h, dict) and h.get("name")
         ]
+        if data["hits"] and not hits:
+            return unreadable
         return StageOutcome(self.stage, available=True, hits=hits)
 
 
@@ -550,8 +553,8 @@ def _probe_preamble(source: str) -> list[str]:
     keeping = False
     for line in source.splitlines():
         if not line.strip():
-            keeping = False
-        elif not line[0].isspace():
+            continue
+        if not line[0].isspace():
             keeping = _PREAMBLE_RE.match(line) is not None
         if keeping:
             kept.append(line)
@@ -610,9 +613,10 @@ class ExactProbeBackend:
             return None
         preamble = _probe_preamble(source[: m.start()])
         opening = "\n".join(preamble) + "\n\n" if preamble else ""
-        return (
-            f"import Mathlib\n\n{opening}theorem {_PROBE_NAME}{header} := by exact?\n"
-        )
+        # `theorem Foo.bar` resolves its names inside `Foo`, so the probe must too.
+        namespace = m.group(2).rpartition(".")[0]
+        name = f"{namespace}.{_PROBE_NAME}" if namespace else _PROBE_NAME
+        return f"import Mathlib\n\n{opening}theorem {name}{header} := by exact?\n"
 
     def search(self, query: StatementQuery) -> StageOutcome:
         source = self.probe_source(query.lean_statement)
@@ -733,6 +737,8 @@ class LeanSearchBackend(_HttpBackend):
         )
         try:
             items = data[0][: self.num_results]
+            if not isinstance(items, list):
+                return unreadable
             for item in items:
                 result = item.get("result", {})
                 name_parts = result.get("name") or []

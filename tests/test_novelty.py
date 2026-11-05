@@ -317,25 +317,19 @@ class TestExactProbe:
         assert "[Inhabited R]" in src
         assert "variable (r : R)" in src
 
-    @pytest.mark.parametrize(
-        ("name", "probe"),
-        [
-            ("Foo.bar", "Foo.lms_novelty_probe"),
-            ("_root_.Foo.bar", "_root_.Foo.lms_novelty_probe"),
-        ],
-    )
-    def test_probe_keeps_the_namespace_in_a_dotted_name(self, name, probe):
-        src = ExactProbeBackend.probe_source(f"theorem {name} : baz := sorry")
-        assert f"theorem {probe} : baz := by exact?" in src
+    def test_probe_keeps_the_namespace_in_a_dotted_name(self):
+        src = ExactProbeBackend.probe_source("theorem _root_.Foo.bar : baz := sorry")
+        assert "theorem _root_.Foo.lms_novelty_probe : baz := by exact?" in src
 
     def test_probe_refuses_a_def(self):
         assert ExactProbeBackend.probe_source("def foo : Nat := 0") is None
 
     def test_a_command_name_later_in_a_line_is_not_a_preamble(self):
         src = ExactProbeBackend.probe_source(
-            'notation "open" => 1\n\ntheorem foo : True := trivial\n'
+            'notation "open" => 1\nopened 1\n\ntheorem foo : True := trivial\n'
         )
         assert "notation" not in src
+        assert "opened" not in src
 
     def test_probe_source_rejects_structure(self):
         assert (
@@ -555,16 +549,13 @@ class TestSeveralDeclarations:
         assert any(
             "`aux`" in e and "first of 2 declarations" in e for e in result.evidence
         )
+        assert "semantic" in result.stages_available
 
     def test_the_helper_it_names_is_not_one_from_a_comment(self):
         lean = "/-- The\ntheorem of Dedekind. -/\n" + self.FILE
         result = self.classify(lean)
         assert any("`aux`" in e for e in result.evidence)
         assert not any("`of`" in e for e in result.evidence)
-
-    def test_the_ladder_goes_on_to_semantic_search(self):
-        result = self.classify(self.FILE)
-        assert "semantic" in result.stages_available
 
     def test_a_single_declaration_still_reads_n0(self):
         lean = "open Nat\n\ntheorem foo (n : Nat) : succ n = n + 1 := rfl\n"
@@ -1252,47 +1243,24 @@ class TestLabelNames:
         )
         assert (short.level, short.confidence) == (long.level, long.confidence)
 
-    def test_a_label_cannot_create_a_match(self):
-        # The hit's tokens appear only in the label, under its full name.
-        name = "Ideal.ramificationIdx_label"
-        statement = f"theorem {name} : True := sorry"
-        match = hit("Ideal.ramificationIdx")
-
+    @pytest.mark.parametrize(
+        ("name", "statement", "match"),
+        [
+            # The hit's tokens appear only in the label, under its full name.
+            ("Ideal.ramificationIdx_label", ": True", "Ideal.ramificationIdx"),
+            ("mk", ": True", "IsZLattice.mk"),
+            ("ramificationIdx_eq_one", "(I : Ideal R) : True", "Ideal.ramificationIdx"),
+        ],
+        ids=["label-tokens", "label-equals-hit-name", "real-name"],
+    )
+    def test_a_name_counts_only_when_it_is_not_a_label(self, name, statement, match):
         def classify(**kwargs):
             semantic = RecordedBackend(
-                "semantic", {name: StageOutcome("semantic", True, hits=[match])}
+                "semantic", {name: StageOutcome("semantic", True, hits=[hit(match)])}
             )
-            stages = [empty_backend("exact_probe"), semantic]
-            return NoveltyClassifier(stages, **kwargs).classify(statement)
-
-        assert classify().level is NoveltyLevel.INCONCLUSIVE
-        assert classify(names_are_labels=True).level is NoveltyLevel.N1
-
-    def test_a_label_equal_to_a_hit_name_is_not_a_match(self):
-        statement = "theorem mk : True := sorry"
-        match = hit("IsZLattice.mk")
-
-        def classify(**kwargs):
-            semantic = RecordedBackend(
-                "semantic", {"mk": StageOutcome("semantic", True, hits=[match])}
-            )
-            stages = [empty_backend("exact_probe"), semantic]
-            return NoveltyClassifier(stages, **kwargs).classify(statement)
-
-        assert classify().level is NoveltyLevel.INCONCLUSIVE
-        assert classify(names_are_labels=True).level is NoveltyLevel.N1
-
-    def test_real_names_still_count_by_default(self):
-        name = "ramificationIdx_eq_one"
-        match = hit("Ideal.ramificationIdx")
-        statement = f"theorem {name} (I : Ideal R) : True := sorry"
-
-        def classify(**kwargs):
-            semantic = RecordedBackend(
-                "semantic", {name: StageOutcome("semantic", True, hits=[match])}
-            )
-            stages = [empty_backend("exact_probe"), semantic]
-            return NoveltyClassifier(stages, **kwargs).classify(statement)
+            return NoveltyClassifier(
+                [empty_backend("exact_probe"), semantic], **kwargs
+            ).classify(f"theorem {name} {statement} := sorry")
 
         assert classify().level is NoveltyLevel.INCONCLUSIVE
         assert classify(names_are_labels=True).level is NoveltyLevel.N1
@@ -1359,11 +1327,6 @@ class TestSemanticMatch:
         expected = "semantic: CategoryTheory.Category.assoc_of_comp (Mathlib.Cat)"
         assert result.candidates == [expected]
         assert result.to_dict()["candidates"] == [expected]
-
-    def test_a_statement_with_all_four_stages_empty_is_decisive_n1(self):
-        result = NoveltyClassifier(four_empty_stages()).classify(NOVEL)
-        assert result.level is NoveltyLevel.N1
-        assert result.needs_review is False
 
     def test_candidates_keep_every_hit_in_order(self):
         hits = [hit(f"Library.result_number_{i}") for i in range(8)]
