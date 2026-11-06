@@ -90,7 +90,8 @@ worked during the box runs because the runs are the user's to execute.
 | 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | 🔲 PENDING | — | Before Phase C. From #82's reviews. All 10 control N0s at R4 came from name search, so the fix may leave the control with none. The choice of rule is the user's |
 | 26Q4-HARN-16: Foundation merge keeps universes the header doesn't bind | 1 | 🔄 IN REVIEW | #84 | Before R6. From the 2026-11-06 team simulation: one artifact's `universe` line rolled back a whole generation |
 | 26Q4-HARN-17: A name collision can't discard a generation's verified work | 3 | 🔄 IN REVIEW | #86 | Before R6. Refuses a differing re-declaration and rolls back per artifact |
-| 26Q4-HARN-18: Rollback reopens the goal tags it undid | 2 | 🔄 IN REVIEW | #88, on #86 | Before the DAG run. A tag reads DONE only while the foundation holds work behind it |
+| 26Q4-HARN-18: Rollback reopens the goal tags it undid | 2 | 🔄 IN REVIEW | #88, on #86 | Before the DAG run. A tag reads DONE only while the foundation holds work behind it. Also returns a gate-blocked committee tag to available, because leaving it in progress stalls a chain goal |
+| 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | 🔲 PENDING | — | Before Phase C. From the reviews of `-16` and `-17`: universe order, shadowing and dropped text can change a statement's meaning with the merged file still compiling. The choice of approach is the user's |
 
 ## Pulled forward: Phase C preparation (2026-10-30)
 
@@ -158,7 +159,7 @@ the planning tooling). Cards for this sprint live under
 
 - **2026-11-06** — Server-run and task rows caught up with what has run and
   merged since 2026-10-30. R0–R3 are done and R4 ran once; #82 merged, so R4
-  re-runs at that commit. `26Q4-HARN-15`, `-16`, `-17` and `-18` added. The DoD
+  re-runs at that commit. `26Q4-HARN-15` to `-19` added. The DoD
   numbers in the server-run table now match the DoD list.
 - **2026-10-30 (later)** — #72 (`26Q4-HARN-02`) merged, so all three
   found-work cards are done and no PR is open. This frees `lms/society.py`

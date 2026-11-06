@@ -186,6 +186,9 @@ could not fit, then runs the calibration itself. Detail in
 - **`26Q4-HARN-15`** (3) — also before the freeze: a matching name stops being
   enough to read N0. All 10 control N0s at the 2026-11-04 run came from name
   search, so this also changes what the control can show.
+- **`26Q4-HARN-19`** (3) — also before the freeze: a statement can change meaning
+  once merged, with the merged file still compiling. CVFN counts what's in the
+  foundation, so this bears on the number Phase C reads.
 - **Slice**: ~20-statement contiguous arc from Neukirch ANT Ch. I, chosen from
   Sprint 3's **measured** N1 density over both candidate arcs. See §4 — the
   currently-decided Ch. I core arc is probably the wrong choice, because
