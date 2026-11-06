@@ -400,11 +400,12 @@ class Society:
         subsequent generation's `import` -- one bad artifact ends the run,
         and the errors point at the importer rather than the cause.
 
-        The artifacts are then retried one at a time, in order, and each that
-        builds stays. That costs one `lake build` per artifact, but only after
-        a failed merged build, and keeping a single bad artifact from discarding
-        the rest of a generation is worth it: in the team simulation, two of
-        three generations lost everything to one artifact each.
+        The artifacts are then promoted again one at a time, in order, and each
+        that builds stays. That costs one `lake build` per artifact, but only
+        after a failed merged build, and keeping a single bad artifact from
+        discarding the rest of a generation is worth it: in the team simulation,
+        two of three generations lost everything to one artifact each. Promoting
+        again rather than restoring lets a copy land when its original is dropped.
 
         Returns:
             True if everything added since the last good state is on disk and
@@ -428,37 +429,44 @@ class Society:
             print("  [foundation] build FAILED and there is no good state to restore")
             return False
 
-        artifacts = self.foundation.artifacts_since(self._last_good_foundation)
-        self.foundation.restore(self._last_good_foundation)
-
-        dropped: list[str] = []
-        kept = 0
-        last_build_ok = False
+        good = self._last_good_foundation
+        attempted = self.foundation.artifacts_since(good)
+        dropped = self.foundation.restore(good)
+        kept: list[str] = []
+        on_disk = False
         # With one artifact, the failed build has already named the culprit.
-        if len(artifacts) == 1:
-            dropped = [entry.name for entry in artifacts[0]]
-        else:
-            for entries in artifacts:
-                self.foundation.reinstate(entries)
+        if len(attempted) != 1 or not dropped:
+            dropped = []
+            for artifact_id, entries in attempted:
+                names = self.foundation.readmit(artifact_id, entries)
+                if not names:
+                    # A pure copy adds nothing to build.
+                    good = self.foundation.snapshot()
+                    continue
                 self.foundation.save()
-                last_build_ok = await project.rebuild_changed_sources()
-                if last_build_ok:
-                    self._last_good_foundation = self.foundation.snapshot()
-                    kept += 1
+                on_disk = await project.rebuild_changed_sources()
+                if on_disk:
+                    good = self.foundation.snapshot()
+                    kept.append(artifact_id)
                 else:
-                    self.foundation.restore(self._last_good_foundation)
-                    dropped.extend(entry.name for entry in entries)
+                    self.foundation.restore(good)
+                    dropped.extend(names)
+        self._last_good_foundation = good
 
         if kept and not dropped:
-            print(f"  [foundation] build FAILED together; kept all {kept} alone")
+            print(
+                "  [foundation] build FAILED, then passed on retry; "
+                f"kept all {len(kept)}"
+            )
             return True
 
         print(
             f"  [foundation] build FAILED; rolled back {len(dropped)} "
             f"entr{'y' if len(dropped) == 1 else 'ies'}: {', '.join(dropped) or '(none)'}; "
-            f"kept {kept} artifact{'' if kept == 1 else 's'}"
+            f"kept {len(kept)} artifact{'' if len(kept) == 1 else 's'}"
+            f"{': ' + ', '.join(kept) if kept else ''}"
         )
-        if not last_build_ok:
+        if not on_disk:
             self.foundation.save()
             if not await project.rebuild_changed_sources():
                 print("  [foundation] WARNING: rebuild after rollback also failed")

@@ -34,11 +34,14 @@ grep -n "foundation.add_artifact" lms/society.py   # three promotion paths
 #### Acceptance Criteria
 
 - [ ] An artifact declaring a name that already exists with a different body contributes nothing, and returns False: not the colliding entry, and not its other entries
+- [ ] A declaration is read as Lean reads it: an attribute or modifier can't hide a collision, and a whole name is one name (`f'`, `f₁`, `rep_α`, `φ`)
 - [ ] This holds against the seed, an earlier artifact, and a name repeated inside the artifact, which happens when the merge strips `namespace`
-- [ ] An identical re-declaration stays a harmless duplicate, ignoring whitespace and comments, and the artifact's other entries are kept
+- [ ] An identical re-declaration stays a harmless duplicate, ignoring whitespace, comments and any command after it, and the artifact's other entries are kept
+- [ ] A command after a skipped copy stays in the file, because the artifact's later entries were verified with it in scope, and it isn't offered to agents as a definition
 - [ ] A rejected artifact says why: the reason names the declaration, is on the artifact's notes, and is in the run log, on all three promotion paths
-- [ ] A failed merged build retries the generation's artifacts one at a time, in order, and keeps each that builds
-- [ ] After a partial rollback, the last-good state includes what was kept, the file on disk compiles, and the log names what was dropped and what was kept
+- [ ] A failed merged build promotes the generation's artifacts again one at a time, in order, and keeps each that builds. A copy lands if its original is dropped, including after a checkpoint
+- [ ] After a partial rollback, the last-good state includes what was kept, the file on disk is what was kept, and the log names what was dropped and what was kept
+- [ ] A rollback forgets an artifact's refusal, and an artifact that later lands has no stale reason
 - [ ] A generation with one artifact takes no extra build, because the failed build already named it
 
 ---
@@ -52,6 +55,7 @@ grep -n "foundation.add_artifact" lms/society.py   # three promotion paths
 | `tests/test_foundation_collisions.py` | CREATE | Rejection and identical duplicates |
 | `tests/test_foundation_rollback.py` | MODIFY | Per-artifact rollback |
 | `tests/test_foundation.py` | MODIFY | The test that approved the silent skip |
+| `tests/test_lean_real.py` | MODIFY | What the merge writes compiles under real Lean |
 | `docs/planning/tasks/26Q4-01/26Q4-HARN-17-name-collision-discards-generation-work.md` | CREATE | This card |
 | `scripts/verify/26Q4-01/verify_26Q4-HARN-17.sh` | CREATE | Verify script |
 
@@ -61,7 +65,8 @@ grep -n "foundation.add_artifact" lms/society.py   # three promotion paths
 
 - Both mechanisms, because they catch different things. Rejection stops an entry binding to the wrong declaration even when the merged file still compiles, which no build can catch. Per-artifact rollback covers merged-build failures with any other cause.
 - First-come wins, matching the class's existing rule. A rejected artifact stays in the library as verified: Lean did accept it.
-- Retries cost one build per artifact, only after a failed merged build.
+- Retries cost one build per artifact that adds anything, only after a failed merged build.
+- A name comparison can't catch every change of meaning. An artifact using core `id` gets a different `id` if an earlier artifact declares one, with no name of its own colliding. That and related cases are in `26Q4-HARN-19`.
 
 ---
 
@@ -77,7 +82,8 @@ grep -n "foundation.add_artifact" lms/society.py   # three promotion paths
 
 - Reopening goal tags for rejected or rolled-back artifacts: `26Q4-HARN-18`. Until it lands, those tags stay DONE as they do today.
 - Universe lines: `26Q4-HARN-16`.
-- Retrying an artifact that was rejected against one later rolled back. The tag reopens under `26Q4-HARN-18`, so a later generation can redo it.
+- Promoting again an artifact that was refused against one later rolled back. The tag reopens under `26Q4-HARN-18`, so a later generation can redo it.
+- Text before an artifact's first declaration, which the merge discards: `26Q4-HARN-19`.
 - An artifact closing more than one tag.
 
 ---

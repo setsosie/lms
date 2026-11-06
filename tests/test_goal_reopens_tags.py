@@ -190,6 +190,84 @@ class TestWhatStaysDone:
         society._reopen_tags_without_foundation_work()
 
 
+class TestCopiesAcrossAFailedBuild:
+    """A copy has an id but no entries, so a rollback can't see it by its entries."""
+
+    async def _built(self, tmp_path: Path, outcomes: list[bool]) -> Society:
+        society = make_society(tmp_path, [True, *outcomes])
+        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
+        await society._write_and_build_foundation()
+        return society
+
+    async def test_a_copy_keeps_its_tag_when_another_artifact_breaks(
+        self, tmp_path: Path
+    ) -> None:
+        society = await self._built(tmp_path, [False, False, True])
+        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
+        promote(society, artifact("bad", "def bad : Nat := 1", tag="T3"))
+
+        await society._write_and_build_foundation()
+        society._reopen_tags_without_foundation_work()
+
+        assert definition(society, "T1").formalized is True
+        assert definition(society, "T3").formalized is False
+
+    async def test_a_copy_keeps_its_tag_when_nothing_is_dropped(
+        self, tmp_path: Path
+    ) -> None:
+        society = await self._built(tmp_path, [False, True])
+        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
+        promote(society, artifact("new", "def fresh : Nat := 1", tag="T3"))
+
+        assert await society._write_and_build_foundation() is True
+        society._reopen_tags_without_foundation_work()
+
+        assert definition(society, "T1").formalized is True
+
+    async def test_a_copy_and_its_original_share_a_fate(self, tmp_path: Path) -> None:
+        society = make_society(tmp_path, [True, False, True, False, True])
+        await society._write_and_build_foundation()
+        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
+        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
+        promote(society, artifact("bad", "def bad : Nat := 1", tag="T3"))
+
+        await society._write_and_build_foundation()
+        society._reopen_tags_without_foundation_work()
+
+        assert definition(society, "T1").formalized is True
+        assert definition(society, "T2").formalized is True
+        assert definition(society, "T3").formalized is False
+
+
+class TestGateBlockedCommitteeTag:
+    """Without this, the tag stays in progress: never offered again, dependents locked."""
+
+    def test_it_goes_back_to_available(self, tmp_path: Path) -> None:
+        society = make_society(tmp_path, [])
+        society.dependency_graph = DependencyGraph.from_goal(society.goal)
+        graph = society.dependency_graph
+        graph.update_status("T1", TaskStatus.IN_PROGRESS)
+        blocked = artifact("blocked", "def blocked : Nat := 1")
+
+        society._release_gate_blocked_task("T1", blocked)
+
+        assert graph.nodes["T1"].status is TaskStatus.AVAILABLE
+        assert [n.tag for n in graph.available_tasks()][0] == "T1"
+        assert "gate failure" in (blocked.notes or "")
+
+    def test_it_leaves_a_task_another_group_finished(self, tmp_path: Path) -> None:
+        society = make_society(tmp_path, [])
+        society.dependency_graph = DependencyGraph.from_goal(society.goal)
+        graph = society.dependency_graph
+        graph.update_status("T1", TaskStatus.DONE, "other")
+
+        society._release_gate_blocked_task(
+            "T1", artifact("blocked", "def blocked : Nat := 1")
+        )
+
+        assert graph.nodes["T1"].status is TaskStatus.DONE
+
+
 class TestGraph:
     def test_the_graph_reopens_and_dependents_lock(self, tmp_path: Path) -> None:
         society = make_society(tmp_path, [])
@@ -230,6 +308,43 @@ class TestResume:
         assert loaded.holds("first") is True
         assert loaded.holds("second") is False
 
+    async def test_a_real_load_reopens_a_copys_tag_when_its_original_goes(
+        self, tmp_path: Path
+    ) -> None:
+        """A walltime kill saves mid-generation. If the resume build then fails, the
+        copy's id must not outlive the declaration it copied."""
+        society = make_society(tmp_path, [False, False, False, True])
+        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
+        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
+        society.foundation.save()
+
+        society.foundation = FoundationFile.load(society.foundation.path)
+        society._last_good_foundation = society.foundation.snapshot_before(1)
+        await society.restore_foundation()
+
+        assert definition(society, "T2").formalized is False
+        assert definition(society, "T1").formalized is False
+        assert "[DONE]" not in society.goal.to_prompt_context()
+
+    async def test_a_refused_artifact_can_land_and_back_its_tag(
+        self, tmp_path: Path
+    ) -> None:
+        """Committee ids hash the code, so identical work returns with the same id."""
+        society = make_society(tmp_path, [True, False, True, True])
+        await society._write_and_build_foundation()
+        promote(society, artifact("x", "def rep : Nat := 1", tag="T1"))
+        promote(society, artifact("r", "def rep : Nat := 2", tag="T2"))
+        await society._write_and_build_foundation()
+        society._reopen_tags_without_foundation_work()
+        assert definition(society, "T2").formalized is False
+
+        promote(society, artifact("r", "def rep : Nat := 2", tag="T2"))
+        await society._write_and_build_foundation()
+        society._reopen_tags_without_foundation_work()
+
+        assert definition(society, "T2").formalized is True
+        assert society.foundation.holds("r") is True
+
 
 class TestCoreConceptRefusal:
     def test_it_says_why(self, tmp_path: Path) -> None:
@@ -241,7 +356,7 @@ class TestCoreConceptRefusal:
 
         society._promote_to_foundation(other)
 
-        assert "Cat" in (other.notes or "")
+        assert "`Cat`" in (other.notes or "")
         assert society.foundation.holds("b") is False
 
 

@@ -65,10 +65,12 @@ class Artifact:
     gate_results: list[GateResult] = field(default_factory=list)
     # Gate 4 novelty classification (26Q3-HARN-04). "N0" | "N1" | "INCONCLUSIVE",
     # None when the gate has not run. Evidence names the matching Mathlib
-    # declarations so an N0 verdict is auditable.
+    # declarations so an N0 verdict is auditable. Candidates are what semantic
+    # search returned, matched or not, for a D4 reviewer to check.
     novelty_level: str | None = None
     novelty_confidence: float | None = None
     novelty_evidence: list[str] = field(default_factory=list)
+    novelty_candidates: list[str] = field(default_factory=list)
 
     @property
     def verified(self) -> bool:
@@ -115,6 +117,7 @@ class Artifact:
             "novelty_level": self.novelty_level,
             "novelty_confidence": self.novelty_confidence,
             "novelty_evidence": self.novelty_evidence,
+            "novelty_candidates": self.novelty_candidates,
         }
 
     @classmethod
@@ -145,6 +148,7 @@ class Artifact:
             novelty_level=d.get("novelty_level"),
             novelty_confidence=d.get("novelty_confidence"),
             novelty_evidence=d.get("novelty_evidence", []),
+            novelty_candidates=d.get("novelty_candidates", []),
         )
 
     @staticmethod

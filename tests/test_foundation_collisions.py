@@ -126,6 +126,184 @@ class TestAnIdenticalDeclarationIsHarmless:
         assert foundation.rejection_reason("b") is None
 
 
+class TestDeclarationsAreReadAsLeanReadsThem:
+    @pytest.mark.parametrize(
+        "modifier",
+        ["@[reducible] ", "@[reducible]\n", "private ", "protected ", "noncomputable "],
+    )
+    def test_a_modifier_cannot_hide_a_collision(
+        self, foundation: FoundationFile, modifier: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+
+        added = foundation.add_artifact(
+            artifact(
+                "b",
+                f"{modifier}def rep : Nat := 2\n\ntheorem pos : 0 < rep := by decide",
+            )
+        )
+
+        assert added is False
+        assert "pos" not in foundation._definition_names
+
+    def test_a_modified_declaration_is_its_own_entry(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "@[simp] theorem first : 1 = 1 := rfl\n\n@[simp] theorem next : 2 = 2 := rfl",
+            )
+        )
+
+        assert [e.name for e in foundation.entries] == ["first", "next"]
+        assert "first" in foundation.entries[0].lean_code
+        assert "@[simp]" in foundation.entries[0].lean_code
+
+    @pytest.mark.parametrize(
+        "code,names",
+        [
+            ("def f : Nat := 1\n\ndef f' : Nat := 2", ["f", "f'"]),
+            ("def f₁ : Nat := 1\n\ndef f₂ : Nat := 2", ["f₁", "f₂"]),
+            ("def rep_α : Nat := 1\n\ndef rep_β : Nat := 2", ["rep_α", "rep_β"]),
+            ("def φ : Nat := 1\n\ndef ψ : Nat := 2", ["φ", "ψ"]),
+        ],
+    )
+    def test_a_whole_name_is_one_name(
+        self, foundation: FoundationFile, code: str, names: list[str]
+    ) -> None:
+        assert foundation.add_artifact(artifact("a", code)) is True
+        assert [e.name for e in foundation.entries] == names
+
+    def test_a_primed_name_is_not_its_stem(self, foundation: FoundationFile) -> None:
+        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+
+        assert foundation.add_artifact(artifact("b", "def rep' : Nat := 2")) is True
+
+    def test_a_universe_list_is_not_part_of_the_name(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def f.{r} (A : Sort r) : Sort r := A"))
+
+        assert [e.name for e in foundation.entries] == ["f"]
+
+    def test_a_name_repeated_inside_says_so(self, foundation: FoundationFile) -> None:
+        code = (
+            "namespace A\ndef f : Nat := 1\nend A\nnamespace B\ndef f : Nat := 2\nend B"
+        )
+        foundation.add_artifact(artifact("a", code))
+
+        reason = foundation.rejection_reason("a")
+
+        assert reason is not None
+        assert "twice" in reason
+
+
+class TestACommandAfterACopy:
+    """A declaration's slice runs to the next one, so commands travel with it."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "variable (n : Nat)",
+            "section",
+            "open Nat",
+            "#check rep",
+            "example : rep = 1 := rfl",
+            "attribute [simp] rep",
+        ],
+    )
+    def test_it_is_not_compared_as_the_body(
+        self, foundation: FoundationFile, command: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+
+        added = foundation.add_artifact(
+            artifact("b", f"def rep : Nat := 1\n\n{command}\n\ndef other : Nat := 3")
+        )
+
+        assert added is True
+        assert foundation.rejection_reason("b") is None
+        assert "other" in foundation._definition_names
+
+    def test_it_stays_in_the_file(self, foundation: FoundationFile) -> None:
+        """Later entries were verified with it in scope."""
+        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+        foundation.add_artifact(
+            artifact(
+                "b",
+                "def rep : Nat := 1\n\nvariable (n : Nat)\n\ndef plus : Nat := n + rep",
+            )
+        )
+
+        foundation.save()
+        text = foundation.path.read_text()
+
+        assert text.index("variable (n : Nat)") < text.index("def plus")
+
+    def test_a_copy_of_a_seed_declaration_ignores_the_seeds_commands(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.set_seed(
+            'structure S where\n  x : Nat\n\nscoped notation "Q" => S\n\ndef seeded : Nat := 1'
+        )
+
+        added = foundation.add_artifact(
+            artifact("a", "structure S where\n  x : Nat\n\ndef other : S := ⟨1⟩")
+        )
+
+        assert added is True
+        assert foundation.rejection_reason("a") is None
+
+
+class TestRejectionsDontGoStale:
+    def test_a_rollback_forgets_the_reason(self, foundation: FoundationFile) -> None:
+        empty = foundation.snapshot()
+        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
+        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
+        assert foundation.rejection_reason("r") is not None
+
+        foundation.restore(empty)
+
+        assert foundation.rejection_reason("r") is None
+
+    def test_the_same_artifact_can_land_later(self, foundation: FoundationFile) -> None:
+        empty = foundation.snapshot()
+        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
+        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
+        foundation.restore(empty)
+
+        assert foundation.add_artifact(artifact("r", "def rep : Nat := 2")) is True
+
+        assert foundation.rejection_reason("r") is None
+        assert foundation.entries[0].lean_code == "def rep : Nat := 2"
+
+
+class TestAgentContext:
+    def test_an_attribute_on_its_own_line_is_not_the_header(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(artifact("a", "@[reducible]\ndef rep : Nat := 1"))
+
+        assert foundation.entries[0].declaration_header().startswith("def rep")
+
+    def test_a_kept_command_is_not_offered_as_a_definition(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+        foundation.add_artifact(
+            artifact(
+                "b", "def rep : Nat := 1\n\nvariable (n : Nat)\n\ndef plus : Nat := n"
+            )
+        )
+
+        context = foundation.get_context_for_agent()
+
+        assert "plus" in context
+        assert "variable" not in context
+        assert "tail" not in context
+
+
 class TestSocietyReportsARejection:
     @pytest.fixture
     def society(self, tmp_path: Path) -> Society:
