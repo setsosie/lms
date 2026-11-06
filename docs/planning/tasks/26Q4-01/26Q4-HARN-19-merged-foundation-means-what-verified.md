@@ -25,15 +25,22 @@
 - **Shadowing.** An artifact using core `id` gets an earlier artifact's `id` once merged, with no name of its own colliding. `def useId : Nat := id 1` reads 1 alone and 2 merged.
 - **An own-line attribute on the last entry.** It stays with that entry and attaches to the next artifact's declaration, exit 0.
 - **Text before the first declaration is discarded.** That includes a leading `open` or `variable`. Most cases fail the build loudly, but a dropped `open` can change what a name resolves to.
+- **A copy reads the same in a different context.** `def g : Nat := k + 1` under `variable (k : Nat)` and under `def k : Nat := 5` is the same text with a different type. The second is skipped as a copy, so a later `def h := g` reads `Nat` alone and `Nat → Nat` merged, exit 0.
+- **`open X in` or `set_option ... in` before a skipped copy stays behind.** It attaches to the next artifact's first declaration, exit 0, or breaks the file if it comes last.
 
-Failures that aren't silent, also predating these fixes: a docstring line beginning `universe ` that closes its comment leaves it unterminated; an artifact opening with a bare `section` keeps a stray `end`; names on a continuation line (`universe u₁\n  u₂`) aren't read.
+Failures that aren't silent, also predating these fixes: a docstring line beginning `universe ` that closes its comment leaves it unterminated; an artifact opening with a bare `section` keeps a stray `end`; names on a continuation line (`universe u₁\n  u₂`) aren't read; `universe x in` with a later `def b.{x}` fails the merged build as already declared.
+
+Neighbours for a card of their own, from the same reviews:
+- **A kill during a merged build can leave a checkpoint that won't resume.** `current_generation` advances before the build, so the artifact being built counts as good, and `restore_foundation` then returns False. A retry after a failed build widens that window.
+- **`lake build` has no timeout,** so a hung build holds a job until its walltime.
+- **A gate-blocked or refused artifact's note enters the textbook under a `[VERIFIED]` success entry.**
 
 ---
 
 #### Acceptance Criteria
 
 - [ ] **Choose the approach (user's call):** give every artifact its own `section` with the universe context the verifier used, and no file-level `universe` line, or compare each statement's elaborated type alone and merged after the build, and drop those that differ. The second also catches shadowing, and costs more per build.
-- [ ] The four silent cases above either compile with the verified meaning or are dropped with a reason in the log
+- [ ] The silent cases above either compile with the verified meaning or are dropped with a reason in the log
 - [ ] Real Lean compiles the fixtures in the CI job that has a toolchain
 
 ---
