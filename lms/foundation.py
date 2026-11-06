@@ -598,6 +598,11 @@ class FoundationFile:
     with incompatible structures, only the FIRST verified definition is kept.
     This "first-mover wins" rule prevents compilation errors from incompatible
     definitions. Future: implement voting on conflicts.
+
+    The same goes for any name declared twice with different bodies, and the
+    later artifact contributes nothing at all: its other entries were verified
+    against its own declaration, not the one they would bind to here. An
+    identical re-declaration is harmless, so only that entry is skipped.
     """
 
     # Core concepts that should only have one definition
@@ -679,6 +684,8 @@ end {FOUNDATION_NAMESPACE}
         self._claimed_concepts: set[str] = (
             set()
         )  # Track which core concepts have definitions
+        #: Why an artifact was refused, by id, so a caller can report it.
+        self._rejections: dict[str, str] = {}
 
     def __len__(self) -> int:
         """Return number of entries in foundation."""
@@ -777,9 +784,9 @@ end {FOUNDATION_NAMESPACE}
 
         Returns:
             True if this call contributed at least one new entry. False means
-            the artifact was silently absorbed -- an id already seen, a
-            conflicting core concept, or every declaration in it duplicating a
-            name already present.
+            it contributed nothing -- an id already seen, a conflicting core
+            concept, a name declared differently (`rejection_reason` says
+            which), or every declaration in it being an identical copy.
 
             Returning nothing made those three outcomes indistinguishable from
             success at the call site, so a caller reported a promotion while
@@ -856,23 +863,72 @@ end {FOUNDATION_NAMESPACE}
                         return False
                     # If same name, it's just a duplicate - will be skipped below
 
+        # Same name, different body: refuse the whole artifact, because its
+        # other entries were verified against its own declaration.
+        declared = {
+            entry.name: self._comparable(entry.lean_code)
+            for entry in (*self.seed_entries, *self.entries)
+        }
+        for entry in new_entries:
+            comparable = self._comparable(entry.lean_code)
+            if declared.setdefault(entry.name, comparable) != comparable:
+                self._artifact_ids.add(artifact.id)
+                self._rejections[artifact.id] = (
+                    f"it declares `{entry.name}`, which the foundation already "
+                    "declares differently"
+                )
+                return False
+
         # Filter and add entries
         unique_entries = []
         for entry in new_entries:
-            # Skip if name already exists (duplicate)
+            # An identical copy of an existing declaration adds nothing.
             if entry.name in self._definition_names:
                 continue
 
-            # Claim any core concepts defined by this entry
-            if entry.entry_type == "structure" and entry.name in self.CORE_CONCEPTS:
-                self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
-
+            self._admit(entry)
             unique_entries.append(entry)
-            self._definition_names.add(entry.name)
 
         self.entries.extend(unique_entries)
         self._artifact_ids.add(artifact.id)
         return bool(unique_entries)
+
+    def _admit(self, entry: FoundationEntry) -> None:
+        """Record the name and any core concept that `entry` claims."""
+        if entry.entry_type == "structure" and entry.name in self.CORE_CONCEPTS:
+            self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
+        self._definition_names.add(entry.name)
+
+    def _comparable(self, code: str) -> str:
+        """`code` without comments or layout, to tell a copy from a difference."""
+        lines = self._strip_block_comments(code).splitlines()
+        return " ".join(
+            " ".join(
+                FoundationEntry._strip_line_comment(line) for line in lines
+            ).split()
+        )
+
+    def rejection_reason(self, artifact_id: str) -> str | None:
+        """Why `add_artifact` refused this artifact, or None if it didn't."""
+        return self._rejections.get(artifact_id)
+
+    def artifacts_since(
+        self, snapshot: FoundationSnapshot
+    ) -> list[list[FoundationEntry]]:
+        """Entries added after `snapshot`, one list per artifact, in order."""
+        kept = {id(entry) for entry in snapshot.entries}
+        by_artifact: dict[str, list[FoundationEntry]] = {}
+        for entry in self.entries:
+            if id(entry) not in kept:
+                by_artifact.setdefault(entry.artifact_id, []).append(entry)
+        return list(by_artifact.values())
+
+    def reinstate(self, entries: list[FoundationEntry]) -> None:
+        """Put back one artifact's entries after `restore` removed them."""
+        for entry in entries:
+            self._admit(entry)
+            self._artifact_ids.add(entry.artifact_id)
+        self.entries.extend(entries)
 
     # Pattern to match block comments /- ... -/
     BLOCK_COMMENT_PATTERN = re.compile(r"/-.*?-/", re.DOTALL)

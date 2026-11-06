@@ -284,6 +284,16 @@ class TestPerArtifactRollback:
 
         assert await self._build_generation(society, "first", "second") is True
 
+    async def test_a_failure_with_nothing_new_still_reports_failure(self, tmp_path):
+        """No artifact to blame: an environment fault, or a resume whose last good
+        state no longer builds. `restore_foundation` decides the resume on this."""
+        society, project = await self._seeded(tmp_path, [False, True])
+
+        assert await society._write_and_build_foundation() is False
+
+        # seed build, the failure, and the rebuild of the good state
+        assert project.builds == 3
+
     async def test_the_log_names_what_went_and_what_stayed(self, tmp_path, capsys):
         society, _ = await self._seeded(tmp_path, [False, True, False])
 
