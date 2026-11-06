@@ -1,7 +1,12 @@
 """Tests for real LEAN 4 verifier."""
 
+import subprocess
+from pathlib import Path
+
 import pytest
 
+from lms.artifacts import Artifact, ArtifactType, VerificationStatus
+from lms.foundation import FoundationFile
 from lms.lean.real import RealLeanVerifier
 from tests._lean_env import LEAN_MISSING, LEAN_MISSING_REASON
 
@@ -106,3 +111,65 @@ theorem add_one_succ (n : Nat) : add_one n = n + 1 := rfl
         code = "theorem nat_zero : (0 : Nat) = 0 := rfl"
         result = await verifier.verify(code)
         assert result.success is True
+
+
+class TestFoundationUniverses:
+    """The saved foundation compiles when artifacts bind their own universes."""
+
+    @staticmethod
+    def _foundation(tmp_path: Path, *codes: str) -> FoundationFile:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        for number, code in enumerate(codes):
+            foundation.add_artifact(
+                Artifact(
+                    id=f"artifact-{number}",
+                    type=ArtifactType.DEFINITION,
+                    natural_language="test",
+                    lean_code=code,
+                    created_by="agent-0",
+                    generation=0,
+                    status=VerificationStatus.VERIFIED_LEAN,
+                )
+            )
+        return foundation
+
+    @staticmethod
+    def _errors(foundation: FoundationFile) -> str:
+        """Compile the saved file; the header's library imports need no toolchain build."""
+        foundation.save()
+        kept = [
+            line
+            for line in foundation.path.read_text().splitlines()
+            if not line.startswith("import ")
+        ]
+        foundation.path.write_text("\n".join(kept) + "\n")
+        proc = subprocess.run(
+            ["lean", str(foundation.path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return proc.stdout + proc.stderr if proc.returncode else ""
+
+    def test_an_exotic_universe_line_compiles(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u₁ u₂\n\ndef pairUp (A : Type u₁) (B : Type u₂) : Type (max u₁ u₂) := A × B",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_two_artifacts_can_bind_the_same_name(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u₁\n\ndef first (A : Type u₁) : A → A := fun a => a",
+            "universe u₁\n\ndef second (A : Type u₁) : A → A := fun a => a",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_later_artifact_can_name_the_level_itself(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u₁\n\ndef first (A : Type u₁) : A → A := fun a => a",
+            "def second.{u₁} (A : Type u₁) : A → A := fun a => a",
+        )
+        assert self._errors(foundation) == ""
