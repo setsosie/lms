@@ -391,6 +391,25 @@ class TestFoundationCollisions:
         assert errors == ""
         assert "tag" not in foundation._definition_names
 
+    def test_a_different_instance_refuses_the_artifact(self, tmp_path: Path) -> None:
+        """`b.n` is 1 alone. If `b` landed on the first instance, it would be 0, and
+        this theorem would fail."""
+        foundation, errors = self._compile(
+            tmp_path,
+            "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩",
+            "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨1⟩⟩\n\n"
+            "def b : Foo := default\n\ntheorem b_n : b.n = 1 := rfl",
+        )
+        assert errors == ""
+        assert "b_n" not in foundation._definition_names
+
+    def test_a_scoped_universe_line_keeps_its_declaration(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path, "universe u₁ in def foo : Type u₁ := PUnit"
+        )
+        assert errors == ""
+        assert foundation.path.read_text().count("def foo") == 1
+
     def test_an_attributed_declaration_keeps_its_attribute(
         self, tmp_path: Path
     ) -> None:
