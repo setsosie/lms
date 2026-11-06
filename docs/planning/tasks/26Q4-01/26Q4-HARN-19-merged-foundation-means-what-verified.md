@@ -24,7 +24,9 @@
 - **Header universe order.** The verifier binds names in the artifact's own order, and the merged file binds `u v w` first. `universe v u` with `abbrev mAt := m.{0, 1}` reads `(α : Type) (β : Type 1)` alone and `(α : Type 1) (β : Type)` merged, exit 0. `universe v u` with `Cat.{v, u}` verifies alone and fails the merged build. `lms/prompts.py` teaches `universe v u`, so agents are likely to write this. A mixed line, such as `universe v₁ u`, has the same defect.
 - **Shadowing.** An artifact using core `id` gets an earlier artifact's `id` once merged, with no name of its own colliding. `def useId : Nat := id 1` reads 1 alone and 2 merged.
 - **An own-line attribute on the last entry.** It stays with that entry and attaches to the next artifact's declaration, exit 0.
-- **Text before the first declaration is discarded.** That includes a leading `open` or `variable`. Most cases fail the build loudly, but a dropped `open` can change what a name resolves to.
+- **Text before the first declaration is discarded.** That includes a leading `open` or `variable`. Most cases fail the build loudly, but it can also be silent: `instance : Inhabited Nat := ⟨9⟩` then `def x : Nat := default` reads 9 alone and 0 merged, exit 0.
+- **An earlier artifact leaks into a later one with no name colliding.** `instance i1 : Inhabited Nat := ⟨5⟩` makes a later `def b : Nat := default` read 5 merged and 0 alone. A file-level `variable (f : Nat → Nat)` can add a binder to a later artifact's `def b`.
+- **Stripping a namespace can bind another artifact's declaration.** With `def Foo.bar : Nat := 5` in the foundation, `namespace Foo / def bar : Nat := 1 / end Foo / def baz : Nat := Foo.bar` reads `baz` as 1 alone and 5 merged, exit 0. Both declare the same Lean name, which the name comparison can't see.
 - **A copy reads the same in a different context.** `def g : Nat := k + 1` under `variable (k : Nat)` and under `def k : Nat := 5` is the same text with a different type. The second is skipped as a copy, so a later `def h := g` reads `Nat` alone and `Nat → Nat` merged, exit 0.
 - **`open X in` or `set_option ... in` before a skipped copy stays behind.** It attaches to the next artifact's first declaration, exit 0, or breaks the file if it comes last.
 
@@ -39,7 +41,7 @@ Neighbours for a card of their own, from the same reviews:
 
 #### Acceptance Criteria
 
-- [ ] **Choose the approach (user's call):** give every artifact its own `section` with the universe context the verifier used, and no file-level `universe` line, or compare each statement's elaborated type alone and merged after the build, and drop those that differ. The second also catches shadowing, and costs more per build.
+- [ ] **Choose the approach (user's call):** give every artifact its own `section` with the universe context the verifier used, and no file-level `universe` line, or compare each statement's elaborated type alone and merged after the build, and drop those that differ. A `section` also stops `variable` and `open` leaking, and keeps a discarded preamble possible to keep. The comparison also catches shadowing and a changed instance when it shows in the type, costs more per build, and misses a change in value only, such as the `Inhabited` case.
 - [ ] The silent cases above either compile with the verified meaning or are dropped with a reason in the log
 - [ ] Real Lean compiles the fixtures in the CI job that has a toolchain
 
