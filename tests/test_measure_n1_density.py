@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lms.novelty.mathlib_search import parse_declaration
+from lms.novelty.mathlib_search import RecordedBackend, parse_declaration
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -40,6 +40,47 @@ class TestBuildClassifier:
             "exact_probe",
             "semantic",
         ]
+
+    def test_label_names_reach_the_classifier(self, tmp_path):
+        classifier = mnd.build_classifier(args(tmp_path), names_are_labels=True)
+        assert classifier.names_are_labels is True
+
+
+class TestPrintout:
+    @staticmethod
+    def run(tmp_path, monkeypatch, capsys, probe_available: bool) -> str:
+        statement = {
+            "id": "a",
+            "name": "n",
+            "lean_statement": "theorem n : True := sorry",
+        }
+        arc = tmp_path / "arc.json"
+        arc.write_text(json.dumps({"arc": "t", "statements": [statement]}))
+        stages = [
+            RecordedBackend("name", {}),
+            RecordedBackend("loogle", {}),
+            RecordedBackend("exact_probe", {}, available=probe_available),
+            RecordedBackend("semantic", {}),
+        ]
+        monkeypatch.setattr(mnd, "default_backends", lambda _: stages)
+        cache = str(tmp_path / "c")
+        mnd.main([str(arc), "--lean-project", str(tmp_path), "--cache-dir", cache])
+        return capsys.readouterr().out
+
+    def test_unreachable_reads_the_ceiling_statements_reached_not_the_configured_one(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        out = self.run(tmp_path, monkeypatch, capsys, probe_available=False)
+        assert "Decisive N1 is unreachable" in out
+        assert "0.75" in out
+
+    def test_it_does_not_call_the_n1_share_an_upper_bound(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        out = self.run(tmp_path, monkeypatch, capsys, probe_available=True)
+        assert "upper" not in out
+        assert "N1 at four stages: 1" in out
+        assert "with INCONCLUSIVE: 1.00" in out
 
 
 @pytest.mark.parametrize("path", ARCS, ids=lambda p: p.stem)
