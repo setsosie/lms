@@ -479,6 +479,17 @@ class TestExactProbeOutput:
         assert outcome.closed_by is None
         assert (outcome.error or "").startswith("probe gave no answer")
 
+    def test_a_close_beside_a_miss_is_not_a_close(self):
+        # Another command's `exact?` closed and the probe's missed. `Try this` carries
+        # no position here, so it can't be tied to the probe. Recorded on v4.32.1.
+        outcome = ExactProbeBackend.read_output(
+            "Try this:\n  [apply] exact zero_eq_one_mod_iff.mp rfl\n"
+            "probe.lean:4:51: error: `exact?` could not close the goal.\n"
+        )
+        assert outcome.available is False
+        assert outcome.closed_by is None
+        assert (outcome.error or "").startswith("probe gave a close and a miss")
+
     def test_a_kernel_timeout_is_a_heartbeat_limit_too(self):
         outcome = ExactProbeBackend.read_output(KERNEL_TIMEOUT)
         assert outcome.available is False
@@ -595,6 +606,7 @@ class TestSeveralDeclarations:
             "axiom x : True",
             "opaque x : Nat",
             "theorem x : True := trivial theorem y : True := trivial",
+            "coinductive x : Nat → Prop where",
         ],
     )
     def test_any_later_declaration_counts(self, later):

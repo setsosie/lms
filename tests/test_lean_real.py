@@ -159,6 +159,15 @@ class TestExactProbeContext:
         assert outcome.available is False
         assert outcome.closed_by is None
 
+    def test_another_commands_close_is_not_the_probes(self, tmp_path):
+        outcome = self.run_probe(
+            tmp_path,
+            "open Nat in #check (by exact? : 1 = 1)\n\n"
+            "theorem foo : ∀ n : Nat, n = 0 := sorry\n",
+        )
+        assert outcome.available is False
+        assert outcome.closed_by is None
+
     def test_an_explicit_universe_list_elaborates(self, tmp_path):
         outcome = self.run_probe(
             tmp_path, "theorem t.{u} (α : Type u) (a : α) : a = a := sorry\n"
