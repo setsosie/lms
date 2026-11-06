@@ -114,7 +114,7 @@ def parse_declaration(lean_code: str) -> tuple[str | None, str | None]:
 # rarely mean anything else in code. An overcount only sends a statement to review.
 _ANY_DECL_RE = re.compile(
     r"(?<![\w.'«])"
-    rf"(?:{'|'.join(_DECL_KEYWORDS)}|example|axiom|opaque|alias|irreducible_def)"
+    rf"(?:{'|'.join(_DECL_KEYWORDS)}|coinductive|example|axiom|opaque|alias|irreducible_def)"
     r"(?![\w.'»])"
 )
 
@@ -670,7 +670,9 @@ class ExactProbeBackend:
         ``rfl`` closes). A heartbeat limit is neither: the search stopped
         before it could answer. A miss has to say so, because a probe killed
         for memory prints nothing at all. ``exact?`` can also run out of budget
-        inside its search and report that as a miss, which this can't detect.
+        inside its search and report that as a miss, which this can't detect. A
+        close beside a miss is no answer either: ``Try this`` carries no position, so
+        the close may be another command's.
         """
         elaboration_errors = [
             line
@@ -688,9 +690,16 @@ class ExactProbeBackend:
                 cls.stage, available=False, error=f"{reason}: {first[:400]}"
             )
         m = _TRY_THIS_RE.search(output)
+        missed = _EXACT_MISS in output
+        if m and missed:
+            return StageOutcome(
+                cls.stage,
+                available=False,
+                error=f"probe gave a close and a miss: {output.strip()[:400]}",
+            )
         if m:
             return StageOutcome(cls.stage, available=True, closed_by=m.group(1).strip())
-        if _EXACT_MISS not in output:
+        if not missed:
             return StageOutcome(
                 cls.stage,
                 available=False,

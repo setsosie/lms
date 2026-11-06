@@ -68,6 +68,7 @@ The first pre-merge review of this PR (2026-11-05) returned NO-GO, and the user 
 - [ ] `candidates` keeps every semantic hit, and Gate 4 stamps them on the artifact as `novelty_candidates`
 - [ ] A probe is a `theorem`, so `exact?` cannot use a `variable` the statement leaves out, and it stops at `where`: `tests/test_lean_real.py::TestExactProbeContext` runs real Lean
 - [ ] The probe keeps `section`, `end`, `include` and `omit`, and an earlier real error outranks a later heartbeat limit
+- [ ] A close beside a miss reads unavailable, because the close may be another command's: `tests/test_lean_real.py::TestExactProbeContext`
 - [ ] A search that failed leaves the stage unavailable and uncached, not an empty search: a malformed LeanSearch answer, a Loogle error, a grep failure, and a probe that gives no answer
 - [ ] A close on a file with several declarations reads INCONCLUSIVE and names what closed, and only a single-declaration close reads N0: `tests/test_novelty.py::TestSeveralDeclarations`
 - [ ] Findings not fixed here are carded before Phase C: `26Q4-HARN-13` and `26Q4-HARN-14`
@@ -132,7 +133,7 @@ The first pre-merge review of this PR (2026-11-05) returned NO-GO, and the user 
 - **A decisive N1 still only means the search found nothing.** In Gate 4's configuration (four stages, names not labels) and with the other stages empty, core-13, -15, -17, -20 and ram-04, -05, -14, -17 read N1 0.90 with no review, and most are in the library by hand reading. Not a regression. `26Q4-HARN-13` owns it.
 - **A miss doesn't prove `exact?` finished.** It can run out of budget and report a miss, which this PR can't detect. Reproduced only at low budgets. `26Q4-HARN-14` owns it.
 - Hit names always contribute tokens, but `extract_identifiers` drops lowercase names from the statement, so core-04 gets no `minpoly` token. Counting them would also match core-04, ram-20 and ram-21, and ram-21 is hand-read as open. The rule table the user chose from didn't show this, and the rule is unchanged.
-- A failed search cached before this change no longer replays, on any stage but `exact_probe`, whose miss carries Lean's message as its error and is a real answer.
+- A failed search cached with a message before this change no longer replays, on any stage but `exact_probe`, whose miss carries Lean's message as its error and is a real answer. A failure cached with no message can't be told from a real empty answer, so it still replays. Nothing shows any occurred.
 - A local control run probes 18 of the 21 probeable statements, because 3 stop at the name stage. On a library build newer than the pin those 18 give 9 closed, 2 missed and 7 unavailable.
 - `names_are_labels` currently only filters backends in `build_classifier`. Pass it to `NoveltyClassifier` as an argument defaulting to False, so `lms/gates/novelty.py` is unchanged.
 - An unclosed `namespace` at the end of a probe file is valid Lean, so the probe needs no matching `end`.
