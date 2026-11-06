@@ -221,6 +221,19 @@ class Goal:
                 defn.artifact_ids.append(artifact_id)
                 return
 
+    def withdraw(self, artifact_ids: set[str]) -> list[str]:
+        """Remove these artifacts from the goal; return the tags left with none."""
+        reopened = []
+        for defn in self.definitions:
+            remaining = [a for a in defn.artifact_ids if a not in artifact_ids]
+            if len(remaining) == len(defn.artifact_ids):
+                continue
+            defn.artifact_ids = remaining
+            if not remaining:
+                defn.formalized = False
+                reopened.append(defn.tag)
+        return reopened
+
     def save(self, path: Path) -> None:
         """Save goal state to JSON.
 

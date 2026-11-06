@@ -860,6 +860,10 @@ end {FOUNDATION_NAMESPACE}
                         self._artifact_ids.add(
                             artifact.id
                         )  # Mark as seen to prevent retry
+                        self._rejections[artifact.id] = (
+                            f"it declares `{entry.name}`, but the foundation "
+                            f"already has `{existing_name}` for that concept"
+                        )
                         return False
                     # If same name, it's just a duplicate - will be skipped below
 
@@ -907,6 +911,10 @@ end {FOUNDATION_NAMESPACE}
                 FoundationEntry._strip_line_comment(line) for line in lines
             ).split()
         )
+
+    def holds(self, artifact_id: str) -> bool:
+        """Whether this artifact's work is here: added, or an identical copy."""
+        return artifact_id in self._artifact_ids and artifact_id not in self._rejections
 
     def rejection_reason(self, artifact_id: str) -> str | None:
         """Why `add_artifact` refused this artifact, or None if it didn't."""
@@ -1298,6 +1306,9 @@ Create foundational definitions that future generations can build upon.
             # Persisted so a resumed run rebuilds the same axiom layer rather
             # than silently dropping it and letting agents redefine `Category`.
             "seed_source": self.seed_source,
+            # A refused id stays in `artifact_ids`, so a resume needs this to
+            # tell it from one the foundation holds.
+            "rejections": self._rejections,
         }
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -1324,6 +1335,7 @@ Create foundational definitions that future generations can build upon.
                 FoundationEntry.from_dict(e) for e in metadata.get("entries", [])
             ]
             foundation._artifact_ids = set(metadata.get("artifact_ids", []))
+            foundation._rejections = dict(metadata.get("rejections", {}))
             # Rebuild definition names from loaded entries
             foundation._definition_names = {e.name for e in foundation.entries}
             # Rebuild claimed concepts from loaded entries

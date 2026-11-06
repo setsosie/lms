@@ -16,6 +16,7 @@ import pytest
 from lms.artifacts import Artifact, ArtifactType, VerificationStatus
 from lms.config import ProviderConfig
 from lms.dependency import DependencyGraph, TaskStatus
+from lms.foundation import FoundationFile
 from lms.goals import Goal, StacksDefinition
 from lms.society import Society
 from tests.test_foundation_rollback import FakeProject, ProjectVerifier, SilentProvider
@@ -216,6 +217,18 @@ class TestResume:
         await society.restore_foundation()
 
         assert definition(society).formalized is False
+
+    def test_a_refusal_survives_a_checkpoint(self, tmp_path: Path) -> None:
+        """A walltime kill saves mid-generation, before the tags are reconciled."""
+        society = make_society(tmp_path, [])
+        society._promote_to_foundation(artifact("first", "def rep : Nat := 1"))
+        society._promote_to_foundation(artifact("second", "def rep : Nat := 2"))
+        society.foundation.save()
+
+        loaded = FoundationFile.load(society.foundation.path)
+
+        assert loaded.holds("first") is True
+        assert loaded.holds("second") is False
 
 
 class TestCoreConceptRefusal:

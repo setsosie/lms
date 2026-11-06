@@ -279,6 +279,7 @@ class Society:
 
         if result.artifacts_verified > 0:
             await self.persist_foundation()
+            self._reopen_tags_without_foundation_work()
 
         result.wall_clock_s = time.monotonic() - gen_start
         return result
@@ -352,13 +353,39 @@ class Society:
         Returns:
             True if the restored foundation is on disk and compiled.
         """
-        if await self._write_and_build_foundation():
-            return True
-        # The failed build rolled back to the generation boundary `load`
-        # marked as good and rebuilt that. Whether it compiled decides the
-        # resume; `_write_and_build_foundation` reports False either way.
-        project = getattr(self.verifier, "project", None)
-        return project is not None and await project.rebuild_changed_sources()
+        restored = await self._write_and_build_foundation()
+        if not restored:
+            # The failed build rolled back to the generation boundary `load`
+            # marked as good and rebuilt that. Whether it compiled decides the
+            # resume; `_write_and_build_foundation` reports False either way.
+            project = getattr(self.verifier, "project", None)
+            restored = project is not None and await project.rebuild_changed_sources()
+        self._reopen_tags_without_foundation_work()
+        return restored
+
+    def _reopen_tags_without_foundation_work(self) -> None:
+        """Reopen goal tags backed only by artifacts the foundation doesn't hold.
+
+        Every promotion path marks a tag as it processes results, and the build
+        that can undo them runs afterwards, so this runs once after it. An
+        artifact counts as withdrawn only if the library knows it: seeded tags
+        and tags a goal starts with name artifacts this run never saw.
+        """
+        if self.goal is None:
+            return
+        withdrawn = {
+            artifact_id
+            for defn in self.goal.definitions
+            for artifact_id in defn.artifact_ids
+            if artifact_id in self.library and not self.foundation.holds(artifact_id)
+        }
+        reopened = self.goal.withdraw(withdrawn)
+        if not reopened:
+            return
+        print(f"  [goal] reopened, nothing in the foundation: {', '.join(reopened)}")
+        if self.dependency_graph is not None:
+            for tag in reopened:
+                self.dependency_graph.revert_done(tag)
 
     async def _write_and_build_foundation(self) -> bool:
         """Write the foundation and recompile so imports see current contents.
