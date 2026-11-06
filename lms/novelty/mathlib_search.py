@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from lms.gates.lean_source import strip_comments
+
 LOOGLE_URL = "https://loogle.lean-lang.org"
 LEANSEARCH_URL = "https://leansearch.net"
 
@@ -105,6 +107,26 @@ def parse_declaration(lean_code: str) -> tuple[str | None, str | None]:
     if not m:
         return None, None
     return m.group(1), m.group(2)
+
+
+# Any declaration keyword, anywhere in the source. What can come ahead of one
+# (`open Nat in`, `local`, `@[...]`) is too open-ended to list, and these words
+# rarely mean anything else in code. An overcount only sends a statement to review.
+_ANY_DECL_RE = re.compile(
+    r"(?<![\w.'«])"
+    rf"(?:{'|'.join(_DECL_KEYWORDS)}|coinductive|example|axiom|opaque|alias|irreducible_def)"
+    r"(?![\w.'»])"
+)
+
+
+def declaration_count(lean_code: str) -> int:
+    """How many declarations a Lean file holds, leaving comments out."""
+    return len(_ANY_DECL_RE.findall(strip_comments(lean_code)))
+
+
+def probed_declaration_name(lean_code: str) -> str | None:
+    """Name of the declaration an ``exact?`` probe of this file tests."""
+    return parse_declaration(strip_comments(lean_code))[1]
 
 
 def declared_names(lean_code: str) -> list[str]:
@@ -396,7 +418,7 @@ class MathlibNameSearch:
         # grep exits 1 on "no matches", which is a result, not a failure.
         if proc.returncode not in (0, 1):
             return StageOutcome(
-                self.stage, available=True, error=proc.stderr.strip()[:500]
+                self.stage, available=False, error=proc.stderr.strip()[:500]
             )
         hits = []
         for line in proc.stdout.splitlines()[:50]:
@@ -489,17 +511,24 @@ class LoogleBackend(_HttpBackend):
             return StageOutcome(self.stage, available=False, error=str(exc)[:500])
         if isinstance(data, dict) and data.get("error"):
             return StageOutcome(
-                self.stage, available=True, error=str(data["error"])[:500]
+                self.stage, available=False, error=str(data["error"])[:500]
             )
+        unreadable = StageOutcome(
+            self.stage, available=False, error="unexpected response shape"
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("hits"), list):
+            return unreadable
         hits = [
             SearchHit(
-                name=h.get("name", ""),
+                name=h["name"],
                 module=h.get("module"),
                 type_signature=h.get("type"),
             )
-            for h in (data.get("hits") or [])[:20]
-            if h.get("name")
+            for h in data["hits"][:20]
+            if isinstance(h, dict) and h.get("name")
         ]
+        if data["hits"] and not hits:
+            return unreadable
         return StageOutcome(self.stage, available=True, hits=hits)
 
 
@@ -508,6 +537,28 @@ _EXACT_MISS = "could not close the goal"
 # Newer toolchains print the suggestion on its own line behind an `[apply]`
 # tag; older ones print it inline. Either way the payload starts at `exact`.
 _TRY_THIS_RE = re.compile(r"Try this:\s*(?:\[apply\]\s*)?(exact\b.+)")
+# Matches both `(deterministic) timeout at ...` and `(kernel) deterministic timeout`.
+_HEARTBEAT_LIMIT_RE = re.compile(r"deterministic\)? timeout")
+# The commands that set the scope a statement's names and notation resolve in.
+_PREAMBLE_RE = re.compile(
+    r"(?:noncomputable\s+)?"
+    r"(?:open|variable|universe|namespace|section|end|include|omit)\b"
+)
+_PROBE_NAME = "lms_novelty_probe"
+
+
+def _probe_preamble(source: str) -> list[str]:
+    """Lines of the preamble commands in ``source``, with their continuations."""
+    kept: list[str] = []
+    keeping = False
+    for line in source.splitlines():
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            keeping = _PREAMBLE_RE.match(line) is not None
+        if keeping:
+            kept.append(line)
+    return kept
 
 
 class ExactProbeBackend:
@@ -537,23 +588,35 @@ class ExactProbeBackend:
         )
 
     def cache_query(self, query: StatementQuery) -> str:
-        # v2: entries written before `read_output` cached elaboration failures
-        # as searches that ran; the version bump stops them being replayed.
-        return f"exact_probe/v2:{query.lean_statement}"
+        # v3: entries written before probes kept the statement's preamble failed
+        # to elaborate; the version bump stops them being replayed.
+        return f"exact_probe/v3:{query.lean_statement}"
 
     @staticmethod
     def probe_source(lean_statement: str) -> str | None:
-        """Rewrite ``theorem foo ... := proof`` as an ``exact?`` probe."""
-        m = _DECL_RE.search(lean_statement)
+        """Rewrite ``theorem foo ... := proof`` as an ``exact?`` probe.
+
+        The scope commands ahead of the declaration come along, since its names
+        and notation may resolve only under them. Its imports do not: the probe
+        searches the whole library. It stays a ``theorem``, because an ``example``
+        also sees ``variable`` hypotheses the statement leaves out, and ``exact?``
+        would use them to close a goal the statement never claimed. Lean rejects a
+        ``theorem`` of data type, as it rejects the statement as written, which is
+        right here too: ``exact?`` on data only shows that some term exists.
+        """
+        source = strip_comments(lean_statement)
+        m = _DECL_RE.search(source)
         if not m or m.group(1) not in ("theorem", "lemma"):
             return None
-        rest = lean_statement[m.end() :]
-        body_start = rest.find(":=")
-        header = rest[:body_start] if body_start != -1 else rest
-        header = header.strip()
+        header = (statement_header(source) or "").rstrip()
         if ":" not in header:
             return None
-        return f"import Mathlib\n\nexample {header} := by exact?\n"
+        preamble = _probe_preamble(source[: m.start()])
+        opening = "\n".join(preamble) + "\n\n" if preamble else ""
+        # `theorem Foo.bar` resolves its names inside `Foo`, so the probe must too.
+        namespace = m.group(2).rpartition(".")[0]
+        name = f"{namespace}.{_PROBE_NAME}" if namespace else _PROBE_NAME
+        return f"import Mathlib\n\n{opening}theorem {name}{header} := by exact?\n"
 
     def search(self, query: StatementQuery) -> StageOutcome:
         source = self.probe_source(query.lean_statement)
@@ -604,7 +667,12 @@ class ExactProbeBackend:
         ``exact?`` ran against whatever error recovery left behind — a goal
         that is not the statement's — so a miss says nothing about Mathlib and
         a close is spurious (an unknown type can leave ``x = x``, which
-        ``rfl`` closes).
+        ``rfl`` closes). A heartbeat limit is neither: the search stopped
+        before it could answer. A miss has to say so, because a probe killed
+        for memory prints nothing at all. ``exact?`` can also run out of budget
+        inside its search and report that as a miss, which this can't detect. A
+        close beside a miss is no answer either: ``Try this`` carries no position, so
+        the close may be another command's.
         """
         elaboration_errors = [
             line
@@ -612,19 +680,32 @@ class ExactProbeBackend:
             if _LEAN_ERROR_RE.search(line) and _EXACT_MISS not in line
         ]
         if elaboration_errors:
+            first = elaboration_errors[0]
+            reason = (
+                "probe hit the heartbeat limit"
+                if _HEARTBEAT_LIMIT_RE.search(first)
+                else "statement did not elaborate"
+            )
+            return StageOutcome(
+                cls.stage, available=False, error=f"{reason}: {first[:400]}"
+            )
+        m = _TRY_THIS_RE.search(output)
+        missed = _EXACT_MISS in output
+        if m and missed:
             return StageOutcome(
                 cls.stage,
                 available=False,
-                error=f"statement did not elaborate: {elaboration_errors[0][:400]}",
+                error=f"probe gave a close and a miss: {output.strip()[:400]}",
             )
-        m = _TRY_THIS_RE.search(output)
         if m:
             return StageOutcome(cls.stage, available=True, closed_by=m.group(1).strip())
-        return StageOutcome(
-            cls.stage,
-            available=True,
-            error=output.strip()[:500] or None,
-        )
+        if not missed:
+            return StageOutcome(
+                cls.stage,
+                available=False,
+                error=f"probe gave no answer: {output.strip()[:400]}",
+            )
+        return StageOutcome(cls.stage, available=True, error=output.strip()[:500])
 
 
 class LeanSearchBackend(_HttpBackend):
@@ -660,8 +741,14 @@ class LeanSearchBackend(_HttpBackend):
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             return StageOutcome(self.stage, available=False, error=str(exc)[:500])
         hits: list[SearchHit] = []
+        unreadable = StageOutcome(
+            self.stage, available=False, error="unexpected response shape"
+        )
         try:
-            for item in data[0][: self.num_results]:
+            items = data[0][: self.num_results]
+            if not isinstance(items, list):
+                return unreadable
+            for item in items:
                 result = item.get("result", {})
                 name_parts = result.get("name") or []
                 module_parts = result.get("module_name") or []
@@ -674,10 +761,10 @@ class LeanSearchBackend(_HttpBackend):
                         type_signature=result.get("signature") or result.get("type"),
                     )
                 )
-        except (IndexError, TypeError, AttributeError):
-            return StageOutcome(
-                self.stage, available=True, error="unexpected response shape"
-            )
+        except (IndexError, KeyError, TypeError, AttributeError):
+            return unreadable
+        if items and not hits:
+            return unreadable
         return StageOutcome(self.stage, available=True, hits=hits)
 
 
