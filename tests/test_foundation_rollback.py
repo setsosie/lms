@@ -198,6 +198,102 @@ class TestBuildRollback:
         assert "bad" in out
 
 
+class TestPerArtifactRollback:
+    """A failed merged build costs the artifacts that broke it, not the generation."""
+
+    @staticmethod
+    async def _build_generation(society, *names: str) -> bool:
+        for number, name in enumerate(names):
+            society.foundation.add_artifact(make_artifact(name, f"gen-{number}"))
+        return await society._write_and_build_foundation()
+
+    async def _seeded(self, tmp_path, outcomes):
+        society, project = make_society(tmp_path, [True, *outcomes])
+        society.foundation.add_artifact(make_artifact("good", "a-0"))
+        await society._write_and_build_foundation()
+        return society, project
+
+    async def test_it_keeps_every_artifact_that_builds(self, tmp_path):
+        society, project = await self._seeded(tmp_path, [False, True, False, True])
+
+        await self._build_generation(society, "first", "bad", "third")
+
+        assert [e.name for e in society.foundation.entries] == [
+            "good",
+            "first",
+            "third",
+        ]
+        # seed build, joint failure, then one per artifact
+        assert project.builds == 5
+
+    async def test_the_good_state_includes_what_was_kept(self, tmp_path):
+        society, _ = await self._seeded(tmp_path, [False, True, False])
+
+        await self._build_generation(society, "first", "bad")
+
+        assert [e.name for e in society._last_good_foundation.entries] == [
+            "good",
+            "first",
+        ]
+
+    async def test_a_failure_last_rebuilds_what_was_kept(self, tmp_path):
+        """The last build tried was the bad one, so the module on disk is stale."""
+        society, project = await self._seeded(tmp_path, [False, True, False, True])
+
+        await self._build_generation(society, "first", "bad")
+
+        # seed build, joint failure, first, bad, then the rebuild
+        assert project.builds == 5
+        on_disk = (tmp_path / "Foundation.lean").read_text()
+        assert "def first" in on_disk
+        assert "def bad" not in on_disk
+
+    async def test_a_success_last_needs_no_rebuild(self, tmp_path):
+        society, project = await self._seeded(tmp_path, [False, False, True])
+
+        await self._build_generation(society, "bad", "last")
+
+        assert project.builds == 4
+
+    async def test_all_failing_leaves_the_good_state(self, tmp_path):
+        society, _ = await self._seeded(tmp_path, [False, False, False, True])
+
+        assert await self._build_generation(society, "bad", "worse") is False
+
+        assert [e.name for e in society.foundation.entries] == ["good"]
+
+    async def test_a_kept_artifact_stays_known(self, tmp_path):
+        """A retry must leave ids and names as a plain add would."""
+        society, _ = await self._seeded(tmp_path, [False, True, False])
+
+        await self._build_generation(society, "first", "bad")
+
+        assert "gen-0" in society.foundation._artifact_ids
+        assert "gen-1" not in society.foundation._artifact_ids
+        assert "first" in society.foundation._definition_names
+        assert "bad" not in society.foundation._definition_names
+
+    async def test_it_returns_false_when_something_was_dropped(self, tmp_path):
+        society, _ = await self._seeded(tmp_path, [False, True, False])
+
+        assert await self._build_generation(society, "first", "bad") is False
+
+    async def test_it_returns_true_when_everything_was_kept(self, tmp_path):
+        """Each built alone, so the foundation holds all of them and compiles."""
+        society, _ = await self._seeded(tmp_path, [False, True, True])
+
+        assert await self._build_generation(society, "first", "second") is True
+
+    async def test_the_log_names_what_went_and_what_stayed(self, tmp_path, capsys):
+        society, _ = await self._seeded(tmp_path, [False, True, False])
+
+        await self._build_generation(society, "first", "bad")
+
+        out = capsys.readouterr().out
+        assert "rolled back 1 entry: bad" in out
+        assert "kept 1 artifact" in out
+
+
 @pytest.mark.parametrize("n_dropped,expected", [(1, "entry"), (2, "entries")])
 def test_rollback_message_pluralises(n_dropped, expected):
     """Cosmetic, but the line is read by a human triaging a failed run."""

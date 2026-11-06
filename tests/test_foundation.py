@@ -1005,7 +1005,7 @@ def Cat.other_helper : Nat := 99""",
         assert "Category.helper" in names
 
     def test_deduplicates_definitions_by_name(self, tmp_path: Path):
-        """Foundation skips definitions with names that already exist."""
+        """An identical re-declaration is skipped and the rest of the artifact kept."""
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
 
         # First artifact defines Category
@@ -1028,7 +1028,6 @@ def Cat.other_helper : Nat := 99""",
             natural_language="Functor (includes Category)",
             lean_code="""structure Category where
   Obj : Type u
-  Hom : Obj → Obj → Type v
 
 structure Functor (C D : Category) where
   obj : C.Obj → D.Obj""",
