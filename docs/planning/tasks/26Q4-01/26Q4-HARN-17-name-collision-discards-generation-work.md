@@ -95,7 +95,7 @@ See `scripts/verify/26Q4-01/verify_26Q4-HARN-17.sh`.
 ```bash
 uv run pytest tests/test_foundation_collisions.py tests/test_foundation_rollback.py -v
 ```
-**Expect**: all pass. For the real case, the 2026-11-06 simulation's generations 0–2 build under Lean with `26Q4-HARN-16` also applied, keeping 2 of generation 2's 3 proofs. Those artifacts are local and gitignored, so the PR records that replay.
+**Expect**: all pass. For the real case, the 2026-11-06 simulation's generations 0–2 build under Lean with `26Q4-HARN-16` also applied, and generation 2 keeps agent 0's proof in the foundation. Those artifacts are local and gitignored, so the PR records that replay.
 
 ---
 
@@ -119,5 +119,6 @@ Evidence from the 2026-11-06 simulation at `3185b0e`, written by Claude for the 
 - **Observed:** all three generation 2 agents proved Yoneda, and all 26 entries were rolled back. Agents 0 and 1 both defined `rep`, returning different types. The merge strips `namespace` (`lms/foundation.py:816`), and all three had chosen `namespace MyYoneda` anyway, so keeping namespaces wouldn't separate them.
 - **Misleading error:** the build reports `Unknown identifier C`. Agent 1 merges fine alone. Its `variable` line disappears only in the collision, apparently because it travels with the skipped `rep` entry. With the line restored, agents 0 and 1 still fail on a type mismatch (`diag4.py`).
 - **Confirmed:** agents 0 and 2 merge and build together, so per-artifact handling would have kept 2 of the 3 proofs (`diag4.py`).
-- **Open choice for the criteria:** reject a colliding artifact at promotion, roll back per artifact after a failed build, or both. Separately, say whether an identical re-declaration should still count as a harmless duplicate.
+- **Open choice for the criteria, drafted as both:** reject a colliding artifact at promotion, and roll back per artifact after a failed build. An identical re-declaration stays a harmless duplicate.
+- **Replay under these criteria:** generation 2 keeps 1 proof of 3, not the 2 above. Agent 2's `yonedaFullyFaithful` differs from agent 0's, so it's refused. It built before only because the old skip dropped that one declaration and kept agent 2's other nine. All three proofs close the same tag and stay verified in the library, so the foundation loses a redundant copy.
 - **Overlap:** shares `add_artifact` with `26Q4-HARN-16`, so merge that first.
