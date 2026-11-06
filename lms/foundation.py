@@ -40,9 +40,36 @@ FOUNDATION_NAMESPACE = "LMS.Foundation"
 FOUNDATION_UNIVERSES: tuple[str, ...] = ("u", "v", "w")
 
 
+_UNIVERSE_NAME = re.compile(r"[^\W\d][\w'!?]*")
+
+
 def _universe_line_names(stripped: str) -> list[str]:
-    """The names a stripped `universe ...` line binds, without a trailing comment."""
-    return stripped[len("universe ") :].split("--", 1)[0].split()
+    """The names a stripped `universe ...` line binds, in order.
+
+    Reading stops at the first token that isn't a name: a trailing comment, or
+    the `in` of `universe u in`, which scopes the line to one command.
+    """
+    names: list[str] = []
+    rest = re.sub(r"/-.*?-/", " ", stripped[len("universe ") :])
+    for token in rest.split():
+        if token == "in" or not _UNIVERSE_NAME.fullmatch(token):
+            break
+        names.append(token)
+    return names
+
+
+def declared_universe_order(lines: Iterable[str]) -> list[str]:
+    """Universe names that `universe ...` lines bind, first-declared first.
+
+    Order is meaning: Lean orders a declaration's level parameters by it, so a
+    different order changes what `f.{0, 1}` refers to and can still compile.
+    """
+    names: dict[str, None] = {}
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("universe "):
+            names.update(dict.fromkeys(_universe_line_names(stripped)))
+    return list(names)
 
 
 def declared_universe_names(lines: Iterable[str]) -> set[str]:
@@ -53,12 +80,7 @@ def declared_universe_names(lines: Iterable[str]) -> set[str]:
     already been declared`, which is the same class of failure in the opposite
     direction.
     """
-    names: set[str] = set()
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("universe "):
-            names.update(_universe_line_names(stripped))
-    return names
+    return set(declared_universe_order(lines))
 
 
 def strip_header_universes(lines: Iterable[str]) -> list[str]:
@@ -818,12 +840,11 @@ end {FOUNDATION_NAMESPACE}
         # - namespace/end statements (conflict with LMS.Foundation namespace)
         _, body_lines = split_imports(clean_code)
         own_universes = tuple(
-            sorted(
-                declared_universe_names(
-                    self._strip_block_comments("\n".join(body_lines)).splitlines()
-                )
-                - set(FOUNDATION_UNIVERSES)
+            name
+            for name in declared_universe_order(
+                self._strip_block_comments("\n".join(body_lines)).splitlines()
             )
+            if name not in FOUNDATION_UNIVERSES
         )
         clean_lines = []
         for line in body_lines:
@@ -1228,7 +1249,9 @@ Create foundational definitions that future generations can build upon.
         # Group by artifact but only write code for unique definitions
         seen_artifacts: set[str] = set()
         written_names: set[str] = set()
-        seed_universes = declared_universe_names(self.seed_source.splitlines())
+        seed_universes = declared_universe_names(
+            self._strip_block_comments(self.seed_source).splitlines()
+        )
         section_open = False
 
         for entry in self.entries:

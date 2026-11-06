@@ -38,6 +38,8 @@ grep -n "test_exotic_universe_names_are_preserved" tests/test_verify_universes.p
 - [ ] A name the seed binds is not rebound
 - [ ] A rollback drops the bindings along with the entries, and they survive `save_metadata`/`load`, including a checkpoint written before this change
 - [ ] A comment is not read as a binding: neither `universe u₁ -- levels` nor a docstring line beginning `universe of discourse` adds a name
+- [ ] The artifact's own names keep their declared order, because Lean orders level parameters by it: `universe v₁ u₁` stays `v₁ u₁`, or `tag.{0, 1}` silently means different types
+- [ ] `universe u in` reads `in` as a keyword, not a level name
 - [ ] Real Lean compiles the saved file for the cases above, in the CI job that has a toolchain
 
 ---
@@ -58,6 +60,7 @@ grep -n "test_exotic_universe_names_are_preserved" tests/test_verify_universes.p
 
 - The names live on `FoundationEntry`, so snapshot, restore, `snapshot_before` and checkpoints need no new state: what's bound follows from the entries kept.
 - A `section` per artifact rather than hoisting to the header. A header binding would break a later artifact that names the level explicitly, with `a universe level named 'u₁' has already been declared`.
+- Mixed lines aren't fully covered. `universe v₁ u` still merges as `.{u, v₁}`, because the header binds `u` first. That's the pre-existing header-order defect in `26Q4-HARN-19`.
 
 ---
 
@@ -74,6 +77,8 @@ grep -n "test_exotic_universe_names_are_preserved" tests/test_verify_universes.p
 - Name collisions and per-artifact rollback: `26Q4-HARN-17`.
 - Reopening goal tags after a rollback: `26Q4-HARN-18`.
 - The verifier's wrapper, which already keeps these lines.
+- The order of header names, and of a mixed line: `26Q4-HARN-19`.
+- Names on a continuation line (`universe u₁\n  u₂`), which fail loudly on `main` too.
 
 ---
 
