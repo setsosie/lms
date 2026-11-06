@@ -258,6 +258,18 @@ class TestGateBlockedCommitteeTag:
         assert [n.tag for n in graph.available_tasks()][0] == "T1"
         assert "gate failure" in (blocked.notes or "")
 
+    def test_the_log_names_it(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        society = make_society(tmp_path, [])
+        society.dependency_graph = DependencyGraph.from_goal(society.goal)
+
+        society._release_gate_blocked_task(
+            "T1", artifact("blocked", "def blocked : Nat := 1")
+        )
+
+        assert "T1 offered again" in capsys.readouterr().out
+
     def test_it_leaves_a_task_another_group_finished(self, tmp_path: Path) -> None:
         society = make_society(tmp_path, [])
         society.dependency_graph = DependencyGraph.from_goal(society.goal)

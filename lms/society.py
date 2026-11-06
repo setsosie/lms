@@ -892,6 +892,7 @@ class Society:
         A task another group finished stays done.
         """
         self._note_gate_block(artifact)
+        print(f"  [graph] {tag} offered again: a gate kept {artifact.id} out")
         if self.dependency_graph is not None:
             self.dependency_graph.update_status(tag, TaskStatus.AVAILABLE)
 
