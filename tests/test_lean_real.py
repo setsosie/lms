@@ -361,16 +361,35 @@ class TestFoundationCollisions:
         assert errors == ""
         assert [e.name for e in foundation.entries] == ["f", "f'", "t"]
 
-    def test_a_command_after_a_copy_keeps_later_entries_compiling(
+    def test_repeating_a_notation_leaves_later_uses_working(
         self, tmp_path: Path
     ) -> None:
         foundation, errors = self._compile(
             tmp_path,
-            "def rep : Nat := 1",
-            "def rep : Nat := 1\n\nvariable (n : Nat)\n\ndef plus : Nat := n + rep",
+            'def foo : Nat := 1\n\nnotation "FOO" => foo',
+            'def foo : Nat := 1\n\nnotation "FOO" => foo\n\ndef bar : Nat := FOO',
         )
         assert errors == ""
-        assert "plus" in foundation._definition_names
+        assert "bar" in foundation._definition_names
+
+    def test_a_copy_with_a_deriving_clause_compiles(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "structure Pt where\n  x : Nat\nderiving Repr",
+            "structure Pt where\n  x : Nat\nderiving Repr\n\ndef y : Nat := 1",
+        )
+        assert errors == ""
+        assert "y" in foundation._definition_names
+
+    def test_another_universe_order_cant_change_a_meaning(self, tmp_path: Path) -> None:
+        body = "def Pair : Type u₁ → Type v₁ → Type (max u₁ v₁) := fun α β => α × β"
+        foundation, errors = self._compile(
+            tmp_path,
+            f"universe v₁ u₁\n\n{body}",
+            f"universe u₁ v₁\n\n{body}\n\ndef tag := Pair.{{0, 1}}",
+        )
+        assert errors == ""
+        assert "tag" not in foundation._definition_names
 
     def test_an_attributed_declaration_keeps_its_attribute(
         self, tmp_path: Path
