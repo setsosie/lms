@@ -2,9 +2,12 @@
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
+from lms.artifacts import Artifact, ArtifactType, VerificationStatus
+from lms.foundation import FoundationFile
 from lms.lean.real import RealLeanVerifier
 from lms.novelty.mathlib_search import ExactProbeBackend, StageOutcome
 from tests._lean_env import LEAN_MISSING, LEAN_MISSING_REASON
@@ -110,6 +113,130 @@ theorem add_one_succ (n : Nat) : add_one n = n + 1 := rfl
         code = "theorem nat_zero : (0 : Nat) = 0 := rfl"
         result = await verifier.verify(code)
         assert result.success is True
+
+
+class TestFoundationUniverses:
+    """The saved foundation compiles when artifacts bind their own universes."""
+
+    @staticmethod
+    def _foundation(tmp_path: Path, *codes: str) -> FoundationFile:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        for number, code in enumerate(codes):
+            foundation.add_artifact(
+                Artifact(
+                    id=f"artifact-{number}",
+                    type=ArtifactType.DEFINITION,
+                    natural_language="test",
+                    lean_code=code,
+                    created_by="agent-0",
+                    generation=0,
+                    status=VerificationStatus.VERIFIED_LEAN,
+                )
+            )
+        return foundation
+
+    @staticmethod
+    def _errors(foundation: FoundationFile) -> str:
+        """Compile the saved file; the header's library imports need no toolchain build."""
+        foundation.save()
+        kept = [
+            line
+            for line in foundation.path.read_text().splitlines()
+            if not line.startswith("import ")
+        ]
+        foundation.path.write_text("\n".join(kept) + "\n")
+        proc = subprocess.run(
+            ["lean", str(foundation.path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return proc.stdout + proc.stderr if proc.returncode else ""
+
+    def test_an_exotic_universe_line_compiles(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u₁ u₂\n\ndef pairUp (A : Type u₁) (B : Type u₂) : Type (max u₁ u₂) := A × B",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_two_artifacts_can_bind_the_same_name(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u₁\n\ndef first (A : Type u₁) : A → A := fun a => a",
+            "universe u₁\n\ndef second (A : Type u₁) : A → A := fun a => a",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_the_merge_keeps_what_verified_alone(self, tmp_path: Path) -> None:
+        """`tag.{0, 1}` means different types if the levels change order. `Nat` fits
+        only the first parameter as declared, so a reordering fails here."""
+        foundation = self._foundation(
+            tmp_path,
+            "universe v₁ u₁\n\n"
+            "def tag (α : Type v₁) (β : Type u₁) : Type (max v₁ u₁) := α × β\n\n"
+            "abbrev tagAt := tag.{0, 1}\n\n"
+            "def check : Type 1 := tagAt Nat (ULift Nat)",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_explicit_levels_on_its_own_class_still_apply(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe v₁ u₁\n\n"
+            "class Cat (C : Type u₁) where\n  Hom : C → C → Type v₁\n\n"
+            "def homOf (C : Type u₁) [Cat.{v₁, u₁} C] (a b : C) : Type v₁ := Cat.Hom a b",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_scoped_universe_line_compiles(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "def good : Nat := 1",
+            "universe u in\ndef foo (A : Type u) : A → A := fun a => a",
+            "universe u₁ in\ndef bar (A : Type u₁) : A → A := fun a => a",
+            "def alsoGood : Nat := 2",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_header_and_own_names_compile_together(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u u₁\n\ndef f (A : Type u) (B : Type u₁) : Type (max u u₁) := A × B",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_name_the_seed_binds_compiles(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.set_seed("universe u₁\n\ndef seeded (A : Type u₁) : Type u₁ := A")
+        foundation.add_artifact(
+            Artifact(
+                id="artifact-0",
+                type=ArtifactType.DEFINITION,
+                natural_language="test",
+                lean_code="universe u₁\n\ndef mine (A : Type u₁) : A → A := fun a => a",
+                created_by="agent-0",
+                generation=0,
+                status=VerificationStatus.VERIFIED_LEAN,
+            )
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_comment_binds_nothing_when_compiled(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "/-- A note.\nuniverse of discourse\n-/\ndef noted : Nat := 1",
+            "universe u₁ -- a level\n\ndef f (A : Type u₁) : A → A := fun a => a",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_later_artifact_can_name_the_level_itself(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u₁\n\ndef first (A : Type u₁) : A → A := fun a => a",
+            "def second.{u₁} (A : Type u₁) : A → A := fun a => a",
+        )
+        assert self._errors(foundation) == ""
 
 
 class TestExactProbeContext:
