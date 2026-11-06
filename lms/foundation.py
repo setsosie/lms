@@ -33,11 +33,16 @@ _BY_TAIL = re.compile(r"\bby$")
 FOUNDATION_NAMESPACE = "LMS.Foundation"
 
 #: Universe names the foundation header binds, above its `namespace` line.
-#: `FoundationFile.add_artifact` strips an entry's own `universe` lines on the
-#: grounds that these are already in scope at the destination -- so the
-#: verifier has to put them in scope too, or it rejects code that would
+#: `FoundationFile.add_artifact` drops these from an entry's own `universe`
+#: lines on the grounds that they are already in scope at the destination --
+#: so the verifier has to put them in scope too, or it rejects code that would
 #: compile once stored (26Q3-HARN-21).
 FOUNDATION_UNIVERSES: tuple[str, ...] = ("u", "v", "w")
+
+
+def _universe_line_names(stripped: str) -> list[str]:
+    """The names a stripped `universe ...` line binds, without a trailing comment."""
+    return stripped[len("universe ") :].split("--", 1)[0].split()
 
 
 def declared_universe_names(lines: Iterable[str]) -> set[str]:
@@ -52,7 +57,7 @@ def declared_universe_names(lines: Iterable[str]) -> set[str]:
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("universe "):
-            names.update(stripped[len("universe ") :].split())
+            names.update(_universe_line_names(stripped))
     return names
 
 
@@ -72,7 +77,7 @@ def strip_header_universes(lines: Iterable[str]) -> list[str]:
             continue
         kept = [
             name
-            for name in stripped[len("universe ") :].split()
+            for name in _universe_line_names(stripped)
             if name not in FOUNDATION_UNIVERSES
         ]
         if kept:
@@ -126,6 +131,8 @@ class FoundationEntry:
         lean_code: Full Lean code for this entry
         generation: Generation when this was added
         author: Agent that created this
+        universes: Universe names its artifact bound beyond the header. On the
+            entry so a rollback or a checkpoint keeps them with what uses them.
     """
 
     artifact_id: str
@@ -135,6 +142,7 @@ class FoundationEntry:
     lean_code: str
     generation: int
     author: str
+    universes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -146,6 +154,7 @@ class FoundationEntry:
             "lean_code": self.lean_code,
             "generation": self.generation,
             "author": self.author,
+            "universes": list(self.universes),
         }
 
     #: Declarations whose indented body *is* the API an agent needs. An
@@ -578,6 +587,7 @@ class FoundationEntry:
             lean_code=d["lean_code"],
             generation=d["generation"],
             author=d["author"],
+            universes=tuple(d.get("universes", ())),
         )
 
 
@@ -804,9 +814,17 @@ end {FOUNDATION_NAMESPACE}
 
         # Remove problematic statements that conflict with Foundation wrapper:
         # - import statements (must be at file top, Foundation has common imports)
-        # - universe declarations (Foundation header has them)
+        # - universe declarations (the header's, and `save` scopes the rest)
         # - namespace/end statements (conflict with LMS.Foundation namespace)
         _, body_lines = split_imports(clean_code)
+        own_universes = tuple(
+            sorted(
+                declared_universe_names(
+                    self._strip_block_comments("\n".join(body_lines)).splitlines()
+                )
+                - set(FOUNDATION_UNIVERSES)
+            )
+        )
         clean_lines = []
         for line in body_lines:
             stripped = line.strip()
@@ -827,6 +845,8 @@ end {FOUNDATION_NAMESPACE}
             artifact.generation,
             artifact.created_by,
         )
+        for entry in new_entries:
+            entry.universes = own_universes
 
         # Check for INCOMPATIBLE concept conflicts (different names, same concept)
         # e.g., Foundation has "Category", artifact defines "Cat" → reject entire artifact
@@ -1208,6 +1228,8 @@ Create foundational definitions that future generations can build upon.
         # Group by artifact but only write code for unique definitions
         seen_artifacts: set[str] = set()
         written_names: set[str] = set()
+        seed_universes = declared_universe_names(self.seed_source.splitlines())
+        section_open = False
 
         for entry in self.entries:
             # Skip if this definition name was already written
@@ -1216,12 +1238,25 @@ Create foundational definitions that future generations can build upon.
 
             if entry.artifact_id not in seen_artifacts:
                 seen_artifacts.add(entry.artifact_id)
+                if section_open:
+                    lean_content += "end\n"
+                    section_open = False
                 lean_content += f"\n-- From {entry.artifact_id} (gen {entry.generation}, {entry.author})\n"
+                # Scoped to the artifact, not hoisted to the header: two
+                # artifacts may pick the same name, and a later `def f.{u₁}`
+                # fails if `u₁` is already bound around it.
+                universes = [n for n in entry.universes if n not in seed_universes]
+                if universes:
+                    lean_content += f"section\nuniverse {' '.join(universes)}\n"
+                    section_open = True
 
             # Write only this entry's code
             lean_content += entry.lean_code
             lean_content += "\n"
             written_names.add(entry.name)
+
+        if section_open:
+            lean_content += "end\n"
 
         lean_content += self.FOUNDATION_FOOTER
 
