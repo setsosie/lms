@@ -48,6 +48,9 @@ def make_goal() -> Goal:
             StacksDefinition(
                 tag="T2", section="1.2", name="two", content="two", requires=["T1"]
             ),
+            StacksDefinition(
+                tag="T3", section="1.3", name="three", content="three", requires=[]
+            ),
         ],
     )
 

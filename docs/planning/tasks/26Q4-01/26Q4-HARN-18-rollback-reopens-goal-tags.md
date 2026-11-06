@@ -23,6 +23,7 @@
 - On a goal with real edges, the graph releases dependents of a tag with nothing behind it.
 - The standard and iterative paths also mark a tag when a gate blocked the artifact. The committee path doesn't.
 - `DependencyGraph.revert_done` exists for this and has no caller.
+- A gate-blocked committee tag stays in progress for good: never offered again, with its dependents locked. On a goal with one available task, that ends the run's progress.
 
 **Investigation**:
 ```bash
@@ -38,7 +39,9 @@ grep -n "foundation-yoneda-complete" lms/goals.py   # tags pre-marked with no ar
 - [ ] After a generation, a tag backed only by artifacts the foundation doesn't hold reads `[TODO]`, whether they were rolled back, refused or gate-blocked
 - [ ] A tag with one surviving artifact stays DONE, and the withdrawn id leaves its `artifact_ids`
 - [ ] Seeded tags, and tags pre-marked with an artifact this run never saw, are untouched
-- [ ] An artifact that added nothing because it copied existing declarations still backs its tag
+- [ ] An artifact that added nothing because it copied existing declarations still backs its tag, including across a failed build, and stops backing it if the declaration it copied goes
+- [ ] A refused artifact that later lands under the same id backs its tag
+- [ ] A gate-blocked committee tag goes back to available, unless another group finished it
 - [ ] The graph reopens the tag through `revert_done`, and its dependents lock again
 - [ ] A resume that rolls back to the generation boundary reopens the same tags
 - [ ] The log names every reopened tag
@@ -63,6 +66,7 @@ grep -n "foundation-yoneda-complete" lms/goals.py   # tags pre-marked with no ar
 
 - Reconcile once, after the build, instead of guarding each `mark_formalized`. The build is what decides, and it runs after all three paths have marked.
 - An artifact is withdrawn only if the run's library knows it and the foundation doesn't hold it. "Not in the foundation" alone would reopen seeded tags and the `stacks-full-path` pre-marks.
+- A mock committee run no longer advances past its first layer of tags: mock artifacts can't enter the foundation, so their tags reopen. The flat paths already never marked them.
 
 ---
 

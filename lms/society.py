@@ -884,6 +884,17 @@ class Society:
             ) + f"\n[Not promoted to foundation — {reason}]"
             print(f"  [foundation] refused {artifact.id}: {reason}")
 
+    def _release_gate_blocked_task(self, tag: str, artifact: Artifact) -> None:
+        """Offer a task again after a gate kept its artifact out.
+
+        Left in progress it's never offered again and its dependents stay locked,
+        which on a goal with one available task ends the run's progress for good.
+        A task another group finished stays done.
+        """
+        self._note_gate_block(artifact)
+        if self.dependency_graph is not None:
+            self.dependency_graph.update_status(tag, TaskStatus.AVAILABLE)
+
     def _note_gate_block(self, artifact: Artifact) -> None:
         """Record on the artifact why it was verified but not promoted.
 
@@ -1552,7 +1563,7 @@ class Society:
                     # the graph then released everything downstream of it.
                     promoted = not self._blocked_by_gates(artifact)
                     if not promoted:
-                        self._note_gate_block(artifact)
+                        self._release_gate_blocked_task(group.config.task_tag, artifact)
                     else:
                         self._promote_to_foundation(artifact)
 
