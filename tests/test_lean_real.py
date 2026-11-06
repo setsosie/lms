@@ -168,6 +168,68 @@ class TestFoundationUniverses:
         )
         assert self._errors(foundation) == ""
 
+    def test_the_merge_keeps_what_verified_alone(self, tmp_path: Path) -> None:
+        """`tag.{0, 1}` means different types if the levels change order. `Nat` fits
+        only the first parameter as declared, so a reordering fails here."""
+        foundation = self._foundation(
+            tmp_path,
+            "universe v₁ u₁\n\n"
+            "def tag (α : Type v₁) (β : Type u₁) : Type (max v₁ u₁) := α × β\n\n"
+            "abbrev tagAt := tag.{0, 1}\n\n"
+            "def check : Type 1 := tagAt Nat (ULift Nat)",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_explicit_levels_on_its_own_class_still_apply(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe v₁ u₁\n\n"
+            "class Cat (C : Type u₁) where\n  Hom : C → C → Type v₁\n\n"
+            "def homOf (C : Type u₁) [Cat.{v₁, u₁} C] (a b : C) : Type v₁ := Cat.Hom a b",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_scoped_universe_line_compiles(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "def good : Nat := 1",
+            "universe u in\ndef foo (A : Type u) : A → A := fun a => a",
+            "universe u₁ in\ndef bar (A : Type u₁) : A → A := fun a => a",
+            "def alsoGood : Nat := 2",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_header_and_own_names_compile_together(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "universe u u₁\n\ndef f (A : Type u) (B : Type u₁) : Type (max u u₁) := A × B",
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_name_the_seed_binds_compiles(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.set_seed("universe u₁\n\ndef seeded (A : Type u₁) : Type u₁ := A")
+        foundation.add_artifact(
+            Artifact(
+                id="artifact-0",
+                type=ArtifactType.DEFINITION,
+                natural_language="test",
+                lean_code="universe u₁\n\ndef mine (A : Type u₁) : A → A := fun a => a",
+                created_by="agent-0",
+                generation=0,
+                status=VerificationStatus.VERIFIED_LEAN,
+            )
+        )
+        assert self._errors(foundation) == ""
+
+    def test_a_comment_binds_nothing_when_compiled(self, tmp_path: Path) -> None:
+        foundation = self._foundation(
+            tmp_path,
+            "/-- A note.\nuniverse of discourse\n-/\ndef noted : Nat := 1",
+            "universe u₁ -- a level\n\ndef f (A : Type u₁) : A → A := fun a => a",
+        )
+        assert self._errors(foundation) == ""
+
     def test_a_later_artifact_can_name_the_level_itself(self, tmp_path: Path) -> None:
         foundation = self._foundation(
             tmp_path,

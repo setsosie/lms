@@ -97,7 +97,75 @@ class TestBinding:
         assert "section" not in lines
 
 
+class TestOrder:
+    """Lean orders a declaration's level parameters by the `universe` command."""
+
+    def test_the_declared_order_is_kept(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.add_artifact(
+            artifact(
+                "a", "universe v₁ u₁\n\ndef f (A : Type v₁) (B : Type u₁) := A × B"
+            )
+        )
+
+        assert "universe v₁ u₁" in saved(foundation).splitlines()
+
+    def test_the_order_holds_across_lines(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "universe v₁\nuniverse u₁\n\ndef f (A : Type v₁) (B : Type u₁) := A × B",
+            )
+        )
+
+        assert "universe v₁ u₁" in saved(foundation).splitlines()
+
+
+class TestScopedLine:
+    """`universe u in` scopes one command, and `in` is not a level name."""
+
+    def test_a_header_name_needs_no_section(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.add_artifact(
+            artifact("a", "universe u in\ndef f (A : Type u) : A → A := fun a => a")
+        )
+
+        lines = saved(foundation).splitlines()
+
+        assert "section" not in lines
+        assert "universe in" not in lines
+
+    def test_an_exotic_name_is_bound(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.add_artifact(
+            artifact("a", "universe u₁ in\ndef f (A : Type u₁) : A → A := fun a => a")
+        )
+
+        assert "universe u₁" in saved(foundation).splitlines()
+
+
+class TestSeedScanning:
+    def test_a_comment_in_the_seed_binds_nothing(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.set_seed("/-\nuniverse u₁ is the level\n-/\ndef seeded : Nat := 1")
+        foundation.add_artifact(artifact("a", SAME_NAME))
+
+        assert "universe u₁" in saved(foundation).splitlines()
+
+
 class TestComments:
+    def test_an_inline_block_comment_is_not_a_name(self, tmp_path: Path) -> None:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "universe u₁ /- first -/ u₂\n\ndef f (A : Type u₁) (B : Type u₂) := A × B",
+            )
+        )
+
+        assert "universe u₁ u₂" in saved(foundation).splitlines()
+
     def test_a_trailing_comment_is_not_a_name(self, tmp_path: Path) -> None:
         foundation = FoundationFile(tmp_path / "Foundation.lean")
         foundation.add_artifact(
