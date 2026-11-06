@@ -309,3 +309,75 @@ class TestExactProbeContext:
         )
         assert outcome.available is True
         assert outcome.closed_by is not None
+
+
+class TestFoundationCollisions:
+    """What the merge writes compiles, and doesn't rebind what verified."""
+
+    @staticmethod
+    def _compile(tmp_path: Path, *codes: str) -> tuple[FoundationFile, str]:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        for number, code in enumerate(codes):
+            foundation.add_artifact(
+                Artifact(
+                    id=f"artifact-{number}",
+                    type=ArtifactType.DEFINITION,
+                    natural_language="test",
+                    lean_code=code,
+                    created_by="agent-0",
+                    generation=0,
+                    status=VerificationStatus.VERIFIED_LEAN,
+                )
+            )
+        foundation.save()
+        kept = [
+            line
+            for line in foundation.path.read_text().splitlines()
+            if not line.startswith("import ")
+        ]
+        foundation.path.write_text("\n".join(kept) + "\n")
+        proc = subprocess.run(
+            ["lean", str(foundation.path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return foundation, proc.stdout + proc.stderr if proc.returncode else ""
+
+    def test_a_modified_collision_lands_nothing(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "def rep : Nat := 1",
+            "@[reducible] def rep : Nat := 2\n\ntheorem two : rep = 2 := rfl",
+        )
+        assert errors == ""
+        assert "two" not in foundation._definition_names
+
+    def test_primed_names_compile_together(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "def f : Nat := 1\n\ndef f' : Nat := 2\n\ntheorem t : f' = 2 := rfl",
+        )
+        assert errors == ""
+        assert [e.name for e in foundation.entries] == ["f", "f'", "t"]
+
+    def test_a_command_after_a_copy_keeps_later_entries_compiling(
+        self, tmp_path: Path
+    ) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "def rep : Nat := 1",
+            "def rep : Nat := 1\n\nvariable (n : Nat)\n\ndef plus : Nat := n + rep",
+        )
+        assert errors == ""
+        assert "plus" in foundation._definition_names
+
+    def test_an_attributed_declaration_keeps_its_attribute(
+        self, tmp_path: Path
+    ) -> None:
+        """Dropped before it was an entry, which took the declaration with it."""
+        _, errors = self._compile(
+            tmp_path,
+            "@[reducible] def rep : Nat := 1\n\ntheorem one : rep = 1 := rfl",
+        )
+        assert errors == ""
