@@ -26,7 +26,8 @@ Every result records the Mathlib revision it was computed against. Mathlib
 moves; yesterday's N1 is today's N0.
 """
 
-from collections.abc import Sequence
+from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -38,10 +39,12 @@ from lms.novelty.mathlib_search import (
     SearchHit,
     StageOutcome,
     StatementQuery,
+    declaration_count,
     default_backends,
     detect_mathlib_rev,
     extract_identifiers,
     name_tokens,
+    probed_declaration_name,
 )
 from lms.novelty.vocabulary import (
     ProjectVocabulary,
@@ -71,9 +74,28 @@ _N1_CONFIDENCE_BY_STAGES = {4: 0.9, 3: 0.75, 2: 0.6, 1: 0.45, 0: 0.0}
 # above this floor the result is INCONCLUSIVE rather than N1.
 _N0_CANDIDATE_FLOOR = 0.5
 
+# A close on the first of several declarations. The probe tested only that one, so
+# it can't call the file a re-derivation: the rest may be novel. Below decisive, so
+# it reads INCONCLUSIVE and names what closed.
+_FIRST_OF_SEVERAL_CLOSE = 0.7
+
 # A semantic hit carrying the eponym the informal statement names. Plausible,
 # never decisive: prose can name a result the formal statement only resembles.
 _INFORMAL_NAME_MATCH = 0.7
+
+# A semantic hit counts as a match when this share of its tokens appear in the
+# statement, and it has enough tokens for that to say something. On the 2026-11-04
+# density run, 0.8 moved 1 of the 4 N1 statements hand-read as open and 0.6 moved 3.
+# A match can only reach INCONCLUSIVE, so the density still rests on human review of
+# the candidates.
+_SEMANTIC_MATCH_SHARE = 0.8
+_SEMANTIC_MATCH_MIN_TOKENS = 3
+
+# A hit this close by Jaccard, short of a match, is too good to ignore and too weak
+# to move the statement. It stays N1 at no more than this confidence, below the
+# decisive line, so it waits on review at Gate 4 and in the CVFN report alike.
+_NEAR_HIT_JACCARD = 0.5
+_NEAR_HIT_N1_CONFIDENCE = _N1_CONFIDENCE_BY_STAGES[3]
 
 
 class NoveltyLevel(str, Enum):
@@ -105,6 +127,8 @@ class NoveltyResult:
     stage_errors: dict[str, str] = field(default_factory=dict)
     # Names the statement takes from project modules, not Mathlib.
     outside_mathlib: list[str] = field(default_factory=list)
+    # What semantic search returned, matched or not, for a D4 reviewer to check.
+    candidates: list[str] = field(default_factory=list)
 
     @property
     def needs_review(self) -> bool:
@@ -124,6 +148,7 @@ class NoveltyResult:
             "stages_unavailable": self.stages_unavailable,
             "stage_errors": self.stage_errors,
             "outside_mathlib": self.outside_mathlib,
+            "candidates": self.candidates,
             "needs_review": self.needs_review,
         }
 
@@ -133,14 +158,45 @@ def _hit_evidence(stage: str, hit: SearchHit) -> str:
     return f"{stage}: {hit.name}{module}"
 
 
-def _token_overlap(a: set[str], b: set[str]) -> float:
-    if not a or not b:
-        return 0.0
-    return len(a & b) / len(a | b)
+def _word_tokens(identifiers: Iterable[str]) -> set[str]:
+    """Word tokens of some identifiers, without single characters.
+
+    A one-letter token is usually a binder (`K`, `L`), so counting it would let
+    the drafter's choice of letter change a verdict.
+    """
+    return {t for ident in identifiers for t in name_tokens(ident) if len(t) > 1}
+
+
+def _hit_tokens(hit: SearchHit) -> set[str]:
+    return _word_tokens([hit.name, *extract_identifiers(hit.type_signature or "")])
+
+
+def _is_match(hit_tokens: set[str], statement_tokens: set[str]) -> bool:
+    """Whether the statement uses enough of a hit's tokens.
+
+    Divides by the hit alone, because a long statement says nothing against a
+    match: a whole file has far more tokens than the declaration it restates.
+    """
+    if len(hit_tokens) < _SEMANTIC_MATCH_MIN_TOKENS:
+        return False
+    shared = len(hit_tokens & statement_tokens)
+    return shared / len(hit_tokens) >= _SEMANTIC_MATCH_SHARE
+
+
+def _is_near(hit_tokens: set[str], statement_tokens: set[str]) -> bool:
+    union = hit_tokens | statement_tokens
+    if not union:
+        return False
+    return len(hit_tokens & statement_tokens) / len(union) >= _NEAR_HIT_JACCARD
 
 
 class NoveltyClassifier:
-    """Runs the search ladder and turns stage outcomes into a NoveltyResult."""
+    """Runs the search ladder and turns stage outcomes into a NoveltyResult.
+
+    ``names_are_labels`` marks declaration names a drafter chose as labels
+    (`ant_c06_discr_ne_zero`), which say nothing about the mathematics, so they
+    take no part in scoring a match.
+    """
 
     def __init__(
         self,
@@ -148,12 +204,14 @@ class NoveltyClassifier:
         cache: DiskCache | None = None,
         mathlib_rev: str | None = None,
         project_dir: Path | str | None = None,
+        names_are_labels: bool = False,
     ) -> None:
         self.backends = list(backends)
         self.cache = cache
         self.mathlib_rev = mathlib_rev
         # Where project modules a statement imports (`LMS.Foundation`) live.
         self.project_dir = project_dir
+        self.names_are_labels = names_are_labels
 
     def classify(
         self,
@@ -168,6 +226,8 @@ class NoveltyClassifier:
         stages_available: list[str] = []
         stages_unavailable: list[str] = []
         stage_errors: dict[str, str] = {}
+        candidates: list[str] = []
+        near_hits: list[str] = []
 
         for backend in self.backends:
             outcome = self._run_stage(backend, query)
@@ -177,6 +237,14 @@ class NoveltyClassifier:
                 stages_unavailable.append(backend.stage)
                 continue
             stages_available.append(backend.stage)
+            if backend.stage == "semantic":
+                candidates = [_hit_evidence("semantic", h) for h in outcome.hits]
+                statement_tokens = self._statement_tokens(query)
+                near_hits = [
+                    _hit_evidence("semantic", h)
+                    for h in outcome.hits
+                    if _is_near(_hit_tokens(h), statement_tokens)
+                ]
             confidence, stage_evidence = self._score(outcome, query)
             evidence.extend(stage_evidence)
             if confidence > best_confidence:
@@ -185,7 +253,7 @@ class NoveltyClassifier:
             if best_confidence >= DECISIVE_CONFIDENCE:
                 break
 
-        return self._verdict(
+        result = self._verdict(
             best_confidence,
             evidence,
             decisive_stage,
@@ -193,7 +261,10 @@ class NoveltyClassifier:
             stages_unavailable,
             stage_errors,
             vocabulary,
+            near_hits,
         )
+        result.candidates = candidates
+        return result
 
     def _run_stage(self, backend: SearchBackend, query: StatementQuery) -> StageOutcome:
         key = None
@@ -202,7 +273,12 @@ class NoveltyClassifier:
                 backend.stage, backend.cache_query(query), self.mathlib_rev
             )
             cached = self.cache.get(key)
-            if cached is not None:
+            # A probe's miss carries Lean's message as an error and is a real answer.
+            # Elsewhere an error means a failed search, cached before those stopped
+            # counting as searches that ran.
+            if cached is not None and (
+                not cached.error or backend.stage == "exact_probe"
+            ):
                 return cached
         outcome = backend.search(query)
         # Only genuine answers are cached: an unavailable backend today may be
@@ -211,25 +287,35 @@ class NoveltyClassifier:
             self.cache.put(key, outcome)
         return outcome
 
+    def _statement_tokens(self, query: StatementQuery) -> set[str]:
+        identifiers = extract_identifiers(query.lean_statement)
+        if self.names_are_labels:
+            identifiers = [ident for ident in identifiers if ident != query.name]
+        elif query.name:
+            identifiers.append(query.name)
+        return _word_tokens(identifiers)
+
     def _score(
         self, outcome: StageOutcome, query: StatementQuery
     ) -> tuple[float, list[str]]:
         """Map one stage's outcome to (N0 confidence, evidence strings)."""
         if outcome.stage == "exact_probe":
-            if outcome.closed_by:
-                return 0.95, [f"exact_probe: closed by `{outcome.closed_by}`"]
-            return 0.0, []
+            if not outcome.closed_by:
+                return 0.0, []
+            declarations = declaration_count(query.lean_statement)
+            if declarations > 1:
+                name = probed_declaration_name(query.lean_statement)
+                return _FIRST_OF_SEVERAL_CLOSE, [
+                    f"exact_probe: `{name}`, the first of {declarations} declarations, "
+                    f"closed by `{outcome.closed_by}`"
+                ]
+            return 0.95, [f"exact_probe: closed by `{outcome.closed_by}`"]
 
         if not outcome.hits:
             return 0.0, []
 
-        last = (query.name or "").split(".")[-1]
-        query_tokens = set(name_tokens(query.name or ""))
-        query_tokens.update(
-            t.lower()
-            for ident in extract_identifiers(query.lean_statement)
-            for t in name_tokens(ident)
-        )
+        last = "" if self.names_are_labels else (query.name or "").split(".")[-1]
+        statement_tokens = self._statement_tokens(query)
 
         eponyms = (
             named_results(query.informal, query.lean_statement)
@@ -251,20 +337,10 @@ class NoveltyClassifier:
                 else:
                     score = 0.55
             else:  # semantic
-                hit_tokens = set(name_tokens(hit.name))
-                if hit.type_signature:
-                    hit_tokens.update(
-                        t.lower()
-                        for ident in extract_identifiers(hit.type_signature)
-                        for t in name_tokens(ident)
-                    )
-                overlap = _token_overlap(query_tokens, hit_tokens)
                 if hit_last == last:
                     score = 0.75
-                elif overlap >= 0.8:
+                elif _is_match(_hit_tokens(hit), statement_tokens):
                     score = 0.7
-                elif overlap >= 0.5:
-                    score = 0.55
                 else:
                     score = 0.3
                 hit_name_tokens = set(name_tokens(hit.name))
@@ -287,6 +363,7 @@ class NoveltyClassifier:
         stages_unavailable: list[str],
         stage_errors: dict[str, str] | None = None,
         vocabulary: ProjectVocabulary | None = None,
+        near_hits: Sequence[str] = (),
     ) -> NoveltyResult:
         vocabulary = vocabulary or ProjectVocabulary()
         if best_confidence >= DECISIVE_CONFIDENCE:
@@ -317,6 +394,9 @@ class NoveltyClassifier:
                 level, confidence = NoveltyLevel.N1, n1_confidence
                 decisive_stage = None
                 evidence = [f"not found by: {', '.join(stages_available)}"]
+                if near_hits:
+                    confidence = min(confidence, _NEAR_HIT_N1_CONFIDENCE)
+                    evidence.extend(f"near hit: {h}" for h in near_hits)
         return NoveltyResult(
             level=level,
             confidence=confidence,
@@ -391,15 +471,22 @@ def measure_density(
         low = int(c * 5) * 2
         buckets[f"{low / 10:.1f}-{(low + 2) / 10:.1f}"] += 1
 
+    stages_per_statement = [len(r["stages_available"]) for r in results]
+    n1_or_inconclusive = counts[NoveltyLevel.N1] + counts[NoveltyLevel.INCONCLUSIVE]
+
     return {
         "arc": doc.get("arc"),
         "source": doc.get("source"),
         "mathlib_rev": classifier.mathlib_rev,
         "total_statements": total,
         "counts": {level.value: n for level, n in counts.items()},
-        # Upper bound: every N1 label, decisive or not.
+        # Every N1 label, decisive or not. Not a ceiling on novelty: a statement
+        # that read INCONCLUSIVE may be novel too.
         "n1_density": (counts[NoveltyLevel.N1] / total) if total else 0.0,
-        # Lower bound: only N1 labels confident enough to stand without D4.
+        # The share the classifier cannot rule out as already in the library.
+        "n1_or_inconclusive_density": (n1_or_inconclusive / total) if total else 0.0,
+        # Only N1 labels confident enough to stand without D4. That says the search
+        # found nothing, not that the statement is novel, so this bounds nothing.
         "n1_density_decisive": (decisive_n1 / total) if total else 0.0,
         # The ceiling on any N1 verdict this ladder can return. Below
         # DECISIVE_CONFIDENCE, a decisive density of 0 is a property of the
@@ -407,6 +494,25 @@ def measure_density(
         "stages_run": [b.stage for b in classifier.backends],
         "max_n1_confidence": _N1_CONFIDENCE_BY_STAGES.get(
             len(classifier.backends), 0.0
+        ),
+        # A configured stage may not have run on any statement. Reaching the
+        # decisive line is necessary for a decisive N1, not sufficient: see
+        # `n1_with_decisive_stages`.
+        "max_n1_confidence_reached": max(
+            (_N1_CONFIDENCE_BY_STAGES.get(n, 0.0) for n in stages_per_statement),
+            default=0.0,
+        ),
+        "statements_by_stages_run": {
+            str(n): count for n, count in sorted(Counter(stages_per_statement).items())
+        },
+        # N1s that ran enough stages to read decisive, with or without a near hit
+        # holding them back. At zero, a decisive density of 0 tested nothing.
+        "n1_with_decisive_stages": sum(
+            1
+            for r in results
+            if r["level"] == NoveltyLevel.N1.value
+            and _N1_CONFIDENCE_BY_STAGES.get(len(r["stages_available"]), 0.0)
+            >= DECISIVE_CONFIDENCE
         ),
         "confidence_distribution": buckets,
         "needs_review": review_queue,
