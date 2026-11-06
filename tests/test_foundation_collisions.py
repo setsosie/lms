@@ -200,20 +200,17 @@ class TestDeclarationsAreReadAsLeanReadsThem:
 
 
 class TestACommandAfterACopy:
-    """A declaration's slice runs to the next one, so commands travel with it."""
+    """A declaration's slice runs to the next one, so commands travel with it.
+
+    A copy is skipped, and its commands with it. If they differ from what the
+    foundation has, the artifact's later entries could compile with another
+    meaning, so the artifact is refused.
+    """
 
     @pytest.mark.parametrize(
-        "command",
-        [
-            "variable (n : Nat)",
-            "section",
-            "open Nat",
-            "#check rep",
-            "example : rep = 1 := rfl",
-            "attribute [simp] rep",
-        ],
+        "command", ["#check rep", "#eval rep", "example : rep = 1 := rfl"]
     )
-    def test_it_is_not_compared_as_the_body(
+    def test_one_that_changes_nothing_is_ignored(
         self, foundation: FoundationFile, command: str
     ) -> None:
         foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
@@ -225,6 +222,65 @@ class TestACommandAfterACopy:
         assert added is True
         assert foundation.rejection_reason("b") is None
         assert "other" in foundation._definition_names
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "variable (n : Nat)",
+            "section",
+            "open Nat",
+            "attribute [simp] rep",
+            "instance : Inhabited Nat := ⟨7⟩",
+            'notation "Q" => rep',
+            "opaque k : Nat",
+            "export Nat (succ)",
+        ],
+    )
+    def test_one_the_foundation_doesnt_have_refuses_the_artifact(
+        self, foundation: FoundationFile, command: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+
+        added = foundation.add_artifact(
+            artifact("b", f"def rep : Nat := 1\n\n{command}\n\ndef other : Nat := 3")
+        )
+
+        assert added is False
+        assert "`rep`" in (foundation.rejection_reason("b") or "")
+        assert "other" not in foundation._definition_names
+
+    def test_a_different_instance_cant_change_a_value_silently(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩",
+            )
+        )
+
+        added = foundation.add_artifact(
+            artifact(
+                "b",
+                "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨1⟩⟩\n\n"
+                "def b : Foo := default",
+            )
+        )
+
+        assert added is False
+        assert "b" not in foundation._definition_names
+
+    def test_the_same_commands_are_a_copy(self, foundation: FoundationFile) -> None:
+        code = "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩"
+        foundation.add_artifact(artifact("a", code))
+
+        added = foundation.add_artifact(
+            artifact("b", f"{code}\n\ndef b : Foo := default")
+        )
+
+        assert added is True
+        foundation.save()
+        assert foundation.path.read_text().count("instance : Inhabited Foo") == 1
 
     def test_it_is_not_added_again(self, foundation: FoundationFile) -> None:
         """Repeating `notation` makes every later use ambiguous, and no build fails
@@ -330,8 +386,8 @@ class TestDeriving:
             )
         )
 
-        assert added is True
-        assert foundation.rejection_reason("b") is None
+        assert added is False
+        assert "`Pt`" in (foundation.rejection_reason("b") or "")
 
 
 class TestUniverseOrderIsPartOfADeclaration:
@@ -347,6 +403,20 @@ class TestUniverseOrderIsPartOfADeclaration:
 
         assert added is False
         assert "tag" not in foundation._definition_names
+
+    def test_names_the_declaration_doesnt_use_dont_count(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def helper : Nat := 2"))
+
+        added = foundation.add_artifact(
+            artifact(
+                "b", "universe u₁\n\ndef helper : Nat := 2\n\ndef other : Nat := 3"
+            )
+        )
+
+        assert added is True
+        assert "other" in foundation._definition_names
 
     def test_the_same_order_is_a_copy(self, foundation: FoundationFile) -> None:
         body = "def Pair : Type u₁ → Type v₁ → Type (max u₁ v₁) := fun α β => α × β"
@@ -420,7 +490,7 @@ class TestIndentedCode:
         added = foundation.add_artifact(
             artifact(
                 "b",
-                "namespace Foo\n  def x : Nat := 1\n\n  variable (n : Nat)\n\n"
+                "namespace Foo\n  def x : Nat := 1\n\n  #check x\n\n"
                 "  def y : Nat := 2\nend Foo",
             )
         )
@@ -428,6 +498,70 @@ class TestIndentedCode:
         assert added is True
         assert foundation.rejection_reason("b") is None
         assert "y" in foundation._definition_names
+
+
+class TestFalseCopies:
+    def test_a_value_starting_with_a_hash_is_the_body(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(artifact("a", "def xs : Array Nat :=\n#[1, 2]"))
+
+        added = foundation.add_artifact(
+            artifact(
+                "b",
+                "def xs : Array Nat :=\n#[3, 4]\n\ndef firstX : Nat := xs[0]!",
+            )
+        )
+
+        assert added is False
+        assert "firstX" not in foundation._definition_names
+
+    @pytest.mark.parametrize(
+        "first,second",
+        [('"a/-x-/b"', '"a/-yy-/b"'), ('"a  b"', '"a b"'), ('"a--b"', '"a--c"')],
+    )
+    def test_a_string_is_compared_as_written(
+        self, foundation: FoundationFile, first: str, second: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", f"def s : String := {first}"))
+
+        added = foundation.add_artifact(
+            artifact("b", f"def s : String := {second}\n\ndef t : String := s")
+        )
+
+        assert added is False
+
+
+class TestMoreFormsOfADeclaration:
+    @pytest.mark.parametrize(
+        "second",
+        [
+            "scoped instance foo : Inhabited Nat := ⟨2⟩",
+            "local instance foo : Inhabited Nat := ⟨2⟩",
+            "instance (priority := low) foo : Inhabited Nat := ⟨2⟩",
+            '@[deprecated "x [y]" (since := "2024-01-01")] instance foo : Inhabited Nat := ⟨2⟩',
+            "@[simp,\n  reducible] instance foo : Inhabited Nat := ⟨2⟩",
+        ],
+    )
+    def test_they_cant_hide_a_collision(
+        self, foundation: FoundationFile, second: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", "instance foo : Inhabited Nat := ⟨1⟩"))
+
+        assert foundation.add_artifact(artifact("b", second)) is False
+        assert "`foo`" in (foundation.rejection_reason("b") or "")
+
+    def test_a_declaration_after_a_scoped_universe_line_is_kept(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(
+            artifact("a", "universe u₁ in def foo : Type u₁ := PUnit")
+        )
+
+        foundation.save()
+
+        assert [e.name for e in foundation.entries] == ["foo"]
+        assert "def foo" in foundation.path.read_text()
 
 
 class TestARefusalAcrossAGenerationBoundary:

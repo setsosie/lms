@@ -227,6 +227,13 @@ class FoundationEntry:
             "universes",
             "elab",
             "initialize",
+            "opaque",
+            "axiom",
+            "export",
+            "alias",
+            "omit",
+            "include",
+            "run_cmd",
             # Declaration keywords too: `DEFINITION_PATTERN` can't read every
             # form, such as a nested attribute (`@[to_additive [x]]`), and an
             # unread declaration is not extracted as its own entry.
@@ -659,8 +666,10 @@ class FoundationFile:
     # Matches: structure Name, def Name, theorem Name, lemma Name, etc.
     # Allows leading whitespace for indented code
     DEFINITION_PATTERN = re.compile(
-        r"^\s*(?:@\[[^\]\n]*\]\s*|(?:private|protected|noncomputable|partial|unsafe|nonrec)\s+)*"
+        r"^\s*(?:@\[(?:[^\[\]]|\[[^\]]*\])*\]\s*"
+        r"|(?:private|protected|noncomputable|partial|unsafe|nonrec|scoped|local)\s+)*"
         r"(class\s+inductive|class\s+abbrev|structure|def|theorem|lemma|abbrev|instance|class|inductive)\s+"
+        r"(?:\(\s*priority\s*:=[^)]*\)\s*)?"
         r"([^\W\d][\w.'!?]*)"
         r"([^\n]*)",
         re.MULTILINE,
@@ -896,6 +905,10 @@ end {FOUNDATION_NAMESPACE}
         for line in body_lines:
             stripped = line.strip()
             if stripped.startswith("universe "):
+                # `universe u in def f ...` on one line still holds a declaration.
+                scoped = re.match(r"universe\s+(?:\S+\s+)*?in\s+(\S.*)", stripped)
+                if scoped:
+                    clean_lines.append(scoped.group(1))
                 continue
             # Remove namespace and end statements (they break Foundation wrapper)
             if stripped.startswith("namespace "):
@@ -947,23 +960,38 @@ end {FOUNDATION_NAMESPACE}
                     # If same name, it's just a duplicate - will be skipped below
 
         # Same name, different body: refuse the whole artifact, because its
-        # other entries were verified against its own declaration.
+        # other entries were verified against its own declaration. The same goes
+        # for commands after a copy, which are skipped with it: an instance or
+        # notation the foundation lacks could leave its later entries compiling
+        # with another meaning.
         declared = {
             entry.name: self._comparable(entry)
             for entry in (*self.seed_entries, *self.entries)
         }
-        own: dict[str, str] = {}
+        own: dict[str, tuple[str, str]] = {}
         for entry in new_entries:
-            comparable = self._comparable(entry)
-            if own.setdefault(entry.name, comparable) != comparable:
+            declaration, commands = self._comparable(entry)
+            if own.setdefault(entry.name, (declaration, commands)) != (
+                declaration,
+                commands,
+            ):
                 return self._refuse(
                     artifact, f"it declares `{entry.name}` twice, differently"
                 )
-            if declared.get(entry.name, comparable) != comparable:
+            known = declared.get(entry.name)
+            if known is None:
+                continue
+            if known[0] != declaration:
                 return self._refuse(
                     artifact,
                     f"it declares `{entry.name}`, which the foundation already "
                     "declares differently",
+                )
+            if commands and commands != known[1]:
+                return self._refuse(
+                    artifact,
+                    f"after its copy of `{entry.name}` it runs commands the "
+                    "foundation doesn't have there",
                 )
 
         return bool(self._land(artifact.id, new_entries))
@@ -980,10 +1008,9 @@ end {FOUNDATION_NAMESPACE}
     ) -> list[FoundationEntry]:
         """Add what `new_entries` doesn't copy; return what it added.
 
-        A skipped copy takes the commands after it along. They aren't added back:
-        repeating a `notation` makes every later use ambiguous, and no build fails
-        on the repeat itself. An artifact that needed one fails the merged build
-        and is dropped, which is at least loud.
+        A skipped copy's commands go with it. They aren't added back, because
+        repeating a `notation` makes every later use ambiguous with no build
+        failing, and `add_artifact` has already refused any that differ.
         """
         landed: list[FoundationEntry] = []
         for entry in new_entries:
@@ -997,32 +1024,40 @@ end {FOUNDATION_NAMESPACE}
         self._accepted[artifact_id] = list(new_entries)
         return landed
 
-    def _declaration_text(self, code: str) -> str:
-        """A declaration's slice, up to the first command after the declaration.
+    def _split_commands(self, code: str) -> tuple[str, list[str]]:
+        """Split a declaration's slice into the declaration and the commands after it.
 
         Only a command at column 0 ends it: `open X in` inside a proof is indented,
         and a `|` arm at column 0 isn't a command. A `deriving` clause belongs to
-        its declaration, while `deriving instance` stands alone.
+        its declaration, `deriving instance` stands alone, and `#[1, 2]` is a value.
         """
         blanked = self._strip_block_comments(code)
         match = self.DEFINITION_PATTERN.search(blanked)
         if match is None:
-            return code
+            return code, []
         offset = match.end()
+        starts: list[int] = []
         for line in blanked[offset:].splitlines(keepends=True):
             text = FoundationEntry._strip_line_comment(line.strip())
             is_clause = text.startswith("deriving") and not text.startswith(
                 "deriving instance"
             )
+            is_value = text.startswith("#") and not re.match(r"#[A-Za-z_]", text)
             if (
                 text
                 and not is_clause
+                and not is_value
                 and not line[0].isspace()
                 and FoundationEntry._is_foreign(text)
             ):
-                return code[:offset].rstrip()
+                starts.append(offset)
             offset += len(line)
-        return code
+        if not starts:
+            return code, []
+        ends = [*starts[1:], len(code)]
+        return code[: starts[0]].rstrip(), [
+            code[start:end].strip() for start, end in zip(starts, ends)
+        ]
 
     def _admit(self, entry: FoundationEntry) -> None:
         """Record the name and any core concept that `entry` claims."""
@@ -1030,22 +1065,30 @@ end {FOUNDATION_NAMESPACE}
             self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
         self._definition_names.add(entry.name)
 
-    def _comparable(self, entry: FoundationEntry) -> str:
-        """A declaration without comments, layout or the commands after it.
+    #: What `_comparable` drops: comments and layout, but nothing in a string.
+    _NOT_MEANING = re.compile(r'("(?:[^"\\]|\\.)*")|/-.*?-/|--[^\n]*|\s+', re.DOTALL)
 
-        Enough to tell a copy from a difference. Its artifact's own universes
-        count, because their order is part of what the declaration means. Layout
-        inside a string literal is lost too, so two strings differing only in
-        spacing compare equal.
+    def _comparable(self, entry: FoundationEntry) -> tuple[str, str]:
+        """A declaration, and the commands after it that change anything.
+
+        Enough to tell a copy from a difference. Comments and layout don't count.
+        The artifact's own universes that the declaration uses do, because their
+        order is part of what it means. `#check` and `example` change nothing.
         """
-        declaration = self._declaration_text(entry.lean_code)
-        lines = self._strip_block_comments(declaration).splitlines()
-        text = " ".join(
-            " ".join(
-                FoundationEntry._strip_line_comment(line) for line in lines
-            ).split()
-        )
-        return f"{' '.join(entry.universes)}|{text}"
+
+        def plain(code: str) -> str:
+            return self._NOT_MEANING.sub(lambda m: m.group(1) or " ", code).strip()
+
+        declaration, commands = self._split_commands(entry.lean_code)
+        text = plain(declaration)
+        words = set(re.findall(r"[^\W\d][\w'!?]*", text))
+        used = " ".join(name for name in entry.universes if name in words)
+        lasting = [
+            plain(command)
+            for command in commands
+            if not re.match(r"#[A-Za-z_]|example\b", command)
+        ]
+        return f"{used}|{text}", "\n".join(lasting)
 
     def holds(self, artifact_id: str) -> bool:
         """Whether this artifact's work is here: added, or an identical copy."""
