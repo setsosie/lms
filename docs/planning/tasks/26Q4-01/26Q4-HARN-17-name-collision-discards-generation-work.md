@@ -34,14 +34,15 @@ grep -n "foundation.add_artifact" lms/society.py   # three promotion paths
 #### Acceptance Criteria
 
 - [ ] An artifact declaring a name that already exists with a different body contributes nothing, and returns False: not the colliding entry, and not its other entries
-- [ ] A declaration is read as Lean reads it: an attribute or modifier can't hide a collision, and a whole name is one name (`f'`, `f₁`, `rep_α`, `φ`)
+- [ ] A declaration is read as Lean reads it: an attribute or modifier can't hide a collision, a whole name is one name (`f'`, `f₁`, `rep_α`, `φ`), and `class inductive P` is named `P`
+- [ ] The same text under another order of the artifact's own universes is not a copy, because that order changes what it means
 - [ ] This holds against the seed, an earlier artifact, and a name repeated inside the artifact, which happens when the merge strips `namespace`
-- [ ] An identical re-declaration stays a harmless duplicate, ignoring whitespace, comments and any command after it, and the artifact's other entries are kept
-- [ ] A command after a skipped copy stays in the file, because the artifact's later entries were verified with it in scope, and it isn't offered to agents as a definition
+- [ ] An identical re-declaration stays a harmless duplicate, ignoring whitespace, comments and any command after it, whether or not the artifact indented it, and the artifact's other entries are kept
+- [ ] A command after a skipped copy is not added back, because repeating a `notation` makes every later use ambiguous with no build failing. An artifact that needed one fails the merged build and is dropped
 - [ ] A rejected artifact says why: the reason names the declaration, is on the artifact's notes, and is in the run log, on all three promotion paths
 - [ ] A failed merged build promotes the generation's artifacts again one at a time, in order, and keeps each that builds. A copy lands if its original is dropped, including after a checkpoint
 - [ ] After a partial rollback, the last-good state includes what was kept, the file on disk is what was kept, and the log names what was dropped and what was kept
-- [ ] A rollback forgets an artifact's refusal, and an artifact that later lands has no stale reason
+- [ ] A rollback forgets an artifact's refusal, including one to a generation boundary on resume, and an artifact that later lands has no stale reason
 - [ ] A generation with one artifact takes no extra build, because the failed build already named it
 
 ---

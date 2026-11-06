@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -327,7 +328,7 @@ class FoundationEntry:
                 text = stripped[newline + 1 :]
                 continue
             first = stripped.split("\n", 1)[0].strip()
-            if first.startswith("@[") and first.endswith("]") and "\n" in stripped:
+            if "\n" in stripped and re.fullmatch(r"@\[[^\]]*\]", first):
                 text = stripped.split("\n", 1)[1]
                 continue
             return stripped
@@ -659,7 +660,7 @@ class FoundationFile:
     # Allows leading whitespace for indented code
     DEFINITION_PATTERN = re.compile(
         r"^\s*(?:@\[[^\]\n]*\]\s*|(?:private|protected|noncomputable|partial|unsafe|nonrec)\s+)*"
-        r"(structure|def|theorem|lemma|abbrev|instance|class|inductive)\s+"
+        r"(class\s+inductive|class\s+abbrev|structure|def|theorem|lemma|abbrev|instance|class|inductive)\s+"
         r"([^\W\d][\w.'!?]*)"
         r"([^\n]*)",
         re.MULTILINE,
@@ -723,6 +724,9 @@ end {FOUNDATION_NAMESPACE}
         )  # Track which core concepts have definitions
         #: Why an artifact was refused, by id, so a caller can report it.
         self._rejections: dict[str, str] = {}
+        #: Which generation refused it. A refused artifact has no entries to
+        #: date it by, and a rollback to a generation boundary has to forget it.
+        self._refused_in: dict[str, int] = {}
         #: Everything each accepted artifact declares, including what it copied
         #: and so didn't add. A retry after a failed build needs it: a copy has
         #: to land if the artifact holding its original is dropped.
@@ -784,6 +788,11 @@ end {FOUNDATION_NAMESPACE}
             for artifact_id, entries in self._accepted.items()
             if entries and entries[0].generation >= generation
         }
+        later_ids |= {
+            artifact_id
+            for artifact_id, refused_in in self._refused_in.items()
+            if refused_in >= generation
+        }
         # Same claiming rules as `set_seed` (seed) and `load` (entries).
         concepts = {
             self.CORE_CONCEPTS[e.name]
@@ -829,6 +838,11 @@ end {FOUNDATION_NAMESPACE}
         self._rejections = {
             artifact_id: reason
             for artifact_id, reason in self._rejections.items()
+            if artifact_id in snapshot.artifact_ids
+        }
+        self._refused_in = {
+            artifact_id: refused_in
+            for artifact_id, refused_in in self._refused_in.items()
             if artifact_id in snapshot.artifact_ids
         }
         return dropped
@@ -889,7 +903,9 @@ end {FOUNDATION_NAMESPACE}
             if stripped.startswith("end "):
                 continue
             clean_lines.append(line)
-        clean_code = "\n".join(clean_lines).strip()
+        # Dedented so a command ends a declaration whether or not the artifact
+        # indented its namespace.
+        clean_code = textwrap.dedent("\n".join(clean_lines)).strip()
 
         # Extract definitions from the code
         new_entries = self._extract_entries(
@@ -924,7 +940,7 @@ end {FOUNDATION_NAMESPACE}
                         # TRUE CONFLICT: Different names for same concept (e.g., Category vs Cat)
                         # Reject entire artifact to avoid incompatible definitions
                         return self._refuse(
-                            artifact.id,
+                            artifact,
                             f"it declares `{entry.name}`, but the foundation "
                             f"already has `{existing_name}` for that concept",
                         )
@@ -933,29 +949,30 @@ end {FOUNDATION_NAMESPACE}
         # Same name, different body: refuse the whole artifact, because its
         # other entries were verified against its own declaration.
         declared = {
-            entry.name: self._comparable(entry.lean_code)
+            entry.name: self._comparable(entry)
             for entry in (*self.seed_entries, *self.entries)
         }
         own: dict[str, str] = {}
         for entry in new_entries:
-            comparable = self._comparable(entry.lean_code)
+            comparable = self._comparable(entry)
             if own.setdefault(entry.name, comparable) != comparable:
                 return self._refuse(
-                    artifact.id, f"it declares `{entry.name}` twice, differently"
+                    artifact, f"it declares `{entry.name}` twice, differently"
                 )
             if declared.get(entry.name, comparable) != comparable:
                 return self._refuse(
-                    artifact.id,
+                    artifact,
                     f"it declares `{entry.name}`, which the foundation already "
                     "declares differently",
                 )
 
         return bool(self._land(artifact.id, new_entries))
 
-    def _refuse(self, artifact_id: str, reason: str) -> bool:
+    def _refuse(self, artifact: Artifact, reason: str) -> bool:
         """Record why an artifact contributes nothing. Always False, for `add_artifact`."""
-        self._artifact_ids.add(artifact_id)
-        self._rejections[artifact_id] = reason
+        self._artifact_ids.add(artifact.id)
+        self._rejections[artifact.id] = reason
+        self._refused_in[artifact.id] = artifact.generation
         return False
 
     def _land(
@@ -963,54 +980,49 @@ end {FOUNDATION_NAMESPACE}
     ) -> list[FoundationEntry]:
         """Add what `new_entries` doesn't copy; return what it added.
 
-        A copy adds nothing but the commands after it. A declaration's slice
-        runs to the next one, so a `variable` or `open` there travels with it,
-        and the artifact's later entries were verified with it in scope.
+        A skipped copy takes the commands after it along. They aren't added back:
+        repeating a `notation` makes every later use ambiguous, and no build fails
+        on the repeat itself. An artifact that needed one fails the merged build
+        and is dropped, which is at least loud.
         """
         landed: list[FoundationEntry] = []
         for entry in new_entries:
-            if entry.name in self._definition_names:
-                _, commands = self._split_commands(entry.lean_code)
-                if commands:
-                    landed.append(
-                        FoundationEntry(
-                            artifact_id=artifact_id,
-                            name=f"{entry.name}@{artifact_id}",
-                            entry_type=self.COMMANDS_ENTRY,
-                            signature="",
-                            lean_code=commands,
-                            generation=entry.generation,
-                            author=entry.author,
-                            universes=entry.universes,
-                        )
-                    )
-                continue
-            landed.append(entry)
-        for entry in landed:
-            self._admit(entry)
+            if entry.name not in self._definition_names:
+                self._admit(entry)
+                landed.append(entry)
         self.entries.extend(landed)
         self._artifact_ids.add(artifact_id)
         self._rejections.pop(artifact_id, None)
+        self._refused_in.pop(artifact_id, None)
         self._accepted[artifact_id] = list(new_entries)
         return landed
 
-    def _split_commands(self, code: str) -> tuple[str, str]:
-        """Split a declaration's slice into the declaration and what follows it.
+    def _declaration_text(self, code: str) -> str:
+        """A declaration's slice, up to the first command after the declaration.
 
-        Only a command at column 0 ends a declaration: `open X in` inside a
-        proof is indented, and a `|` arm at column 0 isn't a command.
+        Only a command at column 0 ends it: `open X in` inside a proof is indented,
+        and a `|` arm at column 0 isn't a command. A `deriving` clause belongs to
+        its declaration, while `deriving instance` stands alone.
         """
         blanked = self._strip_block_comments(code)
         match = self.DEFINITION_PATTERN.search(blanked)
         if match is None:
-            return code, ""
+            return code
         offset = match.end()
         for line in blanked[offset:].splitlines(keepends=True):
             text = FoundationEntry._strip_line_comment(line.strip())
-            if text and not line[0].isspace() and FoundationEntry._is_foreign(text):
-                return code[:offset].rstrip(), code[offset:].strip()
+            is_clause = text.startswith("deriving") and not text.startswith(
+                "deriving instance"
+            )
+            if (
+                text
+                and not is_clause
+                and not line[0].isspace()
+                and FoundationEntry._is_foreign(text)
+            ):
+                return code[:offset].rstrip()
             offset += len(line)
-        return code, ""
+        return code
 
     def _admit(self, entry: FoundationEntry) -> None:
         """Record the name and any core concept that `entry` claims."""
@@ -1018,19 +1030,22 @@ end {FOUNDATION_NAMESPACE}
             self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
         self._definition_names.add(entry.name)
 
-    def _comparable(self, code: str) -> str:
+    def _comparable(self, entry: FoundationEntry) -> str:
         """A declaration without comments, layout or the commands after it.
 
-        Enough to tell a copy from a difference. Layout inside a string literal
-        is lost too, so two strings differing only in spacing compare equal.
+        Enough to tell a copy from a difference. Its artifact's own universes
+        count, because their order is part of what the declaration means. Layout
+        inside a string literal is lost too, so two strings differing only in
+        spacing compare equal.
         """
-        declaration, _ = self._split_commands(code)
+        declaration = self._declaration_text(entry.lean_code)
         lines = self._strip_block_comments(declaration).splitlines()
-        return " ".join(
+        text = " ".join(
             " ".join(
                 FoundationEntry._strip_line_comment(line) for line in lines
             ).split()
         )
+        return f"{' '.join(entry.universes)}|{text}"
 
     def holds(self, artifact_id: str) -> bool:
         """Whether this artifact's work is here: added, or an identical copy."""
@@ -1053,10 +1068,6 @@ end {FOUNDATION_NAMESPACE}
     def readmit(self, artifact_id: str, entries: list[FoundationEntry]) -> list[str]:
         """Put one artifact back after `restore`; return the names it added."""
         return [entry.name for entry in self._land(artifact_id, entries)]
-
-    #: The `entry_type` of commands kept from after a copied declaration. They
-    #: go in the file, but they aren't definitions an agent can use.
-    COMMANDS_ENTRY = "commands"
 
     # Pattern to match block comments /- ... -/
     BLOCK_COMMENT_PATTERN = re.compile(r"/-.*?-/", re.DOTALL)
@@ -1107,7 +1118,9 @@ end {FOUNDATION_NAMESPACE}
         matches = list(self.DEFINITION_PATTERN.finditer(code_without_comments))
 
         for i, match in enumerate(matches):
-            entry_type = match.group(1)  # structure, def, theorem, etc.
+            # `class inductive P` is an inductive named `P`, not a class named
+            # `inductive`.
+            entry_type = match.group(1).split()[-1]  # structure, def, theorem, etc.
             # `f.{u}` reads as `f.`: the universe list isn't part of the name.
             name = match.group(2).rstrip(".")  # Name of the definition
             rest = match.group(3).strip()  # Rest of signature line
@@ -1198,8 +1211,6 @@ end {FOUNDATION_NAMESPACE}
         # Group by type
         by_type: dict[str, list[FoundationEntry]] = {}
         for entry in self.entries:
-            if entry.entry_type == self.COMMANDS_ENTRY:
-                continue
             if entry.entry_type not in by_type:
                 by_type[entry.entry_type] = []
             by_type[entry.entry_type].append(entry)
@@ -1309,8 +1320,6 @@ Create foundational definitions that future generations can build upon.
         # Group entries by generation for clarity
         by_gen: dict[int, list[FoundationEntry]] = {}
         for entry in self.entries:
-            if entry.entry_type == self.COMMANDS_ENTRY:
-                continue
             if entry.generation not in by_gen:
                 by_gen[entry.generation] = []
             by_gen[entry.generation].append(entry)
@@ -1448,13 +1457,14 @@ Create foundational definitions that future generations can build upon.
             # Persisted so a resumed run rebuilds the same axiom layer rather
             # than silently dropping it and letting agents redefine `Category`.
             "seed_source": self.seed_source,
-            # A refused id stays in `artifact_ids`, so a resume needs this to
-            # tell it from one the foundation holds.
-            "rejections": self._rejections,
             "accepted": {
                 artifact_id: [e.to_dict() for e in entries]
                 for artifact_id, entries in self._accepted.items()
             },
+            # A refused id stays in `artifact_ids`, so a resume needs this to
+            # tell it from one the foundation holds.
+            "rejections": self._rejections,
+            "refused_in": self._refused_in,
         }
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -1482,6 +1492,7 @@ Create foundational definitions that future generations can build upon.
             ]
             foundation._artifact_ids = set(metadata.get("artifact_ids", []))
             foundation._rejections = dict(metadata.get("rejections", {}))
+            foundation._refused_in = dict(metadata.get("refused_in", {}))
             # A checkpoint from before this field records only what landed.
             if "accepted" in metadata:
                 foundation._accepted = {
