@@ -361,35 +361,27 @@ class TestFoundationCollisions:
         assert errors == ""
         assert [e.name for e in foundation.entries] == ["f", "f'", "t"]
 
-    def test_repeating_a_notation_leaves_later_uses_working(
+    def test_a_restated_notation_leaves_the_file_compiling(
         self, tmp_path: Path
     ) -> None:
+        """A repeated `notation` would make later uses ambiguous with no build failing."""
         foundation, errors = self._compile(
             tmp_path,
             'def foo : Nat := 1\n\nnotation "FOO" => foo',
             'def foo : Nat := 1\n\nnotation "FOO" => foo\n\ndef bar : Nat := FOO',
+            "def baz : Nat := FOO",
         )
         assert errors == ""
-        assert "bar" in foundation._definition_names
+        assert foundation.path.read_text().count('notation "FOO"') == 1
+        assert "baz" in foundation._definition_names
 
-    def test_a_copy_with_a_deriving_clause_compiles(self, tmp_path: Path) -> None:
-        foundation, errors = self._compile(
+    def test_a_universe_line_with_a_comment_compiles(self, tmp_path: Path) -> None:
+        _, errors = self._compile(
             tmp_path,
-            "structure Pt where\n  x : Nat\nderiving Repr",
-            "structure Pt where\n  x : Nat\nderiving Repr\n\ndef y : Nat := 1",
+            "def g : Nat := 1\n\nuniverse u -- objects live in Type u\n\n"
+            "def h : Type u := PUnit",
         )
         assert errors == ""
-        assert "y" in foundation._definition_names
-
-    def test_another_universe_order_cant_change_a_meaning(self, tmp_path: Path) -> None:
-        body = "def Pair : Type u₁ → Type v₁ → Type (max u₁ v₁) := fun α β => α × β"
-        foundation, errors = self._compile(
-            tmp_path,
-            f"universe v₁ u₁\n\n{body}",
-            f"universe u₁ v₁\n\n{body}\n\ndef tag := Pair.{{0, 1}}",
-        )
-        assert errors == ""
-        assert "tag" not in foundation._definition_names
 
     def test_a_different_instance_refuses_the_artifact(self, tmp_path: Path) -> None:
         """`b.n` is 1 alone. If `b` landed on the first instance, it would be 0, and

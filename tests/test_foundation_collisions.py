@@ -1,10 +1,16 @@
-"""A name collision costs the artifact, and nothing lands on the wrong declaration.
+"""An artifact declaring a name the foundation already has is refused whole.
 
 The merge used to skip any entry whose name already existed and keep the
 artifact's other entries. Those then bound to the other agent's declaration,
 which is not what Lean verified them against. When the merged file still
 compiled, nothing caught it. When it didn't, the whole generation rolled back:
 in the team simulation, two agents' different `rep` cost all three Yoneda proofs.
+
+There's no exception for a copy. Deciding from text whether two declarations mean
+the same needs the universes, the commands after them and what's in scope, and
+each attempt to do it let a statement land meaning something else. An artifact
+that imports the foundation can't redeclare a name anyway, so a copy can only
+come from agents in one generation. The next generation can import it.
 """
 
 from __future__ import annotations
@@ -14,11 +20,11 @@ from pathlib import Path
 import pytest
 
 from lms.artifacts import Artifact, ArtifactType, VerificationStatus
+from lms.config import ProviderConfig
 from lms.foundation import FoundationFile
 from lms.lean.mock import MockLeanVerifier
-from tests.test_foundation_rollback import SilentProvider
-from lms.config import ProviderConfig
 from lms.society import Society
+from tests.test_foundation_rollback import SilentProvider
 
 
 def artifact(artifact_id: str, code: str) -> Artifact:
@@ -38,12 +44,19 @@ def foundation(tmp_path: Path) -> FoundationFile:
     return FoundationFile(tmp_path / "Foundation.lean")
 
 
-class TestADifferingNameIsRejected:
-    def test_nothing_from_the_artifact_lands(self, foundation: FoundationFile) -> None:
+class TestAnExistingNameRefusesTheArtifact:
+    @pytest.mark.parametrize(
+        "copy",
+        ["def rep : Nat := 2", "def rep : Nat := 1"],
+        ids=["differs", "identical"],
+    )
+    def test_nothing_from_the_artifact_lands(
+        self, foundation: FoundationFile, copy: str
+    ) -> None:
         foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
 
         added = foundation.add_artifact(
-            artifact("b", "def rep : Nat := 2\n\ntheorem usesRep : rep = rep := rfl")
+            artifact("b", f"{copy}\n\ntheorem usesRep : rep = rep := rfl")
         )
 
         assert added is False
@@ -60,76 +73,104 @@ class TestADifferingNameIsRejected:
         foundation.set_seed("def seeded : Nat := 1")
 
         added = foundation.add_artifact(
-            artifact("a", "def seeded : Nat := 2\n\ndef other : Nat := 3")
+            artifact("a", "def seeded : Nat := 1\n\ndef other : Nat := 3")
         )
 
         assert added is False
         assert foundation.entries == []
 
+    @pytest.mark.parametrize("second", ["1", "2"], ids=["identical", "differs"])
     def test_a_name_repeated_inside_the_artifact(
-        self, foundation: FoundationFile
+        self, foundation: FoundationFile, second: str
     ) -> None:
         """Lean accepts this in two namespaces, and the merge strips namespaces."""
-        code = (
-            "namespace A\ndef f : Nat := 1\nend A\nnamespace B\ndef f : Nat := 2\nend B"
-        )
+        code = f"namespace A\ndef f : Nat := 1\nend A\nnamespace B\ndef f : Nat := {second}\nend B"
 
         assert foundation.add_artifact(artifact("a", code)) is False
         assert foundation.entries == []
-
-    def test_a_definition_that_landed_is_not_marked_by_the_rejection(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
-        foundation.add_artifact(artifact("b", "def rep : Nat := 2"))
-
-        assert foundation.rejection_reason("a") is None
+        assert "twice" in (foundation.rejection_reason("a") or "")
 
     def test_the_reason_names_the_declaration(self, foundation: FoundationFile) -> None:
         foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
         foundation.add_artifact(artifact("b", "def rep : Nat := 2"))
 
-        reason = foundation.rejection_reason("b")
+        assert foundation.rejection_reason("a") is None
+        assert "`rep`" in (foundation.rejection_reason("b") or "")
 
-        assert reason is not None
-        assert "`rep`" in reason
-
-
-class TestAnIdenticalDeclarationIsHarmless:
-    @pytest.mark.parametrize(
-        "copy",
-        [
-            "def rep : Nat := 1",
-            "def  rep :  Nat :=\n  1",
-            "def rep : Nat := 1 -- the same thing",
-        ],
-    )
-    def test_the_rest_of_the_artifact_is_kept(
-        self, foundation: FoundationFile, copy: str
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
-
-        added = foundation.add_artifact(
-            artifact("b", f"{copy}\n\ndef other : Nat := 3")
-        )
-
-        assert added is True
-        assert [e.name for e in foundation.entries] == ["rep", "other"]
-        assert foundation.rejection_reason("b") is None
-
-    def test_a_complete_copy_adds_nothing_and_is_not_rejected(
+    def test_a_copy_cant_land_a_different_instance(
         self, foundation: FoundationFile
     ) -> None:
-        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
+        """`b.n` is 1 alone, and would be 0 bound to the first instance."""
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩",
+            )
+        )
 
-        assert foundation.add_artifact(artifact("b", "def rep : Nat := 1")) is False
-        assert foundation.rejection_reason("b") is None
+        foundation.add_artifact(
+            artifact(
+                "b",
+                "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨1⟩⟩\n\n"
+                "def b : Foo := default",
+            )
+        )
+
+        assert "b" not in foundation._definition_names
+
+
+class TestARefusalKeepsNoState:
+    """Committee ids hash the code, so identical work can come back under one id."""
+
+    def test_it_can_land_once_the_name_is_gone(
+        self, foundation: FoundationFile
+    ) -> None:
+        empty = foundation.snapshot()
+        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
+        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
+        foundation.restore(empty)
+
+        assert foundation.add_artifact(artifact("r", "def rep : Nat := 2")) is True
+
+        assert foundation.rejection_reason("r") is None
+        assert foundation.entries[0].lean_code == "def rep : Nat := 2"
+
+    def test_it_can_land_after_a_rollback_on_resume(
+        self, foundation: FoundationFile
+    ) -> None:
+        later = artifact("x", "def rep : Nat := 1")
+        later.generation = 1
+        foundation.add_artifact(later)
+        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
+        foundation.save()
+
+        loaded = FoundationFile.load(foundation.path)
+        loaded.restore(loaded.snapshot_before(1))
+
+        assert loaded.add_artifact(artifact("r", "def rep : Nat := 2")) is True
+
+    def test_it_is_refused_again_while_the_name_stays(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
+        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
+
+        assert foundation.add_artifact(artifact("r", "def rep : Nat := 2")) is False
+        assert foundation.rejection_reason("r") is not None
 
 
 class TestDeclarationsAreReadAsLeanReadsThem:
     @pytest.mark.parametrize(
         "modifier",
-        ["@[reducible] ", "@[reducible]\n", "private ", "protected ", "noncomputable "],
+        [
+            "@[reducible] ",
+            "@[reducible]\n",
+            "@[simp,\n  reducible] ",
+            '@[deprecated "x [y]" (since := "2024-01-01")] ',
+            "private ",
+            "protected ",
+            "noncomputable ",
+        ],
     )
     def test_a_modifier_cannot_hide_a_collision(
         self, foundation: FoundationFile, modifier: str
@@ -146,6 +187,22 @@ class TestDeclarationsAreReadAsLeanReadsThem:
         assert added is False
         assert "pos" not in foundation._definition_names
 
+    @pytest.mark.parametrize(
+        "second",
+        [
+            "scoped instance foo : Inhabited Nat := ⟨2⟩",
+            "local instance foo : Inhabited Nat := ⟨2⟩",
+            "instance (priority := low) foo : Inhabited Nat := ⟨2⟩",
+        ],
+    )
+    def test_an_instance_form_cannot_hide_a_collision(
+        self, foundation: FoundationFile, second: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", "instance foo : Inhabited Nat := ⟨1⟩"))
+
+        assert foundation.add_artifact(artifact("b", second)) is False
+        assert "`foo`" in (foundation.rejection_reason("b") or "")
+
     def test_a_modified_declaration_is_its_own_entry(
         self, foundation: FoundationFile
     ) -> None:
@@ -157,7 +214,6 @@ class TestDeclarationsAreReadAsLeanReadsThem:
         )
 
         assert [e.name for e in foundation.entries] == ["first", "next"]
-        assert "first" in foundation.entries[0].lean_code
         assert "@[simp]" in foundation.entries[0].lean_code
 
     @pytest.mark.parametrize(
@@ -187,371 +243,24 @@ class TestDeclarationsAreReadAsLeanReadsThem:
 
         assert [e.name for e in foundation.entries] == ["f"]
 
-    def test_a_name_repeated_inside_says_so(self, foundation: FoundationFile) -> None:
-        code = (
-            "namespace A\ndef f : Nat := 1\nend A\nnamespace B\ndef f : Nat := 2\nend B"
-        )
-        foundation.add_artifact(artifact("a", code))
-
-        reason = foundation.rejection_reason("a")
-
-        assert reason is not None
-        assert "twice" in reason
-
-
-class TestACommandAfterACopy:
-    """A declaration's slice runs to the next one, so commands travel with it.
-
-    A copy is skipped, and its commands with it. If they differ from what the
-    foundation has, the artifact's later entries could compile with another
-    meaning, so the artifact is refused.
-    """
-
     @pytest.mark.parametrize(
-        "command", ["#check rep", "#eval rep", "example : rep = 1 := rfl"]
-    )
-    def test_one_that_changes_nothing_is_ignored(
-        self, foundation: FoundationFile, command: str
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
-
-        added = foundation.add_artifact(
-            artifact("b", f"def rep : Nat := 1\n\n{command}\n\ndef other : Nat := 3")
-        )
-
-        assert added is True
-        assert foundation.rejection_reason("b") is None
-        assert "other" in foundation._definition_names
-
-    @pytest.mark.parametrize(
-        "command",
+        "first,second",
         [
-            "variable (n : Nat)",
-            "section",
-            "open Nat",
-            "attribute [simp] rep",
-            "instance : Inhabited Nat := ⟨7⟩",
-            'notation "Q" => rep',
-            "opaque k : Nat",
-            "export Nat (succ)",
+            ("class inductive P where\n  | mk", "class inductive Q where\n  | mk"),
+            ("class abbrev P := Inhabited Nat", "class abbrev Q := Inhabited Nat"),
         ],
     )
-    def test_one_the_foundation_doesnt_have_refuses_the_artifact(
-        self, foundation: FoundationFile, command: str
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def rep : Nat := 1"))
-
-        added = foundation.add_artifact(
-            artifact("b", f"def rep : Nat := 1\n\n{command}\n\ndef other : Nat := 3")
-        )
-
-        assert added is False
-        assert "`rep`" in (foundation.rejection_reason("b") or "")
-        assert "other" not in foundation._definition_names
-
-    def test_a_different_instance_cant_change_a_value_silently(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(
-            artifact(
-                "a",
-                "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩",
-            )
-        )
-
-        added = foundation.add_artifact(
-            artifact(
-                "b",
-                "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨1⟩⟩\n\n"
-                "def b : Foo := default",
-            )
-        )
-
-        assert added is False
-        assert "b" not in foundation._definition_names
-
-    def test_the_same_commands_are_a_copy(self, foundation: FoundationFile) -> None:
-        code = "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩"
-        foundation.add_artifact(artifact("a", code))
-
-        added = foundation.add_artifact(
-            artifact("b", f"{code}\n\ndef b : Foo := default")
-        )
-
-        assert added is True
-        foundation.save()
-        assert foundation.path.read_text().count("instance : Inhabited Foo") == 1
-
-    def test_it_is_not_added_again(self, foundation: FoundationFile) -> None:
-        """Repeating `notation` makes every later use ambiguous, and no build fails
-        on the repeat itself. An artifact that needs the command fails the merged
-        build and is dropped, which is loud."""
-        foundation.add_artifact(
-            artifact("a", 'def foo : Nat := 1\n\nnotation "FOO" => foo')
-        )
-        foundation.add_artifact(
-            artifact(
-                "b",
-                'def foo : Nat := 1\n\nnotation "FOO" => foo\n\ndef bar : Nat := FOO',
-            )
-        )
-
-        foundation.save()
-
-        assert foundation.path.read_text().count('notation "FOO"') == 1
-        assert "bar" in foundation._definition_names
-
-    def test_a_copy_of_a_seed_declaration_ignores_the_seeds_commands(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.set_seed(
-            'structure S where\n  x : Nat\n\nscoped notation "Q" => S\n\ndef seeded : Nat := 1'
-        )
-
-        added = foundation.add_artifact(
-            artifact("a", "structure S where\n  x : Nat\n\ndef other : S := ⟨1⟩")
-        )
-
-        assert added is True
-        assert foundation.rejection_reason("a") is None
-
-
-class TestRejectionsDontGoStale:
-    def test_a_rollback_forgets_the_reason(self, foundation: FoundationFile) -> None:
-        empty = foundation.snapshot()
-        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
-        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
-        assert foundation.rejection_reason("r") is not None
-
-        foundation.restore(empty)
-
-        assert foundation.rejection_reason("r") is None
-
-    def test_the_same_artifact_can_land_later(self, foundation: FoundationFile) -> None:
-        empty = foundation.snapshot()
-        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
-        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
-        foundation.restore(empty)
-
-        assert foundation.add_artifact(artifact("r", "def rep : Nat := 2")) is True
-
-        assert foundation.rejection_reason("r") is None
-        assert foundation.entries[0].lean_code == "def rep : Nat := 2"
-
-
-class TestAgentContext:
-    def test_an_attribute_on_its_own_line_is_not_the_header(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("a", "@[reducible]\ndef rep : Nat := 1"))
-
-        assert foundation.entries[0].declaration_header().startswith("def rep")
-
-
-class TestDeriving:
-    """A `deriving` clause at column 0 belongs to its declaration."""
-
-    def test_a_copy_with_one_is_still_a_copy(self, foundation: FoundationFile) -> None:
-        code = "structure Pt where\n  x : Nat\nderiving Repr"
-        foundation.add_artifact(artifact("a", code))
-
-        added = foundation.add_artifact(artifact("b", f"{code}\n\ndef y : Nat := 1"))
-
-        assert added is True
-        foundation.save()
-        assert foundation.path.read_text().count("deriving Repr") == 1
-
-    def test_different_clauses_are_different(self, foundation: FoundationFile) -> None:
-        foundation.add_artifact(
-            artifact("a", "structure Pt where\n  x : Nat\nderiving Repr")
-        )
-
-        added = foundation.add_artifact(
-            artifact("b", "structure Pt where\n  x : Nat\nderiving DecidableEq")
-        )
-
-        assert added is False
-        assert foundation.rejection_reason("b") is not None
-
-    def test_a_standalone_deriving_is_a_command(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("a", "structure Pt where\n  x : Nat"))
-
-        added = foundation.add_artifact(
-            artifact(
-                "b",
-                "structure Pt where\n  x : Nat\n\nderiving instance Repr for Pt\n\n"
-                "def y : Nat := 1",
-            )
-        )
-
-        assert added is False
-        assert "`Pt`" in (foundation.rejection_reason("b") or "")
-
-
-class TestUniverseOrderIsPartOfADeclaration:
-    def test_the_same_text_in_another_order_is_not_a_copy(
-        self, foundation: FoundationFile
-    ) -> None:
-        body = "def Pair : Type u₁ → Type v₁ → Type (max u₁ v₁) := fun α β => α × β"
-        foundation.add_artifact(artifact("a", f"universe v₁ u₁\n\n{body}"))
-
-        added = foundation.add_artifact(
-            artifact("b", f"universe u₁ v₁\n\n{body}\n\ndef tag := Pair.{{0, 1}}")
-        )
-
-        assert added is False
-        assert "tag" not in foundation._definition_names
-
-    def test_names_the_declaration_doesnt_use_dont_count(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def helper : Nat := 2"))
-
-        added = foundation.add_artifact(
-            artifact(
-                "b", "universe u₁\n\ndef helper : Nat := 2\n\ndef other : Nat := 3"
-            )
-        )
-
-        assert added is True
-        assert "other" in foundation._definition_names
-
-    def test_the_same_order_is_a_copy(self, foundation: FoundationFile) -> None:
-        body = "def Pair : Type u₁ → Type v₁ → Type (max u₁ v₁) := fun α β => α × β"
-        foundation.add_artifact(artifact("a", f"universe v₁ u₁\n\n{body}"))
-
-        added = foundation.add_artifact(
-            artifact("b", f"universe v₁ u₁\n\n{body}\n\ndef tag := Pair.{{0, 1}}")
-        )
-
-        assert added is True
-
-
-class TestARepeatedNameInsideAnArtifact:
-    def test_one_declaration_is_one_entry(self, foundation: FoundationFile) -> None:
-        foundation.add_artifact(
-            artifact(
-                "a",
-                "namespace A\ndef x : Nat := 1\nend A\n"
-                "namespace B\ndef x : Nat := 1\nend B",
-            )
-        )
-
-        assert [e.name for e in foundation.entries] == ["x"]
-
-
-class TestHeaders:
-    def test_an_attribute_and_binders_on_one_line_keep_the_line(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(
-            artifact(
-                "a",
-                "@[reducible] def pick {M : Type} [Inhabited M]\n    (a : M) : M := a",
-            )
-        )
-
-        assert "def pick" in foundation.entries[0].declaration_header()
-
-
-class TestClassKeywords:
-    @pytest.mark.parametrize(
-        "first,second,names",
-        [
-            (
-                "class inductive P where\n  | mk",
-                "class inductive Q where\n  | mk",
-                ["P", "Q"],
-            ),
-            (
-                "class abbrev P := Inhabited Nat",
-                "class abbrev Q := Inhabited Nat",
-                ["P", "Q"],
-            ),
-        ],
-    )
-    def test_the_name_is_the_name(
-        self, foundation: FoundationFile, first: str, second: str, names: list[str]
+    def test_class_keywords_name_what_follows(
+        self, foundation: FoundationFile, first: str, second: str
     ) -> None:
         foundation.add_artifact(artifact("a", first))
 
         assert foundation.add_artifact(artifact("b", second)) is True
-        assert [e.name for e in foundation.entries] == names
+        assert [e.name for e in foundation.entries] == ["P", "Q"]
 
 
-class TestIndentedCode:
-    def test_a_command_ends_an_indented_declaration(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def x : Nat := 1"))
-
-        added = foundation.add_artifact(
-            artifact(
-                "b",
-                "namespace Foo\n  def x : Nat := 1\n\n  #check x\n\n"
-                "  def y : Nat := 2\nend Foo",
-            )
-        )
-
-        assert added is True
-        assert foundation.rejection_reason("b") is None
-        assert "y" in foundation._definition_names
-
-
-class TestFalseCopies:
-    def test_a_value_starting_with_a_hash_is_the_body(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("a", "def xs : Array Nat :=\n#[1, 2]"))
-
-        added = foundation.add_artifact(
-            artifact(
-                "b",
-                "def xs : Array Nat :=\n#[3, 4]\n\ndef firstX : Nat := xs[0]!",
-            )
-        )
-
-        assert added is False
-        assert "firstX" not in foundation._definition_names
-
-    @pytest.mark.parametrize(
-        "first,second",
-        [('"a/-x-/b"', '"a/-yy-/b"'), ('"a  b"', '"a b"'), ('"a--b"', '"a--c"')],
-    )
-    def test_a_string_is_compared_as_written(
-        self, foundation: FoundationFile, first: str, second: str
-    ) -> None:
-        foundation.add_artifact(artifact("a", f"def s : String := {first}"))
-
-        added = foundation.add_artifact(
-            artifact("b", f"def s : String := {second}\n\ndef t : String := s")
-        )
-
-        assert added is False
-
-
-class TestMoreFormsOfADeclaration:
-    @pytest.mark.parametrize(
-        "second",
-        [
-            "scoped instance foo : Inhabited Nat := ⟨2⟩",
-            "local instance foo : Inhabited Nat := ⟨2⟩",
-            "instance (priority := low) foo : Inhabited Nat := ⟨2⟩",
-            '@[deprecated "x [y]" (since := "2024-01-01")] instance foo : Inhabited Nat := ⟨2⟩',
-            "@[simp,\n  reducible] instance foo : Inhabited Nat := ⟨2⟩",
-        ],
-    )
-    def test_they_cant_hide_a_collision(
-        self, foundation: FoundationFile, second: str
-    ) -> None:
-        foundation.add_artifact(artifact("a", "instance foo : Inhabited Nat := ⟨1⟩"))
-
-        assert foundation.add_artifact(artifact("b", second)) is False
-        assert "`foo`" in (foundation.rejection_reason("b") or "")
-
-    def test_a_declaration_after_a_scoped_universe_line_is_kept(
+class TestAScopedUniverseLine:
+    def test_a_declaration_on_the_same_line_is_kept(
         self, foundation: FoundationFile
     ) -> None:
         foundation.add_artifact(
@@ -563,45 +272,42 @@ class TestMoreFormsOfADeclaration:
         assert [e.name for e in foundation.entries] == ["foo"]
         assert "def foo" in foundation.path.read_text()
 
+    def test_a_comment_is_not_a_declaration(self, foundation: FoundationFile) -> None:
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "def g : Nat := 1\n\nuniverse u -- objects live in Type u\n\n"
+                "def h : Type u := PUnit",
+            )
+        )
 
-class TestARefusalAcrossAGenerationBoundary:
-    def test_a_resume_rollback_forgets_it(self, foundation: FoundationFile) -> None:
-        later = artifact("x", "def rep : Nat := 1")
-        later.generation = 1
-        refused = artifact("r", "def rep : Nat := 2")
-        refused.generation = 1
-        foundation.add_artifact(later)
-        foundation.add_artifact(refused)
-
-        foundation.restore(foundation.snapshot_before(1))
-
-        assert foundation.rejection_reason("r") is None
-        assert foundation.add_artifact(artifact("r", "def rep : Nat := 2")) is True
-
-    def test_an_earlier_generations_refusal_stays(
-        self, foundation: FoundationFile
-    ) -> None:
-        foundation.add_artifact(artifact("x", "def rep : Nat := 1"))
-        foundation.add_artifact(artifact("r", "def rep : Nat := 2"))
-
-        foundation.restore(foundation.snapshot_before(1))
-
-        assert foundation.rejection_reason("r") is not None
-
-    def test_it_survives_a_checkpoint(self, foundation: FoundationFile) -> None:
-        later = artifact("x", "def rep : Nat := 1")
-        later.generation = 1
-        refused = artifact("r", "def rep : Nat := 2")
-        refused.generation = 1
-        foundation.add_artifact(later)
-        foundation.add_artifact(refused)
         foundation.save()
 
-        loaded = FoundationFile.load(foundation.path)
-        assert loaded.rejection_reason("r") is not None
+        assert "\nType u" not in foundation.path.read_text()
 
-        loaded.restore(loaded.snapshot_before(1))
-        assert loaded.rejection_reason("r") is None
+
+class TestAgentContext:
+    @pytest.mark.parametrize(
+        "attribute", ["@[reducible]", "@[to_additive [x]]"], ids=["plain", "nested"]
+    )
+    def test_an_attribute_on_its_own_line_is_not_the_header(
+        self, foundation: FoundationFile, attribute: str
+    ) -> None:
+        foundation.add_artifact(artifact("a", f"{attribute}\ndef rep : Nat := 1"))
+
+        assert foundation.entries[0].declaration_header().startswith("def rep")
+
+    def test_an_attribute_and_binders_on_one_line_keep_the_line(
+        self, foundation: FoundationFile
+    ) -> None:
+        foundation.add_artifact(
+            artifact(
+                "a",
+                "@[reducible] def pick {M : Type} [Inhabited M]\n    (a : M) : M := a",
+            )
+        )
+
+        assert "def pick" in foundation.entries[0].declaration_header()
 
 
 class TestSocietyReportsARejection:

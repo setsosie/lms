@@ -147,6 +147,21 @@ class TestReopening:
         assert definition(society).formalized is False
 
 
+class TestARestatedName:
+    def test_its_tag_reopens_unless_something_else_backs_it(
+        self, tmp_path: Path
+    ) -> None:
+        """The next generation can import the declaration and close the tag properly."""
+        society = make_society(tmp_path, [])
+        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
+        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
+
+        society._reopen_tags_without_foundation_work()
+
+        assert definition(society, "T1").formalized is False
+        assert definition(society, "T2").formalized is True
+
+
 class TestWhatStaysDone:
     def test_a_surviving_artifact_keeps_the_tag(self, tmp_path: Path) -> None:
         society = make_society(tmp_path, [])
@@ -159,15 +174,6 @@ class TestWhatStaysDone:
 
         assert definition(society).formalized is True
         assert definition(society).artifact_ids == ["kept"]
-
-    def test_a_copy_of_existing_work_still_backs_its_tag(self, tmp_path: Path) -> None:
-        society = make_society(tmp_path, [])
-        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
-        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
-
-        society._reopen_tags_without_foundation_work()
-
-        assert definition(society, "T1").formalized is True
 
     def test_a_seeded_tag_is_left_alone(self, tmp_path: Path) -> None:
         society = make_society(tmp_path, [])
@@ -191,55 +197,6 @@ class TestWhatStaysDone:
         society.goal = None
 
         society._reopen_tags_without_foundation_work()
-
-
-class TestCopiesAcrossAFailedBuild:
-    """A copy has an id but no entries, so a rollback can't see it by its entries."""
-
-    async def _built(self, tmp_path: Path, outcomes: list[bool]) -> Society:
-        society = make_society(tmp_path, [True, *outcomes])
-        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
-        await society._write_and_build_foundation()
-        return society
-
-    async def test_a_copy_keeps_its_tag_when_another_artifact_breaks(
-        self, tmp_path: Path
-    ) -> None:
-        society = await self._built(tmp_path, [False, False, True])
-        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
-        promote(society, artifact("bad", "def bad : Nat := 1", tag="T3"))
-
-        await society._write_and_build_foundation()
-        society._reopen_tags_without_foundation_work()
-
-        assert definition(society, "T1").formalized is True
-        assert definition(society, "T3").formalized is False
-
-    async def test_a_copy_keeps_its_tag_when_nothing_is_dropped(
-        self, tmp_path: Path
-    ) -> None:
-        society = await self._built(tmp_path, [False, True])
-        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
-        promote(society, artifact("new", "def fresh : Nat := 1", tag="T3"))
-
-        assert await society._write_and_build_foundation() is True
-        society._reopen_tags_without_foundation_work()
-
-        assert definition(society, "T1").formalized is True
-
-    async def test_a_copy_and_its_original_share_a_fate(self, tmp_path: Path) -> None:
-        society = make_society(tmp_path, [True, False, True, False, True])
-        await society._write_and_build_foundation()
-        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
-        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
-        promote(society, artifact("bad", "def bad : Nat := 1", tag="T3"))
-
-        await society._write_and_build_foundation()
-        society._reopen_tags_without_foundation_work()
-
-        assert definition(society, "T1").formalized is True
-        assert definition(society, "T2").formalized is True
-        assert definition(society, "T3").formalized is False
 
 
 class TestGateBlockedCommitteeTag:
@@ -270,7 +227,9 @@ class TestGateBlockedCommitteeTag:
 
         assert "T1 offered again" in capsys.readouterr().out
 
-    def test_it_leaves_a_task_another_group_finished(self, tmp_path: Path) -> None:
+    def test_it_leaves_a_task_another_group_finished(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         society = make_society(tmp_path, [])
         society.dependency_graph = DependencyGraph.from_goal(society.goal)
         graph = society.dependency_graph
@@ -281,6 +240,7 @@ class TestGateBlockedCommitteeTag:
         )
 
         assert graph.nodes["T1"].status is TaskStatus.DONE
+        assert "offered again" not in capsys.readouterr().out
 
 
 class TestGraph:
@@ -322,24 +282,6 @@ class TestResume:
 
         assert loaded.holds("first") is True
         assert loaded.holds("second") is False
-
-    async def test_a_real_load_reopens_a_copys_tag_when_its_original_goes(
-        self, tmp_path: Path
-    ) -> None:
-        """A walltime kill saves mid-generation. If the resume build then fails, the
-        copy's id must not outlive the declaration it copied."""
-        society = make_society(tmp_path, [False, False, False, True])
-        promote(society, artifact("first", "def same : Nat := 1", tag="T2"))
-        promote(society, artifact("copy", "def same : Nat := 1", tag="T1"))
-        society.foundation.save()
-
-        society.foundation = FoundationFile.load(society.foundation.path)
-        society._last_good_foundation = society.foundation.snapshot_before(1)
-        await society.restore_foundation()
-
-        assert definition(society, "T2").formalized is False
-        assert definition(society, "T1").formalized is False
-        assert "[DONE]" not in society.goal.to_prompt_context()
 
     async def test_a_refused_artifact_can_land_and_back_its_tag(
         self, tmp_path: Path
@@ -384,3 +326,12 @@ class TestHolds:
         assert society.foundation.holds("a") is True
         assert society.foundation.holds("b") is False
         assert society.foundation.holds("never") is False
+
+    def test_a_rollback_is_seen(self, tmp_path: Path) -> None:
+        society = make_society(tmp_path, [])
+        empty = society.foundation.snapshot()
+        society._promote_to_foundation(artifact("a", "def rep : Nat := 1"))
+
+        society.foundation.restore(empty)
+
+        assert society.foundation.holds("a") is False

@@ -76,18 +76,6 @@ def make_artifact(name: str, ident: str) -> Artifact:
     )
 
 
-def make_coded(ident: str, code: str) -> Artifact:
-    return Artifact(
-        id=ident,
-        type=ArtifactType.DEFINITION,
-        natural_language=ident,
-        created_by="agent-0",
-        generation=1,
-        lean_code=code,
-        status=VerificationStatus.VERIFIED_LEAN,
-    )
-
-
 def make_society(tmp_path, outcomes):
     project = FakeProject(outcomes)
     society = Society(
@@ -295,60 +283,6 @@ class TestPerArtifactRollback:
         society, _ = await self._seeded(tmp_path, [False, True, True])
 
         assert await self._build_generation(society, "first", "second") is True
-
-    async def test_a_copy_lands_when_its_original_is_dropped(self, tmp_path):
-        """It built on its own, so losing the other artifact mustn't cost it."""
-        society, _ = await self._seeded(tmp_path, [False, False, True])
-        society.foundation.add_artifact(
-            make_coded("first", "def rep : Nat := 1\n\ndef broken : Nat := rep")
-        )
-        society.foundation.add_artifact(
-            make_coded("copy", "def rep : Nat := 1\n\ndef fine : Nat := rep")
-        )
-
-        await society._write_and_build_foundation()
-
-        assert [e.name for e in society.foundation.entries] == ["good", "rep", "fine"]
-        assert "first" not in society.foundation._artifact_ids
-        assert "copy" in society.foundation._artifact_ids
-
-    async def test_a_pure_copy_stays_known_and_takes_no_build(self, tmp_path):
-        society, project = await self._seeded(tmp_path, [False, False, True])
-        society.foundation.add_artifact(make_coded("copy", "def good : Nat := 1"))
-        society.foundation.add_artifact(make_coded("bad", "def bad : Nat := 1"))
-
-        await society._write_and_build_foundation()
-
-        # seed build, joint failure, bad, then the rebuild. The copy adds nothing to build.
-        assert project.builds == 4
-        assert "copy" in society.foundation._artifact_ids
-
-    async def test_a_copy_survives_a_checkpoint_for_the_retry(self, tmp_path):
-        """A walltime kill saves mid-generation, and the resume build can fail."""
-        society, _ = make_society(tmp_path, [False, False, True])
-        society.foundation.add_artifact(
-            make_coded("first", "def rep : Nat := 1\n\ndef broken : Nat := rep")
-        )
-        society.foundation.add_artifact(
-            make_coded("copy", "def rep : Nat := 1\n\ndef fine : Nat := rep")
-        )
-        society.foundation.save()
-
-        society.foundation = FoundationFile.load(society.foundation.path)
-        society._last_good_foundation = society.foundation.snapshot_before(1)
-        await society._write_and_build_foundation()
-
-        assert [e.name for e in society.foundation.entries] == ["rep", "fine"]
-
-    def test_a_generation_boundary_forgets_a_copy(self, tmp_path):
-        f = FoundationFile(tmp_path / "F.lean")
-        original = make_coded("first", "def rep : Nat := 1")
-        f.add_artifact(original)
-        f.add_artifact(make_coded("copy", "def rep : Nat := 1"))
-
-        boundary = f.snapshot_before(1)
-
-        assert "copy" not in boundary.artifact_ids
 
     async def test_a_failure_with_nothing_new_still_reports_failure(self, tmp_path):
         """No artifact to blame: an environment fault, or a resume whose last good

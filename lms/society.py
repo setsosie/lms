@@ -400,12 +400,11 @@ class Society:
         subsequent generation's `import` -- one bad artifact ends the run,
         and the errors point at the importer rather than the cause.
 
-        The artifacts are then promoted again one at a time, in order, and each
-        that builds stays. That costs one `lake build` per artifact, but only
-        after a failed merged build, and keeping a single bad artifact from
-        discarding the rest of a generation is worth it: in the team simulation,
-        two of three generations lost everything to one artifact each. Promoting
-        again rather than restoring lets a copy land when its original is dropped.
+        The artifacts are then retried one at a time, in order, and each that
+        builds stays. That costs one `lake build` per artifact, but only after a
+        failed merged build, and keeping a single bad artifact from discarding the
+        rest of a generation is worth it: in the team simulation, two of three
+        generations lost everything to one artifact each.
 
         Returns:
             True if everything added since the last good state is on disk and
@@ -435,22 +434,18 @@ class Society:
         kept: list[str] = []
         on_disk = False
         # With one artifact, the failed build has already named the culprit.
-        if len(attempted) != 1 or not dropped:
+        if len(attempted) > 1:
             dropped = []
-            for artifact_id, entries in attempted:
-                names = self.foundation.readmit(artifact_id, entries)
-                if not names:
-                    # A pure copy adds nothing to build.
-                    good = self.foundation.snapshot()
-                    continue
+            for entries in attempted:
+                self.foundation.reinstate(entries)
                 self.foundation.save()
                 on_disk = await project.rebuild_changed_sources()
                 if on_disk:
                     good = self.foundation.snapshot()
-                    kept.append(artifact_id)
+                    kept.append(entries[0].artifact_id)
                 else:
                     self.foundation.restore(good)
-                    dropped.extend(names)
+                    dropped.extend(entry.name for entry in entries)
         self._last_good_foundation = good
 
         if kept and not dropped:
@@ -892,9 +887,12 @@ class Society:
         A task another group finished stays done.
         """
         self._note_gate_block(artifact)
-        print(f"  [graph] {tag} offered again: a gate kept {artifact.id} out")
-        if self.dependency_graph is not None:
-            self.dependency_graph.update_status(tag, TaskStatus.AVAILABLE)
+        graph = self.dependency_graph
+        if graph is None or tag not in graph.nodes:
+            return
+        graph.update_status(tag, TaskStatus.AVAILABLE)
+        if graph.nodes[tag].status is TaskStatus.AVAILABLE:
+            print(f"  [graph] {tag} offered again: a gate kept {artifact.id} out")
 
     def _note_gate_block(self, artifact: Artifact) -> None:
         """Record on the artifact why it was verified but not promoted.

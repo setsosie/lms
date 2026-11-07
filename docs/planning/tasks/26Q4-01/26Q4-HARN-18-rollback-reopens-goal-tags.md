@@ -39,8 +39,7 @@ grep -n "foundation-yoneda-complete" lms/goals.py   # tags pre-marked with no ar
 - [ ] After a generation, a tag backed only by artifacts the foundation doesn't hold reads `[TODO]`, whether they were rolled back, refused or gate-blocked
 - [ ] A tag with one surviving artifact stays DONE, and the withdrawn id leaves its `artifact_ids`
 - [ ] Seeded tags, and tags pre-marked with an artifact this run never saw, are untouched
-- [ ] An artifact that added nothing because it copied existing declarations still backs its tag, including across a failed build, and stops backing it if the declaration it copied goes
-- [ ] A refused artifact that later lands under the same id backs its tag
+- [ ] A refused artifact doesn't back its tag, even if it restated work the foundation holds under another tag, and it does once it lands under the same id
 - [ ] A gate-blocked committee tag goes back to available, unless another group finished it
 - [ ] The graph reopens the tag through `revert_done`, and its dependents lock again
 - [ ] A resume that rolls back to the generation boundary reopens the same tags
