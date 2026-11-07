@@ -66,11 +66,11 @@ Sprint 3. They are still what this sprint is for.
 
 | Step | What | DoD | Status | Notes |
 |------|------|-----|--------|-------|
-| R0 | Inventory (read-only) | — | 🔲 PENDING | Paste the output back before anything else; the box was restored to an earlier state |
-| R1–R3 | Scratch routing, Lean toolchain + library build, Python env + suite | — | 🔲 PENDING | Install the pinned toolchain, not `stable`; `lean/.lake` may dangle |
-| R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 3 | 🔲 PENDING | Expect some non-SCHEMATIC drafts to fail at the pin; repair them in one PR and re-run |
-| R5 | CVFN denominator from a real run | 4 | 🔲 PENDING | R5a if a run's `attempts.json` survived the restore, else R5b (a small real run) |
-| R6 | Committee re-run, `committee_fix_c` config at TP=2 | — | 🔲 PENDING | Not a DoD item: the first post-box experiment (#67, merged 2026-10-20). Resuming after a walltime needs #68 |
+| R0 | Inventory (read-only) | — | ✅ DONE | The box was restored to an earlier state |
+| R1–R3 | Scratch routing, Lean toolchain + library build, Python env + suite | — | ✅ DONE | As one batch job on 2026-11-04, in a dedicated worktree: pinned toolchain, 937 passed, 1 sorry |
+| R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 2 | 🔄 RE-RUN | Ran 2026-11-04, but its densities were mostly classifier misses and its control couldn't fail. The classifier fix (#82) merged 2026-11-06; the re-run at that commit is next, once R5 has finished |
+| R5 | CVFN denominator from a real run | 3 | 🔄 IN PROGRESS | No `attempts.json` survived, so R5b. It failed 2026-11-05: vLLM's kernels need a CUDA toolkit the node doesn't have on its default paths. A retry with those kernels off was started 2026-11-06, untested on a GPU until it returns |
+| R6 | Committee re-run, `committee_fix_c` config at TP=2 | — | 🔲 PENDING | Not a DoD item: the first post-box experiment (#67, merged 2026-10-20). Needs R5's retry to pass, its flags in `lms_run.sbatch`, and `26Q4-HARN-16`/`-17`, because the run exists to separate harness faults from the model |
 | R7 | Three groups on three tags: one committee generation on `stacks-kernel-track-b` | — | 🔲 PENDING | Not a DoD item: the box half of HARN-27's Outcome Demo. R6's goal has no edges, so it can't show this |
 
 ## Found-work (unpointed)
@@ -84,9 +84,14 @@ worked during the box runs because the runs are the user's to execute.
 | 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | ✅ DONE | #68, merged 2026-10-30 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
 | 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | ✅ DONE | #70, merged 2026-10-30 | Two of its checks read an untracked archive, so it failed on every clean checkout |
 | 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | ✅ DONE | #72, merged 2026-10-30 | Threads the store beside the cost ledger (the user's choice): one `ConversationLog` per ledgered exchange. Not blocking R6: committee transcripts already land in `textbook.json` |
-| 26Q4-HARN-09: The novelty control can fail, and semantic hits stop reading as N1 | 3 | 🔲 PENDING | #82, in review | From the 2026-11-04 R4 run, whose densities were mostly classifier misses. R4 re-runs once this merges; the slice number comes from D4 reading `candidates` |
+| 26Q4-HARN-09: The novelty control can fail, and semantic hits stop reading as N1 | 3 | ✅ DONE | #82, merged 2026-11-06 | From the 2026-11-04 R4 run, whose densities were mostly classifier misses. R4 re-runs at this commit; the slice number comes from D4 reading `candidates` |
 | 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | 🔲 PENDING | — | Before Phase C. From #82's review: library results can read decisive N1 at Gate 4. The choice of rule is the user's |
 | 26Q4-HARN-14: Tell an exhausted exact? from a miss | 2 | 🔲 PENDING | — | Before Phase C. From #82's review. Starts by measuring how often it happens, on the box |
+| 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | 🔲 PENDING | — | Before Phase C. From #82's reviews. All 10 control N0s at R4 came from name search, so the fix may leave the control with none. The choice of rule is the user's |
+| 26Q4-HARN-16: Foundation merge keeps universes the header doesn't bind | 1 | 🔄 IN REVIEW | #84 | Before R6. From the 2026-11-06 team simulation: one artifact's `universe` line rolled back a whole generation |
+| 26Q4-HARN-17: A name collision can't discard a generation's verified work | 3 | 🔄 IN REVIEW | #86 | Before R6. Refuses a differing re-declaration and rolls back per artifact |
+| 26Q4-HARN-18: Rollback reopens the goal tags it undid | 2 | 🔄 IN REVIEW | #88, on #86 | Before the DAG run. A tag reads DONE only while the foundation holds work behind it. Also returns a gate-blocked committee tag to available, because leaving it in progress stalls a chain goal |
+| 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | 🔲 PENDING | — | Before Phase C. From the reviews of `-16` and `-17`: universe order, shadowing and dropped text can change a statement's meaning with the merged file still compiling. The choice of approach is the user's |
 
 ## Pulled forward: Phase C preparation (2026-10-30)
 
@@ -101,8 +106,8 @@ and `dependency.py` with HARN-27, and HARN-28 depends on HARN-25.
 | Task | Points | Status | PR | Notes |
 |------|--------|--------|----|-------|
 | 26Q4-HARN-04: Reset the foundation to its seed at every generation (the R9 arm) | 2 | 🔲 PENDING | — | ADR 0003's R9 arm; the flag defaults off |
-| 26Q4-HARN-03: Arm-comparison report: pooled isolated arm, distinct statements, paired tests | 3 | 🔲 PENDING | — | Reads saved run directories; reports C9 − I9 and C9 − R9 |
-| 26Q3-HARN-27: Source-anchored dependency edges | 3 | 🔲 PENDING | — | Every goal graph is a chain today; the 9-agent arm needs more than one AVAILABLE task |
+| 26Q4-HARN-03: Arm-comparison report: pooled isolated arm, distinct statements, paired tests | 3 | ✅ DONE | #77, merged 2026-11-04 | Reads saved run directories; reports C9 − I9 and C9 − R9 |
+| 26Q3-HARN-27: Source-anchored dependency edges | 3 | ✅ DONE | #75, merged 2026-11-03 | `stacks-kernel-track-a` and `-b` now start with 16 and 18 available statements; every other goal is still a chain |
 | 26Q3-HARN-25: Proof sketches become open leaves | 5 | 🔲 PENDING | — | Prerequisite for HARN-28's `statement` field |
 | 26Q3-HARN-28: Theorem cards and statement pinning | 5 | 🔲 PENDING | — | Depends on HARN-25. Holds the ANT arc → goal converter; no ANT goal exists without it |
 
@@ -152,6 +157,10 @@ the planning tooling). Cards for this sprint live under
 
 ## Sync Log
 
+- **2026-11-06** — Server-run and task rows caught up with what has run and
+  merged since 2026-10-30. R0–R3 are done and R4 ran once; #82 merged, so R4
+  re-runs at that commit. `26Q4-HARN-15` to `-19` added. The DoD
+  numbers in the server-run table now match the DoD list.
 - **2026-10-30 (later)** — #72 (`26Q4-HARN-02`) merged, so all three
   found-work cards are done and no PR is open. This frees `lms/society.py`
   for `26Q4-HARN-04`.
@@ -175,4 +184,4 @@ the planning tooling). Cards for this sprint live under
 
 ---
 
-*Last Updated: 2026-10-30*
+*Last Updated: 2026-11-06*

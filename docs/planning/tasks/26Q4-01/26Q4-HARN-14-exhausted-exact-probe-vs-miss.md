@@ -93,3 +93,11 @@ See `scripts/verify/26Q4-01/verify_26Q4-HARN-14.sh`.
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
 - [ ] Tests included with implementation
 - [ ] Outcome Demo run by a human validator
+
+---
+
+#### Notes
+
+A neighbouring gap from the independent review at the final gate of `26Q4-HARN-09` (2026-11-06, at `3185b0e`), reproduced with a probe, predating that PR and not blocking:
+
+- **Some search failures raise instead of reading as unavailable.** A grep `subprocess.TimeoutExpired`, and a `ConnectionResetError` or `UnicodeDecodeError` from either HTTP backend. No verdict comes out wrong. In the density script, one reset ends the run, and Gate 4 catches it as an audit hole. It's the same gap as `26Q4-HARN-09`'s "a search that failed" criterion, in a form its tests don't cover. Decide here whether it belongs in this card or a new one.
