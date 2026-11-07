@@ -33,11 +33,46 @@ _BY_TAIL = re.compile(r"\bby$")
 FOUNDATION_NAMESPACE = "LMS.Foundation"
 
 #: Universe names the foundation header binds, above its `namespace` line.
-#: `FoundationFile.add_artifact` strips an entry's own `universe` lines on the
-#: grounds that these are already in scope at the destination -- so the
-#: verifier has to put them in scope too, or it rejects code that would
+#: `FoundationFile.add_artifact` drops these from an entry's own `universe`
+#: lines on the grounds that they are already in scope at the destination --
+#: so the verifier has to put them in scope too, or it rejects code that would
 #: compile once stored (26Q3-HARN-21).
 FOUNDATION_UNIVERSES: tuple[str, ...] = ("u", "v", "w")
+
+
+_UNIVERSE_NAME = re.compile(r"[^\W\d][\w'!?]*")
+
+#: An attribute list, with brackets one level deep inside it.
+_ATTRIBUTE = r"@\[(?:[^\[\]]|\[[^\]]*\])*\]"
+
+
+def _universe_line_names(stripped: str) -> list[str]:
+    """The names a stripped `universe ...` line binds, in order.
+
+    Reading stops at the first token that isn't a name: a trailing comment, or
+    the `in` of `universe u in`, which scopes the line to one command.
+    """
+    names: list[str] = []
+    rest = re.sub(r"/-.*?-/", " ", stripped[len("universe ") :])
+    for token in rest.split():
+        if token == "in" or not _UNIVERSE_NAME.fullmatch(token):
+            break
+        names.append(token)
+    return names
+
+
+def declared_universe_order(lines: Iterable[str]) -> list[str]:
+    """Universe names that `universe ...` lines bind, first-declared first.
+
+    Order is meaning: Lean orders a declaration's level parameters by it, so a
+    different order changes what `f.{0, 1}` refers to and can still compile.
+    """
+    names: dict[str, None] = {}
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("universe "):
+            names.update(dict.fromkeys(_universe_line_names(stripped)))
+    return list(names)
 
 
 def declared_universe_names(lines: Iterable[str]) -> set[str]:
@@ -48,12 +83,7 @@ def declared_universe_names(lines: Iterable[str]) -> set[str]:
     already been declared`, which is the same class of failure in the opposite
     direction.
     """
-    names: set[str] = set()
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("universe "):
-            names.update(stripped[len("universe ") :].split())
-    return names
+    return set(declared_universe_order(lines))
 
 
 def strip_header_universes(lines: Iterable[str]) -> list[str]:
@@ -72,7 +102,7 @@ def strip_header_universes(lines: Iterable[str]) -> list[str]:
             continue
         kept = [
             name
-            for name in stripped[len("universe ") :].split()
+            for name in _universe_line_names(stripped)
             if name not in FOUNDATION_UNIVERSES
         ]
         if kept:
@@ -126,6 +156,8 @@ class FoundationEntry:
         lean_code: Full Lean code for this entry
         generation: Generation when this was added
         author: Agent that created this
+        universes: Universe names its artifact bound beyond the header. On the
+            entry so a rollback or a checkpoint keeps them with what uses them.
     """
 
     artifact_id: str
@@ -135,6 +167,7 @@ class FoundationEntry:
     lean_code: str
     generation: int
     author: str
+    universes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -146,6 +179,7 @@ class FoundationEntry:
             "lean_code": self.lean_code,
             "generation": self.generation,
             "author": self.author,
+            "universes": list(self.universes),
         }
 
     #: Declarations whose indented body *is* the API an agent needs. An
@@ -195,9 +229,9 @@ class FoundationEntry:
             "universes",
             "elab",
             "initialize",
-            # Declaration keywords too: an `@[ext] theorem` is indented and
-            # carries an attribute, so `DEFINITION_PATTERN`'s `^\s*` never
-            # matches it and it is never extracted as its own entry.
+            # Declaration keywords too: `DEFINITION_PATTERN` can't read every
+            # form, such as a nested attribute (`@[to_additive [x]]`), and an
+            # unread declaration is not extracted as its own entry.
             "theorem",
             "lemma",
             "def",
@@ -262,7 +296,7 @@ class FoundationEntry:
         )
 
     def _code(self) -> str:
-        """`lean_code` with any leading comments removed.
+        """`lean_code` with leading comments and own-line attributes removed.
 
         `lean_code` does not begin at the declaration. `_strip_block_comments`
         blanks `/-- ... -/` to spaces before matching, and
@@ -294,6 +328,10 @@ class FoundationEntry:
                 if newline == -1:
                     return ""
                 text = stripped[newline + 1 :]
+                continue
+            first = stripped.split("\n", 1)[0].strip()
+            if "\n" in stripped and re.fullmatch(_ATTRIBUTE, first):
+                text = stripped.split("\n", 1)[1]
                 continue
             return stripped
 
@@ -578,6 +616,7 @@ class FoundationEntry:
             lean_code=d["lean_code"],
             generation=d["generation"],
             author=d["author"],
+            universes=tuple(d.get("universes", ())),
         )
 
 
@@ -598,6 +637,15 @@ class FoundationFile:
     with incompatible structures, only the FIRST verified definition is kept.
     This "first-mover wins" rule prevents compilation errors from incompatible
     definitions. Future: implement voting on conflicts.
+
+    The same goes for any name declared twice, and the later artifact contributes
+    nothing at all: its other entries were verified against its own declaration,
+    not the one they would bind to here. An identical declaration is refused too.
+    Whether two texts mean the same depends on the universes, the commands after
+    them and what's in scope, so comparing them let statements land meaning
+    something else. An artifact importing the foundation can't redeclare a name
+    anyway, so a copy only comes from agents in one generation, and the next
+    generation can import it.
     """
 
     # Core concepts that should only have one definition
@@ -617,8 +665,11 @@ class FoundationFile:
     # Matches: structure Name, def Name, theorem Name, lemma Name, etc.
     # Allows leading whitespace for indented code
     DEFINITION_PATTERN = re.compile(
-        r"^\s*(structure|def|theorem|lemma|abbrev|instance|class|inductive)\s+"
-        r"([A-Za-z_][A-Za-z0-9_\.]*)"
+        rf"^\s*(?:{_ATTRIBUTE}\s*"
+        r"|(?:private|protected|noncomputable|partial|unsafe|nonrec|scoped|local)\s+)*"
+        r"(class\s+inductive|class\s+abbrev|structure|def|theorem|lemma|abbrev|instance|class|inductive)\s+"
+        r"(?:\(\s*priority\s*:=[^)]*\)\s*)?"
+        r"([^\W\d][\w.'!?]*)"
         r"([^\n]*)",
         re.MULTILINE,
     )
@@ -679,6 +730,8 @@ end {FOUNDATION_NAMESPACE}
         self._claimed_concepts: set[str] = (
             set()
         )  # Track which core concepts have definitions
+        #: Why an artifact was refused, by id, so a caller can report it.
+        self._rejections: dict[str, str] = {}
 
     def __len__(self) -> int:
         """Return number of entries in foundation."""
@@ -776,10 +829,9 @@ end {FOUNDATION_NAMESPACE}
             artifact: The artifact to add (must be verified with Lean code)
 
         Returns:
-            True if this call contributed at least one new entry. False means
-            the artifact was silently absorbed -- an id already seen, a
-            conflicting core concept, or every declaration in it duplicating a
-            name already present.
+            True if this call added the artifact. False means it contributed
+            nothing -- an id already seen, or a refusal, which `rejection_reason`
+            explains: a conflicting core concept, or a name already declared.
 
             Returning nothing made those three outcomes indistinguishable from
             success at the call site, so a caller reported a promotion while
@@ -796,6 +848,7 @@ end {FOUNDATION_NAMESPACE}
         # Skip duplicates
         if artifact.id in self._artifact_ids:
             return False
+        self._rejections.pop(artifact.id, None)
 
         # Clean the lean code (remove YAML multiline markers and embedded imports)
         clean_code = artifact.lean_code
@@ -804,13 +857,27 @@ end {FOUNDATION_NAMESPACE}
 
         # Remove problematic statements that conflict with Foundation wrapper:
         # - import statements (must be at file top, Foundation has common imports)
-        # - universe declarations (Foundation header has them)
+        # - universe declarations (the header's, and `save` scopes the rest)
         # - namespace/end statements (conflict with LMS.Foundation namespace)
         _, body_lines = split_imports(clean_code)
+        own_universes = tuple(
+            name
+            for name in declared_universe_order(
+                self._strip_block_comments("\n".join(body_lines)).splitlines()
+            )
+            if name not in FOUNDATION_UNIVERSES
+        )
         clean_lines = []
         for line in body_lines:
             stripped = line.strip()
             if stripped.startswith("universe "):
+                # `universe u in def f ...` on one line still holds a declaration.
+                scoped = re.match(
+                    r"universe\s+(?:[^\W\d][\w'!?]*\s+)*?in\s+(\S.*)",
+                    FoundationEntry._strip_line_comment(stripped),
+                )
+                if scoped:
+                    clean_lines.append(scoped.group(1))
                 continue
             # Remove namespace and end statements (they break Foundation wrapper)
             if stripped.startswith("namespace "):
@@ -827,6 +894,8 @@ end {FOUNDATION_NAMESPACE}
             artifact.generation,
             artifact.created_by,
         )
+        for entry in new_entries:
+            entry.universes = own_universes
 
         # Check for INCOMPATIBLE concept conflicts (different names, same concept)
         # e.g., Foundation has "Category", artifact defines "Cat" → reject entire artifact
@@ -850,29 +919,68 @@ end {FOUNDATION_NAMESPACE}
                     if existing_name and existing_name != entry.name:
                         # TRUE CONFLICT: Different names for same concept (e.g., Category vs Cat)
                         # Reject entire artifact to avoid incompatible definitions
-                        self._artifact_ids.add(
-                            artifact.id
-                        )  # Mark as seen to prevent retry
-                        return False
-                    # If same name, it's just a duplicate - will be skipped below
+                        return self._refuse(
+                            artifact.id,
+                            f"it declares `{entry.name}`, but the foundation "
+                            f"already has `{existing_name}` for that concept",
+                        )
+                    # If same name, the check below refuses it
 
-        # Filter and add entries
-        unique_entries = []
+        # A name that already exists refuses the whole artifact, because its other
+        # entries were verified against its own declaration.
+        own: set[str] = set()
         for entry in new_entries:
-            # Skip if name already exists (duplicate)
             if entry.name in self._definition_names:
-                continue
+                return self._refuse(
+                    artifact.id,
+                    f"it declares `{entry.name}`, which the foundation already has",
+                )
+            if entry.name in own:
+                return self._refuse(artifact.id, f"it declares `{entry.name}` twice")
+            own.add(entry.name)
 
-            # Claim any core concepts defined by this entry
-            if entry.entry_type == "structure" and entry.name in self.CORE_CONCEPTS:
-                self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
-
-            unique_entries.append(entry)
-            self._definition_names.add(entry.name)
-
-        self.entries.extend(unique_entries)
+        for entry in new_entries:
+            self._admit(entry)
+        self.entries.extend(new_entries)
         self._artifact_ids.add(artifact.id)
-        return bool(unique_entries)
+        return True
+
+    def _refuse(self, artifact_id: str, reason: str) -> bool:
+        """Record why an artifact contributes nothing. Always False, for `add_artifact`.
+
+        Its id isn't recorded as seen, so the same work can land once the name is
+        gone: committee ids hash the code, so it comes back under the same id.
+        """
+        self._rejections[artifact_id] = reason
+        return False
+
+    def _admit(self, entry: FoundationEntry) -> None:
+        """Record the name and any core concept that `entry` claims."""
+        if entry.entry_type == "structure" and entry.name in self.CORE_CONCEPTS:
+            self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
+        self._definition_names.add(entry.name)
+
+    def rejection_reason(self, artifact_id: str) -> str | None:
+        """Why `add_artifact` refused this artifact, or None if it didn't."""
+        return self._rejections.get(artifact_id)
+
+    def artifacts_since(
+        self, snapshot: FoundationSnapshot
+    ) -> list[list[FoundationEntry]]:
+        """Entries added after `snapshot`, one list per artifact, in order."""
+        kept = {id(entry) for entry in snapshot.entries}
+        by_artifact: dict[str, list[FoundationEntry]] = {}
+        for entry in self.entries:
+            if id(entry) not in kept:
+                by_artifact.setdefault(entry.artifact_id, []).append(entry)
+        return list(by_artifact.values())
+
+    def reinstate(self, entries: list[FoundationEntry]) -> None:
+        """Put back one artifact's entries after `restore` removed them."""
+        for entry in entries:
+            self._admit(entry)
+            self._artifact_ids.add(entry.artifact_id)
+        self.entries.extend(entries)
 
     # Pattern to match block comments /- ... -/
     BLOCK_COMMENT_PATTERN = re.compile(r"/-.*?-/", re.DOTALL)
@@ -923,8 +1031,11 @@ end {FOUNDATION_NAMESPACE}
         matches = list(self.DEFINITION_PATTERN.finditer(code_without_comments))
 
         for i, match in enumerate(matches):
-            entry_type = match.group(1)  # structure, def, theorem, etc.
-            name = match.group(2)  # Name of the definition
+            # `class inductive P` is an inductive named `P`, not a class named
+            # `inductive`.
+            entry_type = match.group(1).split()[-1]  # structure, def, theorem, etc.
+            # `f.{u}` reads as `f.`: the universe list isn't part of the name.
+            name = match.group(2).rstrip(".")  # Name of the definition
             rest = match.group(3).strip()  # Rest of signature line
 
             signature = f"{entry_type} {name}{rest}"
@@ -1208,6 +1319,10 @@ Create foundational definitions that future generations can build upon.
         # Group by artifact but only write code for unique definitions
         seen_artifacts: set[str] = set()
         written_names: set[str] = set()
+        seed_universes = declared_universe_names(
+            self._strip_block_comments(self.seed_source).splitlines()
+        )
+        section_open = False
 
         for entry in self.entries:
             # Skip if this definition name was already written
@@ -1216,12 +1331,25 @@ Create foundational definitions that future generations can build upon.
 
             if entry.artifact_id not in seen_artifacts:
                 seen_artifacts.add(entry.artifact_id)
+                if section_open:
+                    lean_content += "end\n"
+                    section_open = False
                 lean_content += f"\n-- From {entry.artifact_id} (gen {entry.generation}, {entry.author})\n"
+                # Scoped to the artifact, not hoisted to the header: two
+                # artifacts may pick the same name, and a later `def f.{u₁}`
+                # fails if `u₁` is already bound around it.
+                universes = [n for n in entry.universes if n not in seed_universes]
+                if universes:
+                    lean_content += f"section\nuniverse {' '.join(universes)}\n"
+                    section_open = True
 
             # Write only this entry's code
             lean_content += entry.lean_code
             lean_content += "\n"
             written_names.add(entry.name)
+
+        if section_open:
+            lean_content += "end\n"
 
         lean_content += self.FOUNDATION_FOOTER
 

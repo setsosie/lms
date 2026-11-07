@@ -373,10 +373,15 @@ class Society:
         subsequent generation's `import` -- one bad artifact ends the run,
         and the errors point at the importer rather than the cause.
 
-        Rolling back the whole generation is deliberately blunt. Bisecting to
-        the single offending entry costs one `lake build` per artifact and is
-        worth doing only once there is evidence that partial generations are
-        common; the run surviving at all is the point here.
+        The artifacts are then retried one at a time, in order, and each that
+        builds stays. That costs one `lake build` per artifact, but only after a
+        failed merged build, and keeping a single bad artifact from discarding the
+        rest of a generation is worth it: in the team simulation, two of three
+        generations lost everything to one artifact each.
+
+        Returns:
+            True if everything added since the last good state is on disk and
+            compiled. False if anything was dropped, or nothing could be built.
         """
         self.foundation.save()
 
@@ -396,15 +401,43 @@ class Society:
             print("  [foundation] build FAILED and there is no good state to restore")
             return False
 
-        dropped = self.foundation.restore(self._last_good_foundation)
-        self.foundation.save()
-        restored = await project.rebuild_changed_sources()
+        good = self._last_good_foundation
+        attempted = self.foundation.artifacts_since(good)
+        dropped = self.foundation.restore(good)
+        kept: list[str] = []
+        on_disk = False
+        # With one artifact, the failed build has already named the culprit.
+        if len(attempted) > 1:
+            dropped = []
+            for entries in attempted:
+                self.foundation.reinstate(entries)
+                self.foundation.save()
+                on_disk = await project.rebuild_changed_sources()
+                if on_disk:
+                    good = self.foundation.snapshot()
+                    kept.append(entries[0].artifact_id)
+                else:
+                    self.foundation.restore(good)
+                    dropped.extend(entry.name for entry in entries)
+        self._last_good_foundation = good
+
+        if kept and not dropped:
+            print(
+                "  [foundation] build FAILED, then passed on retry; "
+                f"kept all {len(kept)}"
+            )
+            return True
+
         print(
             f"  [foundation] build FAILED; rolled back {len(dropped)} "
-            f"entr{'y' if len(dropped) == 1 else 'ies'}: {', '.join(dropped) or '(none)'}"
+            f"entr{'y' if len(dropped) == 1 else 'ies'}: {', '.join(dropped) or '(none)'}; "
+            f"kept {len(kept)} artifact{'' if len(kept) == 1 else 's'}"
+            f"{': ' + ', '.join(kept) if kept else ''}"
         )
-        if not restored:
-            print("  [foundation] WARNING: rebuild after rollback also failed")
+        if not on_disk:
+            self.foundation.save()
+            if not await project.rebuild_changed_sources():
+                print("  [foundation] WARNING: rebuild after rollback also failed")
         return False
 
     async def _run_generation_impl(self, generation: int) -> GenerationResult:
@@ -678,10 +711,7 @@ class Society:
                     if self._blocked_by_gates(artifact):
                         self._note_gate_block(artifact)
                     else:
-                        try:
-                            self.foundation.add_artifact(artifact)
-                        except ValueError:
-                            pass  # Skip if artifact has issues
+                        self._promote_to_foundation(artifact)
 
                     # Add successful insights to textbook
                     if artifact.notes:
@@ -808,6 +838,19 @@ class Society:
         milestone in `committee_fix_c`.
         """
         return any(r.outcome is GateOutcome.FAILED for r in artifact.gate_results)
+
+    def _promote_to_foundation(self, artifact: Artifact) -> None:
+        """Add a verified artifact to the foundation, and say so if it's refused."""
+        try:
+            self.foundation.add_artifact(artifact)
+        except ValueError:
+            return  # Skip if artifact has issues
+        reason = self.foundation.rejection_reason(artifact.id)
+        if reason:
+            artifact.notes = (
+                artifact.notes or ""
+            ) + f"\n[Not promoted to foundation — {reason}]"
+            print(f"  [foundation] refused {artifact.id}: {reason}")
 
     def _note_gate_block(self, artifact: Artifact) -> None:
         """Record on the artifact why it was verified but not promoted.
@@ -1037,10 +1080,7 @@ class Society:
                     if self._blocked_by_gates(artifact):
                         self._note_gate_block(artifact)
                     else:
-                        try:
-                            self.foundation.add_artifact(artifact)
-                        except ValueError:
-                            pass  # Skip if artifact has issues
+                        self._promote_to_foundation(artifact)
 
                     # Add successful insights to textbook
                     if artifact.notes:
@@ -1482,11 +1522,7 @@ class Society:
                     if not promoted:
                         self._note_gate_block(artifact)
                     else:
-                        # Add to foundation
-                        try:
-                            self.foundation.add_artifact(artifact)
-                        except ValueError:
-                            pass
+                        self._promote_to_foundation(artifact)
 
                         # Update dependency graph
                         self.dependency_graph.update_status(
