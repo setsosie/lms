@@ -279,6 +279,7 @@ class Society:
 
         if result.artifacts_verified > 0:
             await self.persist_foundation()
+            self._reopen_tags_without_foundation_work()
 
         result.wall_clock_s = time.monotonic() - gen_start
         return result
@@ -352,13 +353,39 @@ class Society:
         Returns:
             True if the restored foundation is on disk and compiled.
         """
-        if await self._write_and_build_foundation():
-            return True
-        # The failed build rolled back to the generation boundary `load`
-        # marked as good and rebuilt that. Whether it compiled decides the
-        # resume; `_write_and_build_foundation` reports False either way.
-        project = getattr(self.verifier, "project", None)
-        return project is not None and await project.rebuild_changed_sources()
+        restored = await self._write_and_build_foundation()
+        if not restored:
+            # The failed build rolled back to the generation boundary `load`
+            # marked as good and rebuilt that. Whether it compiled decides the
+            # resume; `_write_and_build_foundation` reports False either way.
+            project = getattr(self.verifier, "project", None)
+            restored = project is not None and await project.rebuild_changed_sources()
+        self._reopen_tags_without_foundation_work()
+        return restored
+
+    def _reopen_tags_without_foundation_work(self) -> None:
+        """Reopen goal tags backed only by artifacts the foundation doesn't hold.
+
+        Every promotion path marks a tag as it processes results, and the build
+        that can undo them runs afterwards, so this runs once after it. An
+        artifact counts as withdrawn only if the library knows it: seeded tags
+        and tags a goal starts with name artifacts this run never saw.
+        """
+        if self.goal is None:
+            return
+        withdrawn = {
+            artifact_id
+            for defn in self.goal.definitions
+            for artifact_id in defn.artifact_ids
+            if artifact_id in self.library and not self.foundation.holds(artifact_id)
+        }
+        reopened = self.goal.withdraw(withdrawn)
+        if not reopened:
+            return
+        print(f"  [goal] reopened, nothing in the foundation: {', '.join(reopened)}")
+        if self.dependency_graph is not None:
+            for tag in reopened:
+                self.dependency_graph.revert_done(tag)
 
     async def _write_and_build_foundation(self) -> bool:
         """Write the foundation and recompile so imports see current contents.
@@ -851,6 +878,21 @@ class Society:
                 artifact.notes or ""
             ) + f"\n[Not promoted to foundation — {reason}]"
             print(f"  [foundation] refused {artifact.id}: {reason}")
+
+    def _release_gate_blocked_task(self, tag: str, artifact: Artifact) -> None:
+        """Offer a task again after a gate kept its artifact out.
+
+        Left in progress it's never offered again and its dependents stay locked,
+        which on a goal with one available task ends the run's progress for good.
+        A task another group finished stays done.
+        """
+        self._note_gate_block(artifact)
+        graph = self.dependency_graph
+        if graph is None or tag not in graph.nodes:
+            return
+        graph.update_status(tag, TaskStatus.AVAILABLE)
+        if graph.nodes[tag].status is TaskStatus.AVAILABLE:
+            print(f"  [graph] {tag} offered again: a gate kept {artifact.id} out")
 
     def _note_gate_block(self, artifact: Artifact) -> None:
         """Record on the artifact why it was verified but not promoted.
@@ -1520,7 +1562,7 @@ class Society:
                     # the graph then released everything downstream of it.
                     promoted = not self._blocked_by_gates(artifact)
                     if not promoted:
-                        self._note_gate_block(artifact)
+                        self._release_gate_blocked_task(group.config.task_tag, artifact)
                     else:
                         self._promote_to_foundation(artifact)
 

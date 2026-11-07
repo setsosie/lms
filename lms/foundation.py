@@ -960,6 +960,10 @@ end {FOUNDATION_NAMESPACE}
             self._claimed_concepts.add(self.CORE_CONCEPTS[entry.name])
         self._definition_names.add(entry.name)
 
+    def holds(self, artifact_id: str) -> bool:
+        """Whether this artifact's work is in the foundation."""
+        return any(entry.artifact_id == artifact_id for entry in self.entries)
+
     def rejection_reason(self, artifact_id: str) -> str | None:
         """Why `add_artifact` refused this artifact, or None if it didn't."""
         return self._rejections.get(artifact_id)
