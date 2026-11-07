@@ -1004,50 +1004,44 @@ def Cat.other_helper : Nat := 99""",
         # But Category.helper should be there (from accepted artifact)
         assert "Category.helper" in names
 
-    def test_deduplicates_definitions_by_name(self, tmp_path: Path):
-        """An identical re-declaration is skipped and the rest of the artifact kept."""
+    def test_an_artifact_restating_a_definition_is_refused(self, tmp_path: Path):
+        """Its other entries could bind to a declaration they weren't verified against."""
         foundation = FoundationFile(tmp_path / "LMS" / "Foundation.lean")
 
-        # First artifact defines Category
-        artifact1 = Artifact(
-            id="def-cat-gen0",
-            type=ArtifactType.DEFINITION,
-            natural_language="Category v1",
-            lean_code="""structure Category where
+        foundation.add_artifact(
+            Artifact(
+                id="def-cat-gen0",
+                type=ArtifactType.DEFINITION,
+                natural_language="Category v1",
+                lean_code="""structure Category where
   Obj : Type u""",
-            status=VerificationStatus.VERIFIED_LEAN,
-            created_by="agent-0",
-            generation=0,
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-0",
+                generation=0,
+            )
         )
-        foundation.add_artifact(artifact1)
 
-        # Second artifact ALSO defines Category (agent included all definitions)
-        artifact2 = Artifact(
-            id="def-functor-gen1",
-            type=ArtifactType.DEFINITION,
-            natural_language="Functor (includes Category)",
-            lean_code="""structure Category where
+        added = foundation.add_artifact(
+            Artifact(
+                id="def-functor-gen1",
+                type=ArtifactType.DEFINITION,
+                natural_language="Functor (includes Category)",
+                lean_code="""structure Category where
   Obj : Type u
 
 structure Functor (C D : Category) where
   obj : C.Obj → D.Obj""",
-            status=VerificationStatus.VERIFIED_LEAN,
-            created_by="agent-1",
-            generation=1,
+                status=VerificationStatus.VERIFIED_LEAN,
+                created_by="agent-1",
+                generation=1,
+            )
         )
-        foundation.add_artifact(artifact2)
         foundation.save()
 
         content = foundation.path.read_text()
-
-        # Category should only appear once (from gen 0)
-        category_count = content.count("structure Category")
-        assert category_count == 1, (
-            f"Expected 1 Category definition, found {category_count}"
-        )
-
-        # But Functor should be there
-        assert "structure Functor" in content
+        assert added is False
+        assert content.count("structure Category") == 1
+        assert "structure Functor" not in content
 
 
 class TestFoundationCompilation:
