@@ -33,7 +33,8 @@
 Failures that aren't silent, also predating these fixes: a docstring line beginning `universe ` that closes its comment leaves it unterminated; an artifact opening with a bare `section` keeps a stray `end`; names on a continuation line (`universe u₁\n  u₂`) aren't read; `universe x in` with a later `def b.{x}` fails the merged build as already declared.
 
 Neighbours for a card of their own, from the same reviews:
-- **A kill during a merged build can leave a checkpoint that won't resume.** `current_generation` advances before the build, so the artifact being built counts as good, and `restore_foundation` then returns False. A retry after a failed build widens that window.
+- **A kill during a merged build can leave a checkpoint that won't resume.** `current_generation` advances before the build, so the artifact being built counts as good, and `restore_foundation` then returns False, which `run.py` reports as "not resuming". It's loud. A retry after a failed build widens that window. Moving the update after the build looks like the fix.
+- **Identical committee work under two tags is "already seen".** Committee ids hash the name and code, so a second tag's byte-identical artifact gets the first's id. `add_artifact` returns False with no reason, and the tag reads DONE, backed by the first artifact. The declaration is in the foundation, but the tag is closed by work written for another one.
 - **`lake build` has no timeout,** so a hung build holds a job until its walltime.
 - **A gate-blocked or refused artifact's note enters the textbook under a `[VERIFIED]` success entry.**
 
