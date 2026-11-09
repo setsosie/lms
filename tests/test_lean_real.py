@@ -309,3 +309,105 @@ class TestExactProbeContext:
         )
         assert outcome.available is True
         assert outcome.closed_by is not None
+
+
+class TestFoundationCollisions:
+    """What the merge writes compiles, and doesn't rebind what verified."""
+
+    @staticmethod
+    def _compile(tmp_path: Path, *codes: str) -> tuple[FoundationFile, str]:
+        foundation = FoundationFile(tmp_path / "Foundation.lean")
+        for number, code in enumerate(codes):
+            foundation.add_artifact(
+                Artifact(
+                    id=f"artifact-{number}",
+                    type=ArtifactType.DEFINITION,
+                    natural_language="test",
+                    lean_code=code,
+                    created_by="agent-0",
+                    generation=0,
+                    status=VerificationStatus.VERIFIED_LEAN,
+                )
+            )
+        foundation.save()
+        kept = [
+            line
+            for line in foundation.path.read_text().splitlines()
+            if not line.startswith("import ")
+        ]
+        foundation.path.write_text("\n".join(kept) + "\n")
+        proc = subprocess.run(
+            ["lean", str(foundation.path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return foundation, proc.stdout + proc.stderr if proc.returncode else ""
+
+    def test_a_modified_collision_lands_nothing(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "def rep : Nat := 1",
+            "@[reducible] def rep : Nat := 2\n\ntheorem two : rep = 2 := rfl",
+        )
+        assert errors == ""
+        assert "two" not in foundation._definition_names
+
+    def test_primed_names_compile_together(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "def f : Nat := 1\n\ndef f' : Nat := 2\n\ntheorem t : f' = 2 := rfl",
+        )
+        assert errors == ""
+        assert [e.name for e in foundation.entries] == ["f", "f'", "t"]
+
+    def test_a_restated_notation_leaves_the_file_compiling(
+        self, tmp_path: Path
+    ) -> None:
+        """A repeated `notation` would make later uses ambiguous with no build failing."""
+        foundation, errors = self._compile(
+            tmp_path,
+            'def foo : Nat := 1\n\nnotation "FOO" => foo',
+            'def foo : Nat := 1\n\nnotation "FOO" => foo\n\ndef bar : Nat := FOO',
+            "def baz : Nat := FOO",
+        )
+        assert errors == ""
+        assert foundation.path.read_text().count('notation "FOO"') == 1
+        assert "baz" in foundation._definition_names
+
+    def test_a_universe_line_with_a_comment_compiles(self, tmp_path: Path) -> None:
+        _, errors = self._compile(
+            tmp_path,
+            "def g : Nat := 1\n\nuniverse u -- objects live in Type u\n\n"
+            "def h : Type u := PUnit",
+        )
+        assert errors == ""
+
+    def test_a_different_instance_refuses_the_artifact(self, tmp_path: Path) -> None:
+        """`b.n` is 1 alone. If `b` landed on the first instance, it would be 0, and
+        this theorem would fail."""
+        foundation, errors = self._compile(
+            tmp_path,
+            "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨0⟩⟩",
+            "structure Foo where\n  n : Nat\n\ninstance : Inhabited Foo := ⟨⟨1⟩⟩\n\n"
+            "def b : Foo := default\n\ntheorem b_n : b.n = 1 := rfl",
+        )
+        assert errors == ""
+        assert "b_n" not in foundation._definition_names
+
+    def test_a_scoped_universe_line_keeps_its_declaration(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path, "universe u₁ in def foo : Type u₁ := PUnit"
+        )
+        assert errors == ""
+        assert foundation.path.read_text().count("def foo") == 1
+
+    def test_an_attributed_declaration_keeps_its_attribute(
+        self, tmp_path: Path
+    ) -> None:
+        """Dropped before it was an entry, which took the declaration with it."""
+        _, errors = self._compile(
+            tmp_path,
+            "@[reducible] def rep : Nat := 1\n\ntheorem one : rep = 1 := rfl",
+        )
+        assert errors == ""
