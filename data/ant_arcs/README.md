@@ -50,7 +50,18 @@ time (`fe3134f0`). A novelty verdict is only meaningful relative to a Mathlib
 revision — a stale N1 becomes N0 when upstream lands it (HARN-04 card,
 Implementation Notes).
 
-## Validation status: pre-screened, not yet confirmed at the pin
+## Validation status: all 41 elaborate at the pin
+
+**2026-11-09, at `fe3134f0`.** All 41 elaborate, checked by
+`scripts/check_arc_elaboration.py` with the library built at the pin. It frames
+each draft as the `exact?` probe does, and the Lean CI job runs it whenever
+these files change. The R4b box run (2026-11-07) had reported 12 that did not:
+`core-14`, `core-19`, and `ram-02`, `-03`, `-07`, `-08`, `-10`, `-11`, `-12`,
+`-15`, `-18`, `-19`. Those 12 were rewritten in the pinned library's terms
+(`26Q4-CHORE-03`), and each one's `notes` start `REPAIRED 2026-11-09` with what
+changed. `ram-11` was also corrected: its right side said G_P = I_P, a statement
+about f, where Neukirch's is I_P = 1. `ram-09` is still marked SCHEMATIC but
+elaborates as drafted. The history below is kept as it was.
 
 **2026-08-19:** none of the 41 drafts had been elaborated; the local olean cache
 was stale.
