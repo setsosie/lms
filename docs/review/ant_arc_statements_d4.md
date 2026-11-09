@@ -18,10 +18,13 @@ the references. You know this book; expect ~30–60 min for a first pass.
    selection skip statements you'd consider load-bearing?
 
 Lean drafts below are **trimmed to the mathematical content** (binders and
-typeclass stacks elided; full signatures in the JSON). None has been elaborated
-against Mathlib (local olean cache is stale — see `data/ant_arcs/README.md`);
-`SCHEMATIC` marks drafts with known placeholder names. For D4 purposes the
-informal statement is the object of review; the Lean is best-effort.
+typeclass stacks elided; full signatures in the JSON). All 41 elaborate at the
+pin `fe3134f0` as of 2026-11-09 (`scripts/check_arc_elaboration.py`, also run
+by the Lean CI job). `repaired 2026-11-09` marks the 12 drafts rewritten to get
+there: their placeholders became the library's terms, and each one's `notes` in
+the JSON says what changed. **Check those 12 for faithfulness first.**
+`SCHEMATIC` still marks `ram-09`, which elaborates as drafted. For D4 purposes
+the informal statement is the object of review.
 
 ## Open questions for you
 
@@ -95,8 +98,10 @@ Nonzero fractional ideals of a Dedekind domain: I · I⁻¹ = (1).
 X convex, symmetric, vol(X) > 2ⁿ covol(Γ) ⇒ X contains a nonzero lattice point. (Drafted for Γ = ℤⁿ.)
 `Convex S → symm S → 2^n < vol S → ∃ x : ℤⁿ, x ≠ 0 ∧ x ∈ S`
 
-**core-14 · ideal lattice covolume** — Ch I §5 · SCHEMATIC
-j(a) ⊂ K_ℝ is a complete lattice of covolume √|d_K| · 𝔑(a). Check: measure normalization is the book's canonical one.
+**core-14 · ideal lattice covolume** — Ch I §5 · repaired 2026-11-09
+j(a) ⊂ K_ℝ is a complete lattice of covolume √|d_K| · 𝔑(a).
+`IsZLattice ℝ (idealLattice K a) ∧ covolume (idealLattice K a) = 𝔑(a) · 2⁻ˢ · √|d_K|`
+Measure: the library's covolume is for Lebesgue measure, and the book's canonical measure is 2ˢ times it, hence 2⁻ˢ.
 
 **core-15 · element of small norm** — Ch I §5–§6
 Every nonzero ideal contains a ≠ 0 with |N(a)| ≤ (2/π)^s √|d_K| 𝔑(a). (Book's constant, not the sharper Minkowski bound — Q2 above.)
@@ -112,8 +117,10 @@ Each class contains integral a with 𝔑(a) ≤ (2/π)^s √|d_K|.
 Roots of unity in K form a finite cyclic group.
 `Finite (torsion K) ∧ IsCyclic (torsion K)`
 
-**core-19 · unit log-lattice complete in H** — Ch I §7 · SCHEMATIC
+**core-19 · unit log-lattice complete in H** — Ch I §7 · repaired 2026-11-09
 λ(O_Kˣ) is a complete lattice in the trace-zero hyperplane; ker λ = μ(K).
+`IsZLattice ℝ (unitLattice K) ∧ ∀ x, logEmbedding x = 0 ↔ x ∈ torsion K`
+The library drops one place w₀'s coordinate, which identifies H with ℝʳ.
 
 **core-20 · Dirichlet unit theorem** — Ch I §7 (7.4?)
 O_Kˣ ≅ μ(K) × ℤ^{r+s−1}.
@@ -125,12 +132,14 @@ O_Kˣ ≅ μ(K) × ℤ^{r+s−1}.
 A Dedekind, L/K finite separable ⇒ B = integral closure of A in L is Dedekind.
 `IsDedekindDomain (integralClosure A L)` · N0-anchor
 
-**ram-02 · fundamental identity** — Ch I §8 (8.2?)
-Σ eᵢfᵢ = [L:K].
+**ram-02 · fundamental identity** — Ch I §8 (8.2?) · repaired 2026-11-09
+Σ eᵢfᵢ = [L:K]. (Only a `DecidableEq` instance added.)
 `∑ P | p, e(P) * f(P) = finrank K L`
 
-**ram-03 · Dedekind–Kummer** — Ch I §8 (8.3?) · SCHEMATIC
-Factorization of p in A[θ] mirrors factorization of minpoly(θ) mod p (p prime to conductor). Check: the conductor hypothesis is dropped in the draft.
+**ram-03 · Dedekind–Kummer** — Ch I §8 (8.3?) · repaired 2026-11-09
+Factorization of p in A[θ] mirrors factorization of minpoly(θ) mod p (p prime to conductor).
+`F ⊔ p = ⊤ → ḡ = ∏ ḡᵢ^eᵢ → pB = ∏ (pB + gᵢ(θ)B)^eᵢ ∧ f(Pᵢ|p) = deg gᵢ ∧ Pᵢ distinct`
+The conductor hypothesis the draft dropped is back, and the factorization into distinct irreducibles is a hypothesis on monic lifts gᵢ.
 
 **ram-04 · finitely many ramified primes** — Ch I §8
 Only finitely many p ramify in K (those dividing d_K).
@@ -141,30 +150,36 @@ Only finitely many p ramify in K (those dividing d_K).
 **ram-06 · n = efg in Galois extensions** — Ch I §9
 e, f constant over p; e·f·g = n.
 
-**ram-07 · |G_P| = e·f** — Ch I §9 · SCHEMATIC
+**ram-07 · |G_P| = e·f** — Ch I §9 · repaired 2026-11-09
 Decomposition group order e·f, index g.
+`#G_P = e·f ∧ (G : G_P) = #(primes over p)`. The draft had only the order.
 
-**ram-08 · decomposition field** — Ch I §9 · SCHEMATIC
+**ram-08 · decomposition field** — Ch I §9 · repaired 2026-11-09
 In Z_P = L^{G_P}: e(P_Z|p) = f(P_Z|p) = 1; P unique over P_Z.
+`e(P_Z|p) = 1 ∧ f(P_Z|p) = 1 ∧ ∀ Q prime, Q ∩ O_Z = P_Z → Q = P`
 
 **ram-09 · G_P ↠ Gal(κ(P)/κ(p))** — Ch I §9 · SCHEMATIC
 Residue extension normal; reduction map surjective.
 
-**ram-10 · |I_P| = e** — Ch I §9 · SCHEMATIC
+**ram-10 · |I_P| = e** — Ch I §9 · repaired 2026-11-09
 Inertia group order e; G_P/I_P ≅ Gal(κ(P)/κ(p)).
+`#I_P = e`, and the reduction G_P → Aut(κ(P)/κ(p)) is surjective with kernel I_P.
 
-**ram-11 · unramified ⇔ I_P trivial** — Ch I §9
-`e = 1 ↔ ∀ σ ∈ G_P, ∀ x, σx ≡ x mod P`
+**ram-11 · unramified ⇔ I_P trivial** — Ch I §9 · repaired 2026-11-09
+`e = 1 ↔ I_P = 1`
+Corrected: the draft's right side said G_P = I_P, which is f = 1, not e = 1.
 
-**ram-12 · O_{ℚ(ζₙ)} = ℤ[ζₙ]** — Ch I §10 · SCHEMATIC
+**ram-12 · O_{ℚ(ζₙ)} = ℤ[ζₙ]** — Ch I §10 · repaired 2026-11-09
+`IsPrimitiveRoot ζ n → Algebra.adjoin ℤ {ζ} = ⊤` in O_{ℚ(ζₙ)}
 
 **ram-13 · [ℚ(ζₙ):ℚ] = φ(n)** — Ch I §10
 `finrank ℚ (CyclotomicField n ℚ) = totient n`
 
 **ram-14 · p ramifies in ℚ(ζₙ) ⇔ p | n** — Ch I §10 (convention: Q3 above)
 
-**ram-15 · cyclotomic splitting law** — Ch I §10 · SCHEMATIC
+**ram-15 · cyclotomic splitting law** — Ch I §10 · repaired 2026-11-09
 p ∤ n splits into φ(n)/f primes, f = ord of p in (ℤ/n)ˣ.
+`f(P|p) = ord_n(p) ∧ #(primes over p) · ord_n(p) = φ(n)`. The draft had only f.
 
 **ram-16 · different well-defined** — Ch III §2
 Inverse different is a fractional ideal ⊇ B; 𝔡 = its inverse is a nonzero integral ideal.
@@ -173,11 +188,13 @@ Inverse different is a fractional ideal ⊇ B; 𝔡 = its inverse is a nonzero i
 **ram-17 · P ramified ⇔ P | 𝔡** — Ch III §2 (2.6?)
 Dedekind's theorem on the different.
 
-**ram-18 · v_P(𝔡) = e−1 iff tame** — Ch III §2 (2.6?) · SCHEMATIC
+**ram-18 · v_P(𝔡) = e−1 iff tame** — Ch III §2 (2.6?) · repaired 2026-11-09
 Tame: exactly e−1; wild: ≥ e. Check: draft states only the tame equality.
+`char κ(p) ∤ e → v_P(𝔇) = e − 1`, with κ(P)/κ(p) separable as in III §2.
 
-**ram-19 · disc = N(different)** — Ch III §2 · SCHEMATIC
+**ram-19 · disc = N(different)** — Ch III §2 · repaired 2026-11-09
 𝔡isc_{B/A} = N_{L/K}(𝔡_{B/A}).
+`span {d(α) : α a basis of L/K inside B} = relNorm A (differentIdeal A B)`. The library has no relative discriminant ideal, so the book's definition is written out.
 
 **ram-20 · monogenic different** — Ch III §2
 B = A[θ] ⇒ 𝔡 = (f′(θ)).
