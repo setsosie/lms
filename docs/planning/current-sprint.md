@@ -68,8 +68,8 @@ Sprint 3. They are still what this sprint is for.
 |------|------|-----|--------|-------|
 | R0 | Inventory (read-only) | — | ✅ DONE | The box was restored to an earlier state |
 | R1–R3 | Scratch routing, Lean toolchain + library build, Python env + suite | — | ✅ DONE | As one batch job on 2026-11-04, in a dedicated worktree: pinned toolchain, 937 passed, 1 sorry |
-| R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 2 | 🔄 RE-RUN | Ran 2026-11-04, but its densities were mostly classifier misses and its control couldn't fail. The classifier fix (#82) merged 2026-11-06; the re-run at that commit is next, once R5 has finished |
-| R5 | CVFN denominator from a real run | 3 | 🔄 IN PROGRESS | No `attempts.json` survived, so R5b. It failed 2026-11-05: vLLM's kernels need a CUDA toolkit the node doesn't have on its default paths. A retry with those kernels off was started 2026-11-06, untested on a GPU until it returns |
+| R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 2 | 🔄 IN PROGRESS | Ran 2026-11-04, but its densities were mostly classifier misses and its control couldn't fail. Re-ran 2026-11-07 at #82's commit: control N1 4/52, core 6/20, ramification 7/21, decisive N1 0 on all three, as the replay forecast. Arc N1 bounds nothing, so the slice number comes from the D4 read of each statement's candidates, under way. 12 drafts (10 ramification, 2 core) don't compile at the pin and are unmeasured |
+| R5 | CVFN denominator from a real run | 3 | 🔄 IN PROGRESS | No `attempts.json` survived, so R5b. It failed 2026-11-05: vLLM's kernels need a CUDA toolkit the node doesn't have on its default paths. Retry R5c hung in NCCL start-up; R5d passed NCCL on 2026-11-07, then died in vLLM's sampler, which compiles a FlashInfer kernel without checking for the toolkit. R5e, queued 2026-11-09, turns that sampler off too and checks each setting with a real request |
 | R6 | Committee re-run, `committee_fix_c` config at TP=2 | — | 🔲 PENDING | Not a DoD item: the first post-box experiment (#67, merged 2026-10-20). Needs R5's retry to pass, its flags in `lms_run.sbatch`, and `26Q4-HARN-16`/`-17`, because the run exists to separate harness faults from the model |
 | R7 | Three groups on three tags: one committee generation on `stacks-kernel-track-b` | — | 🔲 PENDING | Not a DoD item: the box half of HARN-27's Outcome Demo. R6's goal has no edges, so it can't show this |
 
@@ -88,9 +88,9 @@ worked during the box runs because the runs are the user's to execute.
 | 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | 🔲 PENDING | — | Before Phase C. From #82's review: library results can read decisive N1 at Gate 4. The choice of rule is the user's |
 | 26Q4-HARN-14: Tell an exhausted exact? from a miss | 2 | 🔲 PENDING | — | Before Phase C. From #82's review. Starts by measuring how often it happens, on the box |
 | 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | 🔲 PENDING | — | Before Phase C. From #82's reviews. All 10 control N0s at R4 came from name search, so the fix may leave the control with none. The choice of rule is the user's |
-| 26Q4-HARN-16: Foundation merge keeps universes the header doesn't bind | 1 | 🔄 IN REVIEW | #84 | Before R6. From the 2026-11-06 team simulation: one artifact's `universe` line rolled back a whole generation |
-| 26Q4-HARN-17: A name collision can't discard a generation's verified work | 3 | 🔄 IN REVIEW | #86 | Before R6. Refuses a differing re-declaration and rolls back per artifact |
-| 26Q4-HARN-18: Rollback reopens the goal tags it undid | 2 | 🔄 IN REVIEW | #88, on #86 | Before the DAG run. A tag reads DONE only while the foundation holds work behind it. Also returns a gate-blocked committee tag to available, because leaving it in progress stalls a chain goal |
+| 26Q4-HARN-16: Foundation merge keeps universes the header doesn't bind | 1 | ✅ DONE | #84, merged 2026-11-09 | Before R6. From the 2026-11-06 team simulation: one artifact's `universe` line rolled back a whole generation |
+| 26Q4-HARN-17: A name collision can't discard a generation's verified work | 3 | ✅ DONE | #86, merged 2026-11-09 | Before R6. Refuses a differing re-declaration and rolls back per artifact |
+| 26Q4-HARN-18: Rollback reopens the goal tags it undid | 2 | ✅ DONE | #88, merged 2026-11-09 | Before the DAG run. A tag reads DONE only while the foundation holds work behind it. Also returns a gate-blocked committee tag to available, because leaving it in progress stalls a chain goal |
 | 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | 🔲 PENDING | — | Before Phase C. From the reviews of `-16` and `-17`: universe order, shadowing and dropped text can change a statement's meaning with the merged file still compiling. The choice of approach is the user's |
 
 ## Pulled forward: Phase C preparation (2026-10-30)
@@ -157,6 +157,7 @@ the planning tooling). Cards for this sprint live under
 
 ## Sync Log
 
+- **2026-11-09** — 3 tasks reconciled: `26Q4-HARN-16`/`-17`/`-18` done (#84, #86, #88), so R6 has its harness fixes. R4 re-ran at #82's commit; the slice waits on the D4 read. R5 is on its fifth attempt (R5e). Committed points unchanged at 3/3.
 - **2026-11-06** — Server-run and task rows caught up with what has run and
   merged since 2026-10-30. R0–R3 are done and R4 ran once; #82 merged, so R4
   re-runs at that commit. `26Q4-HARN-15` to `-19` added. The DoD
@@ -184,4 +185,4 @@ the planning tooling). Cards for this sprint live under
 
 ---
 
-*Last Updated: 2026-11-06*
+*Last Updated: 2026-11-09*
