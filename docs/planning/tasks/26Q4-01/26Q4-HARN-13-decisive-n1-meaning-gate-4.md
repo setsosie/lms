@@ -97,3 +97,12 @@ See `scripts/verify/26Q4-01/verify_26Q4-HARN-13.sh`.
 - [ ] PR opened with <500 lines changed (target) / <1000 (max)
 - [ ] Tests included with implementation
 - [ ] Outcome Demo run by a human validator
+
+---
+
+#### Notes
+
+From the independent review at the final gate of `26Q4-HARN-09` (2026-11-06, at `3185b0e`), reproduced with a probe and not blocking:
+
+- **Binder case can flip a verdict to decisive N1.** `extract_identifiers` drops a dotted name with a lowercase head. `theorem t (R : Type) [CommRing R] (P : Ideal R) (hP : P.IsPrime) : (P.comap (RingHom.id R)).IsPrime := sorry` with hit `Ideal.IsPrime.comap`, in Gate 4's configuration with the other stages empty, reads INCONCLUSIVE 0.5. Renaming `P` to `p` loses the `is` and `prime` tokens and reads N1 0.90, counted without review. "Renaming a binder changes no verdict" holds only for capital-to-capital renames.
+- **Real-data impact:** none seen. Lowercasing every capital single-letter binder used dotted, across the 15 core and ramification statements in the recorded-hits fixture, flipped nothing in either configuration.
