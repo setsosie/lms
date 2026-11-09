@@ -294,9 +294,15 @@ cd ~/code/lms && uv run python -c "import json,glob; [print(s['id'], s['stage_er
    the eponym as `evidence[0]`. That is the instrument working; their notes
    expect N0. At the 2026-11-04 run core-13 and core-20 read N1 all the same, and
    they stay N1 when their hits are replayed. Every arc statement is a single
-   declaration, so an `exact?` close still reads N0 here. A miss is weaker than
-   it looks: `exact?` can run out of budget and report a miss, and how often that
-   happens at the default budget is unmeasured.
+   declaration, so an `exact?` close still reads N0 here. A miss can be weaker
+   than it looks: an `exact?` that runs out of heartbeats prints the same "could
+   not close" as one that finished, and the output can't tell them apart. At the
+   pin, R4b's 18 misses were all genuine. Re-run with no limit, every one still
+   missed, using 13,441 to 193,525 thousand heartbeats against the default
+   200,000 (`scripts/research/measure_exact_budget.py`, 2026-11-09). Two came
+   close: core-17 used 97% of the budget and ram-16 88%. So a miss on a statement
+   not in that list, including a re-drafted one, is unchecked until it is
+   measured the same way.
 3. **Elaboration at the pin.** The 2026-10-08 pre-screen against a newer
    library build expects only SCHEMATIC drafts here (13 of them). Paste any
    non-SCHEMATIC id: it gets repaired in one pass through a PR, and a re-run
