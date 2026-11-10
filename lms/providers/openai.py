@@ -7,7 +7,13 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
 from lms.config import ProviderConfig
-from lms.providers.base import BaseLLMProvider, GenerationResponse, Message, TokenUsage
+from lms.providers.base import (
+    BaseLLMProvider,
+    GenerationResponse,
+    Message,
+    TokenUsage,
+    split_thinking,
+)
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -87,10 +93,23 @@ class OpenAIProvider(BaseLLMProvider):
         )
         self._track_usage(usage)
 
+        message = response.choices[0].message
+        # None happens on refusals and tool-only turns; the harness treats
+        # content as text everywhere, so empty is the faithful mapping.
+        #
+        # A local thinking model returns its scratch work in front of the
+        # answer. Read whole, the first code fence a working group finds is the
+        # first thing the model tried, and every reply pasted into the next
+        # prompt carries its thinking along until the server refuses the
+        # prompt. A server with a reasoning parser has already split it off.
+        thinking, content = split_thinking(message.content or "")
+        separated = getattr(message, "reasoning_content", None)
+        if not thinking and isinstance(separated, str):
+            thinking = separated.strip()
+
         return GenerationResponse(
-            # None happens on refusals and tool-only turns; the harness treats
-            # content as text everywhere, so empty is the faithful mapping.
-            content=response.choices[0].message.content or "",
+            content=content,
             usage=usage,
             provider=self.name,
+            thinking=thinking,
         )

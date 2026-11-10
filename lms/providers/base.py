@@ -34,17 +34,53 @@ class TokenUsage:
         return self.input_tokens - self.cache_read_tokens
 
 
+# What ends a thinking block. Models that think (Qwen3, DeepSeek-R1 and others)
+# emit their scratch work first, then this tag, then the answer.
+_THINKING_END = "</think>"
+_THINKING_START = "<think>"
+
+
+def split_thinking(text: str) -> tuple[str, str]:
+    """Split a reply into (thinking, answer).
+
+    Some chat templates supply the opening tag themselves, so the reply starts
+    inside the thinking block and only the closing tag appears in it. The
+    answer is what follows the last closing tag: thinking may quote the tag,
+    and a model's own reference parser splits there too. A reply with no
+    closing tag is all answer, which is every model that does not think and
+    also a thinking reply cut off before it finished. The two cannot be told
+    apart here.
+
+    Args:
+        text: The reply exactly as the server returned it.
+
+    Returns:
+        The thinking, stripped, and the answer with only the newlines that
+        separated it from the tag removed.
+    """
+    thinking, tag, answer = text.rpartition(_THINKING_END)
+    if not tag:
+        return "", text
+    return thinking.strip().removeprefix(_THINKING_START).strip(), answer.lstrip("\n")
+
+
 @dataclass
 class GenerationResponse:
     """Response from an LLM generation call.
 
     Like a letter received from a mathematician - contains the content
     and a record of the correspondence cost.
+
+    `content` is the answer only. `thinking` is the scratch work a thinking
+    model produced before it, which nothing downstream may parse, quote back
+    to the model or count as a proposal. Its tokens are in `usage` all the
+    same: the model spent them.
     """
 
     content: str
     usage: TokenUsage
     provider: str
+    thinking: str = ""
 
 
 class BaseLLMProvider(ABC):
