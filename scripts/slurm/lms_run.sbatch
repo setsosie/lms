@@ -10,13 +10,11 @@
 #   sbatch --export=ALL,RESUME=1,RUN_TAG=<tag>,... scripts/slurm/lms_run.sbatch  # after a walltime
 #
 # ---------------------------------------------------------------------------
-# SITE CONFIG -- resolved 2026-08-10 on mahpiya:
-#   sinfo  -> "gpu* infinite gpu:h100:4 localhost"  (single node, default part.)
-#   sacctmgr -> no accounting_storage plugin, so --account must NOT be set
-# UNRESOLVED on the box as restored 2026-10: partition, gres name and
-# accounting may all differ. Command-line flags override the directives
-# below, so pass -p / --gres / --account from the restore runbook's Step R0
-# rather than editing them here on a guess.
+# SITE CONFIG -- from the restore runbook's Step R0, run 2026-11-04:
+#   one node, default partition gpu* (2-day limit), four GPUs whose gres name
+#   is gpu:nvidia_h100_nvl. The name before the restore, gpu:h100, is refused.
+#   No --account is needed.
+# Command-line flags override the directives below.
 # ---------------------------------------------------------------------------
 #SBATCH --job-name=lms-run
 #SBATCH --partition=gpu
@@ -26,8 +24,8 @@
 # All four GPUs by default (decided 2026-08-19; runbook 4d) — the 9-agent
 # config slightly exceeds TP=2's 1,139,984-token KV cache. Walltime sized for
 # a 2M-token budget run (est. up to ~6 h for the 1-agent config). On a shared
-# day: sbatch --gres=gpu:h100:2 --time=04:00:00 --export=ALL,TP_SIZE=2 ...
-#SBATCH --gres=gpu:h100:4
+# day: sbatch --gres=gpu:nvidia_h100_nvl:2 --time=04:00:00 --export=ALL,TP_SIZE=2 ...
+#SBATCH --gres=gpu:nvidia_h100_nvl:4
 #SBATCH --time=08:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
@@ -43,6 +41,10 @@ ITERATIVE="${ITERATIVE:-1}"          # 1 = pass --iterative
 # silently ignores assignments to it.
 N_GROUPS="${N_GROUPS:-0}"
 REPAIR_ATTEMPTS="${REPAIR_ATTEMPTS:-2}"  # committee mode only
+# Token budget for the whole run (--max-tokens); empty = no limit. The harness
+# checks it when a generation starts, so a run stops at the first generation
+# boundary past the budget, not at the exact token.
+MAX_TOKENS="${MAX_TOKENS:-}"
 RUN_TAG="${RUN_TAG:-slurm_${SLURM_JOB_ID:-manual}}"
 # 1 = continue experiments/$RUN_TAG from its checkpoint, to GENERATIONS total.
 # Pass the same mode knobs as the original job; the checkpoint does not keep them.
@@ -57,6 +59,22 @@ SERVED_NAME="${SERVED_NAME:-lms-generalist}"
 PORT="${PORT:-8000}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-131072}"
 TP_SIZE="${TP_SIZE:-4}"
+# Seconds to wait for the server to list its model. A cold load took about
+# 3 minutes on the box; the old loop said 600 s and really waited up to 20 min.
+READY_TIMEOUT="${READY_TIMEOUT:-900}"
+# vLLM 0.33.0 compiles its DeepGEMM and FlashInfer kernels at load, which needs a
+# CUDA toolkit this node doesn't have on its default paths: it died in
+# find_cuda_toolkit. Its GDN prefill also picks FlashInfer without checking that
+# it's there, so a run gets past startup and fails on the first real request.
+# Its sampler does the same: it checks the GPU but not the toolkit, and died in
+# the first sampling pass (round R5d).
+# These use the kernels that need no toolkit. Override them if one is installed.
+export VLLM_USE_DEEP_GEMM="${VLLM_USE_DEEP_GEMM:-0}"
+export VLLM_ALLREDUCE_USE_FLASHINFER="${VLLM_ALLREDUCE_USE_FLASHINFER:-0}"
+export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-triton}"
+# Anything else for `vllm serve`, split on spaces (e.g. "--enforce-eager").
+LMS_EXTRA_VLLM_ARGS="${LMS_EXTRA_VLLM_ARGS:-}"
 
 # --- Scratch routing --------------------------------------------------------
 # A batch job does NOT source ~/.bashrc, so nothing exported interactively in
@@ -94,6 +112,7 @@ echo "=== LMS run $RUN_TAG ==="
 echo "node=$(hostname)  job=${SLURM_JOB_ID:-none}  gpus=${CUDA_VISIBLE_DEVICES:-unset-by-slurm}"
 echo "agents=$AGENTS generations=$GENERATIONS goal=$GOAL iterative=$ITERATIVE n_groups=$N_GROUPS"
 echo "resume=$RESUME checkpoint_interval=$CHECKPOINT_INTERVAL out=$OUT_DIR"
+echo "max_tokens=${MAX_TOKENS:-unlimited}"
 
 # Before vLLM loads, like the check below: a fresh run over a checkpoint
 # overwrites it, and a resume with no checkpoint has nothing to continue.
@@ -106,6 +125,12 @@ if [ "$RESUME" = "1" ]; then
 fi
 if [ "$RESUME" != "1" ] && [ -f "$OUT_DIR/results.json" ]; then
   echo "FATAL: $OUT_DIR already holds a run; pass RESUME=1 or a new RUN_TAG"
+  exit 2
+fi
+
+# Same reason: argparse would reject it, but only after vLLM has loaded.
+if [ -n "$MAX_TOKENS" ] && ! [[ "$MAX_TOKENS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "FATAL: MAX_TOKENS=$MAX_TOKENS is not a positive whole number"
   exit 2
 fi
 
@@ -183,6 +208,8 @@ echo "--- starting vLLM on GPUs ${CUDA_VISIBLE_DEVICES:-all} (log: $VLLM_LOG) --
   --tensor-parallel-size "$TP_SIZE" \
   --max-model-len "$MAX_MODEL_LEN" \
   --served-model-name "$SERVED_NAME" \
+  --gdn-prefill-backend "$GDN_PREFILL_BACKEND" \
+  $LMS_EXTRA_VLLM_ARGS \
   > "$VLLM_LOG" 2>&1 &
 VLLM_PID=$!
 
@@ -197,9 +224,12 @@ trap cleanup EXIT INT TERM
 
 # --- Wait for readiness -----------------------------------------------------
 # Poll rather than sleep: load time varies with page cache and is ~2-3 min cold.
-echo "--- waiting for vLLM on port $PORT ---"
+# vLLM binds the port long before it can answer, so a `curl` during load waits
+# out its own limit: time comes from the clock, not from counting loops.
+echo "--- waiting for vLLM on port $PORT (up to ${READY_TIMEOUT}s) ---"
 READY=0
-for i in $(seq 1 120); do
+WAIT_START=$SECONDS
+while [ $((SECONDS - WAIT_START)) -lt "$READY_TIMEOUT" ]; do
   if ! kill -0 "$VLLM_PID" 2>/dev/null; then
     echo "FATAL: vLLM died during startup. Tail of $VLLM_LOG:"
     tail -40 "$VLLM_LOG"
@@ -207,12 +237,12 @@ for i in $(seq 1 120); do
   fi
   if curl -sS --max-time 5 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; then
     READY=1
-    echo "vLLM ready after ~$((i * 5))s"
+    echo "vLLM ready after ~$((SECONDS - WAIT_START))s"
     break
   fi
   sleep 5
 done
-[ "$READY" -eq 1 ] || { echo "FATAL: vLLM not ready after 600s"; tail -40 "$VLLM_LOG"; exit 1; }
+[ "$READY" -eq 1 ] || { echo "FATAL: vLLM not ready after ${READY_TIMEOUT}s"; tail -40 "$VLLM_LOG"; exit 1; }
 
 grep -m1 "GPU KV cache size" "$VLLM_LOG" || true
 
@@ -221,6 +251,8 @@ ITER_FLAG=""
 [ "$ITERATIVE" = "1" ] && ITER_FLAG="--iterative"
 MODE_FLAGS=""
 [ "$N_GROUPS" -gt 0 ] && MODE_FLAGS="--groups --n-groups $N_GROUPS --repair-attempts $REPAIR_ATTEMPTS"
+BUDGET_ARGS=()
+[ -n "$MAX_TOKENS" ] && BUDGET_ARGS=(--max-tokens "$MAX_TOKENS")
 RESUME_ARGS=()
 TEE_ARGS=()
 if [ "$RESUME" = "1" ]; then
@@ -238,6 +270,7 @@ uv run python -m lms.run \
   --goal "$GOAL" \
   $ITER_FLAG \
   $MODE_FLAGS \
+  ${BUDGET_ARGS[@]+"${BUDGET_ARGS[@]}"} \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   --checkpoint-interval "$CHECKPOINT_INTERVAL" \
   --output "$OUT_DIR" \

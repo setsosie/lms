@@ -533,6 +533,14 @@ grep 'Planning panel:' ~/code/lms/logs/lms-run-JOBID.out
 cd ~/code/lms && uv run python -m lms.accounting experiments/committee_dag_a
 ```
 
+To use the node overnight, run R7 for longer. Raise `GENERATIONS` and the walltime
+and keep the same `RUN_TAG`. The goal has 40 statements, and this is the first
+sustained run with groups on different statements. The checkpoint below reads only
+generation 0, so more generations don't change it. A job killed at its walltime
+keeps its finished generations and can be resumed as in R6. To queue it behind R6,
+add `--dependency=afterany:R6JOBID`, so an R6 that hits its walltime still lets it
+start.
+
 **Checkpoint R7.** Both read-backs are needed. If the chair's output doesn't
 parse, the harness silently assigns the first three available tags, and the
 ledger still reads `3`.
@@ -544,6 +552,13 @@ ledger still reads `3`.
   a partial result, not a pass.
 - **The ledger reads below `3`.** Not a pass. Two groups shared a tag, or a group
   never called the model.
+
+On a longer run, also read how much verified work reached the foundation, and
+which tags reopened, because those decide whether anything accumulated:
+
+```bash
+grep -E '\[foundation\]|\[goal\]' ~/code/lms/logs/lms-run-JOBID.out
+```
 
 Keep `experiments/committee_dag_a/` whatever the result. This is the first run
 with groups on different nodes in one generation. Its failed artifacts show
