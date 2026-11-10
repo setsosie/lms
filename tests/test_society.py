@@ -1625,3 +1625,226 @@ class TestCommitteeCastScaling:
         assert result.artifacts_created == 1
         provider = society.provider
         assert provider.call_count == 5
+
+
+# =============================================================================
+# The R9 arm's flag: --reset-each-generation reaches the society (ADR 0003)
+# =============================================================================
+
+
+def _no_work(seen: list[bool]):
+    """A `run_generation` that records the society's reset flag and does nothing."""
+
+    async def _generation(self: Society, generation: int) -> GenerationResult:
+        seen.append(self.reset_foundation_each_generation)
+        self.current_generation = generation + 1
+        return GenerationResult(
+            generation=generation,
+            artifacts_created=0,
+            artifacts_verified=0,
+            artifacts_referenced=0,
+            fresh_creations=0,
+        )
+
+    return _generation
+
+
+class TestResetEachGenerationFlag:
+    def test_the_flag_parses_and_defaults_off(self):
+        from lms.run import build_parser
+
+        parser = build_parser()
+        assert parser.parse_args(["--reset-each-generation"]).reset_each_generation
+        assert parser.parse_args([]).reset_each_generation is False
+
+    def test_the_help_names_the_decision(self):
+        from lms.run import build_parser
+
+        assert "ADR 0003" in " ".join(build_parser().format_help().split())
+
+    @pytest.mark.parametrize("on", [True, False])
+    @pytest.mark.asyncio
+    async def test_a_run_sets_the_flag_and_records_it_before_generating(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, on: bool
+    ):
+        """In `metadata.json` from the start: a walltime kill skips the end."""
+        import json
+
+        from lms.config import Config
+        from lms.run import run_experiment
+
+        monkeypatch.setattr(
+            "lms.run.create_provider", lambda name, cfg: MockProvider(cfg)
+        )
+        out = tmp_path / "out"
+        seen: list[bool] = []
+        recorded: list[object] = []
+        record_flag = _no_work(seen)
+
+        async def _generation(self: Society, generation: int) -> GenerationResult:
+            metadata = json.loads((out / "metadata.json").read_text())
+            recorded.append(metadata.get("reset_each_generation"))
+            return await record_flag(self, generation)
+
+        monkeypatch.setattr(Society, "run_generation", _generation)
+
+        await run_experiment(
+            n_agents=1,
+            n_generations=1,
+            provider_name="anthropic",
+            output_dir=out,
+            config=Config(anthropic=ProviderConfig(api_key="k", model="m")),
+            verifier_type="mock",
+            reset_each_generation=on,
+        )
+
+        assert seen == [on]
+        assert recorded == [on]
+        final = json.loads((out / "metadata.json").read_text())
+        assert final["reset_each_generation"] is on
+
+    @pytest.mark.asyncio
+    async def test_a_run_that_does_not_ask_records_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        import json
+
+        from lms.config import Config
+        from lms.run import run_experiment
+
+        monkeypatch.setattr(
+            "lms.run.create_provider", lambda name, cfg: MockProvider(cfg)
+        )
+        seen: list[bool] = []
+        monkeypatch.setattr(Society, "run_generation", _no_work(seen))
+
+        await run_experiment(
+            n_agents=1,
+            n_generations=1,
+            provider_name="anthropic",
+            output_dir=tmp_path / "out",
+            config=Config(anthropic=ProviderConfig(api_key="k", model="m")),
+            verifier_type="mock",
+        )
+
+        assert seen == [False]
+        metadata = json.loads((tmp_path / "out" / "metadata.json").read_text())
+        assert metadata["reset_each_generation"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_resume_takes_the_flag_from_its_own_command_line(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        import json
+
+        from lms.config import Config
+        from lms.run import resume_experiment
+        from tests.test_resume_foundation import _checkpoint
+
+        run_dir = tmp_path / "run"
+        await _checkpoint(run_dir)
+        (run_dir / "metadata.json").write_text(
+            json.dumps(
+                {
+                    "provider": "anthropic",
+                    "n_agents": 1,
+                    "generations_completed": 1,
+                    "total_tokens_used": 0,
+                    "reset_each_generation": False,
+                }
+            )
+        )
+        monkeypatch.setattr(
+            "lms.run.create_provider", lambda name, cfg: MockProvider(cfg)
+        )
+        seen: list[bool] = []
+        monkeypatch.setattr(Society, "run_generation", _no_work(seen))
+
+        await resume_experiment(
+            checkpoint_dir=run_dir,
+            target_generations=2,
+            config=Config(anthropic=ProviderConfig(api_key="k", model="m")),
+            verifier_type="mock",
+            reset_each_generation=True,
+        )
+
+        assert seen == [True]
+        metadata = json.loads((run_dir / "metadata.json").read_text())
+        assert metadata["reset_each_generation"] is False, "the original run's"
+        assert metadata["reset_each_generation_resume"] is True
+
+    @pytest.mark.parametrize("resume", [False, True])
+    def test_main_passes_the_flag_on(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, resume: bool
+    ):
+        import sys
+
+        import lms.run
+        from lms.config import Config
+
+        config = Config(anthropic=ProviderConfig(api_key="k", model="m"))
+        monkeypatch.setattr(
+            lms.run.Config, "from_env", classmethod(lambda cls, path=None: config)
+        )
+        calls: dict[str, dict[str, object]] = {}
+
+        def capture(name: str):
+            async def _fake(**kwargs: object) -> None:
+                calls[name] = kwargs
+
+            return _fake
+
+        monkeypatch.setattr(lms.run, "run_experiment", capture("run"))
+        monkeypatch.setattr(lms.run, "resume_experiment", capture("resume"))
+        argv = ["lms.run", "--reset-each-generation", "--output", str(tmp_path)]
+        if resume:
+            argv += ["--resume", str(tmp_path)]
+        monkeypatch.setattr(sys, "argv", argv)
+
+        lms.run.main()
+
+        (kwargs,) = calls.values()
+        assert kwargs["reset_each_generation"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_committee_generation_cites_nothing_from_before_a_reset(
+        self, tmp_path: Path
+    ):
+        """End to end through committee mode, the R9 arm's mode: the same
+        uncited Functor that `test_uncited_reuse_is_linked_end_to_end` links
+        to generation 0's Category links to nothing once the foundation is
+        reset."""
+        from lms.artifacts import Artifact, ArtifactType
+
+        uncited = """<artifact>
+type: definition
+name: Functor
+stacks_tag: T1
+description: builds on Category without citing it
+lean: |
+  structure Functor (C : Category) where
+    objMap : C.Ob → C.Ob
+</artifact>"""
+        responses = GROUP_SESSION_RESPONSES[:3] + [uncited]
+        society = _committee_society(tmp_path, responses, RecordingVerifier())
+        society.use_peer_review = False
+        society.seed_source = ""
+        await society.reset_foundation()
+        base = Artifact(
+            id="art-0013",
+            type=ArtifactType.DEFINITION,
+            natural_language="Definition of a category",
+            lean_code="structure Category where\n  Ob : Type\n",
+            status=VerificationStatus.VERIFIED_LEAN,
+            created_by="group-1",
+            generation=0,
+        )
+        society.library.add(base)
+        assert society.foundation.add_artifact(base)
+        society.reset_foundation_each_generation = True
+
+        await society.run_generation(1)
+
+        (functor,) = [a for a in society.library.all() if a.id != "art-0013"]
+        assert functor.references == []
+        assert society.library.reused_artifact_count() == 0
