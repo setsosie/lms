@@ -189,6 +189,11 @@ class Society:
         # Last foundation state that compiled, to roll back to when a
         # generation's additions break the merged module (26Q3-HARN-22).
         self._last_good_foundation: FoundationSnapshot | None = None
+        # ADR 0003's R9 arm: put the foundation back to its seed before every
+        # generation after the first. Off, a run carries it as it always has.
+        self.reset_foundation_each_generation: bool = False
+        # The seeded state `reset_foundation` installed, which that reset restores.
+        self._seed_foundation: FoundationSnapshot | None = None
         # Generation-0 axiom layer, installed by `reset_foundation`
         # (26Q3-HARN-23). Explicit argument wins; then the goal's choice; then
         # the shipped default. A goal setting `seed=""` gets a bare foundation,
@@ -265,6 +270,9 @@ class Society:
         a `Foundation.lean` that predated the run. Agents cited prior artifacts
         correctly and got an empty module back.
 
+        With `reset_foundation_each_generation`, every generation after the
+        first starts from the seed instead (`_reset_foundation_to_seed`).
+
         Args:
             generation: Current generation number
 
@@ -272,6 +280,8 @@ class Society:
             GenerationResult with metrics for this generation
         """
         gen_start = time.monotonic()
+        if self.reset_foundation_each_generation and generation > 0:
+            await self._reset_foundation_to_seed(generation)
         if self.use_working_groups:
             result = await self.run_generation_with_groups(generation)
         else:
@@ -279,7 +289,7 @@ class Society:
 
         if result.artifacts_verified > 0:
             await self.persist_foundation()
-            self._reopen_tags_without_foundation_work()
+            self._reopen_tags_without_foundation_work(generation)
 
         result.wall_clock_s = time.monotonic() - gen_start
         return result
@@ -340,7 +350,47 @@ class Society:
                     # Say it out loud: these count toward `progress()` and were
                     # not earned by the collective.
                     print(f"  Tags given by the seed (not earned): {', '.join(seeded)}")
+        self._seed_foundation = self.foundation.snapshot()
         return await self._write_and_build_foundation()
+
+    async def _reset_foundation_to_seed(self, generation: int) -> None:
+        """Put the foundation back to the state `reset_foundation` seeded.
+
+        ADR 0003's R9 arm: C9 against R9 prices what carrying the foundation
+        is worth. Restored and rebuilt like a rollback. The seed banner and
+        `goal.mark_seeded()` belong to run start and are not repeated; the
+        textbook, the goal's statuses and the library carry in both arms.
+
+        Raises:
+            RuntimeError: If there is no seed state, or the seed no longer
+                builds. Going on would leave the last generation's module
+                compiled where Lean imports it, which is the carried
+                foundation this arm exists to remove.
+        """
+        # The generation will stop on the budget before it does anything, so
+        # leave the run's last checkpoint the foundation it actually ended on.
+        if self.max_tokens and self.total_tokens_used >= self.max_tokens:
+            return
+        seed = self._seed_foundation
+        if seed is None:
+            raise RuntimeError(
+                "reset_foundation_each_generation needs the seed state that "
+                "reset_foundation() keeps; call it before the first generation"
+            )
+        dropped = self.foundation.restore(seed)
+        print(
+            f"  [foundation] reset to seed for generation {generation + 1}: "
+            f"dropped {len(dropped)} entr{'y' if len(dropped) == 1 else 'ies'}"
+        )
+        # Before the build, so a failed one rolls back to the seed rather
+        # than to the state the reset just removed.
+        self._last_good_foundation = seed
+        if not await self._write_and_build_foundation():
+            raise RuntimeError(
+                f"the seed foundation did not rebuild before generation "
+                f"{generation + 1}; stopping rather than let it import the "
+                "previous generation's module"
+            )
 
     async def restore_foundation(self) -> bool:
         """Put a resumed run's foundation back where Lean imports it.
@@ -360,16 +410,23 @@ class Society:
             # resume; `_write_and_build_foundation` reports False either way.
             project = getattr(self.verifier, "project", None)
             restored = project is not None and await project.rebuild_changed_sources()
-        self._reopen_tags_without_foundation_work()
+        self._reopen_tags_without_foundation_work(self.current_generation)
         return restored
 
-    def _reopen_tags_without_foundation_work(self) -> None:
+    def _reopen_tags_without_foundation_work(
+        self, generation: int | None = None
+    ) -> None:
         """Reopen goal tags backed only by artifacts the foundation doesn't hold.
 
         Every promotion path marks a tag as it processes results, and the build
         that can undo them runs afterwards, so this runs once after it. An
         artifact counts as withdrawn only if the library knows it: seeded tags
         and tags a goal starts with name artifacts this run never saw.
+
+        With `reset_foundation_each_generation`, work from before `generation`
+        left the foundation through the reset, not a failed build, so it still
+        backs its tags: ADR 0003 carries the goal's and the graph's statuses in
+        both arms.
         """
         if self.goal is None:
             return
@@ -379,6 +436,12 @@ class Society:
             for artifact_id in defn.artifact_ids
             if artifact_id in self.library and not self.foundation.holds(artifact_id)
         }
+        if self.reset_foundation_each_generation and generation is not None:
+            withdrawn = {
+                artifact_id
+                for artifact_id in withdrawn
+                if self.library.artifacts[artifact_id].generation >= generation
+            }
         reopened = self.goal.withdraw(withdrawn)
         if not reopened:
             return
@@ -1886,6 +1949,9 @@ class Society:
         society._last_good_foundation = society.foundation.snapshot_before(
             society.current_generation
         )
+        # What `reset_foundation` would have kept: a resume takes the reset
+        # flag from its command line, so the seed state has to exist anyway.
+        society._seed_foundation = society.foundation.snapshot_before(0)
 
         # Load per-agent stats if they exist
         stats_path = output_dir / "agent_stats.json"

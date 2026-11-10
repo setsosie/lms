@@ -30,7 +30,7 @@ from lms.goals import Goal, StacksDefinition
 from lms.lean.mock import MockLeanVerifier
 from lms.lean.real import RealLeanVerifier
 from lms.run import run_experiment
-from lms.society import GenerationResult, Society
+from lms.society import BudgetExceeded, GenerationResult, Society
 from tests.test_foundation_rollback import FakeProject, ProjectVerifier
 from tests.test_society import MockProvider, StubLeanVerifier
 
@@ -536,6 +536,26 @@ async def test_a_seed_that_no_longer_builds_stops_the_run(tmp_path: Path) -> Non
 
     assert society.foundation.entries == [], "the rollback went back to generation 0"
     assert "Pointed0" not in society.foundation.path.read_text()
+
+
+@pytest.mark.asyncio
+async def test_a_generation_the_budget_stops_is_not_reset_first(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A budget ends the run there, so its last checkpoint must keep the last
+    generation's foundation, and the log must not count a reset that never ran."""
+    society = _r9_society(tmp_path, StubLeanVerifier(), reset=True)
+    await _run(society, 1)
+    del society._run_generation_impl  # the real one checks the budget
+    society.max_tokens = 1
+    society.total_tokens_used = 1
+    capsys.readouterr()
+
+    with pytest.raises(BudgetExceeded):
+        await society.run_generation(1)
+
+    assert [e.name for e in society.foundation.entries] == ["Pointed0"]
+    assert "reset to seed" not in capsys.readouterr().out
 
 
 @pytest.mark.asyncio
