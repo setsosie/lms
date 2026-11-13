@@ -15,6 +15,7 @@ lived inside `current-sprint.md`.
 | 1 | `26Q2-01` | ANT shakedown + local serving | 2026-06-16 → 2026-06-27 | 24 | 0 | 0% | [sprint-01-26Q2-01.md](sprint-01-26Q2-01.md) |
 | 2 | `26Q3-01` | Make the harness incapable of lying | 2026-07-27 → 2026-08-07 | 41 | 19 | 46% | [sprint-02-26Q3-01.md](sprint-02-26Q3-01.md) |
 | 3 | `26Q3-01` | Find out whether a calibratable slice exists | 2026-08-10 → 2026-09-04 | 43 | 40 | 93% | [sprint-03-26Q3-01.md](sprint-03-26Q3-01.md) |
+| 4 | `26Q4-01` | Get the number Sprint 3 was for | 2026-10-09 → 2026-11-13 | 58 | 38 | 66% | [sprint-04-26Q4-01.md](sprint-04-26Q4-01.md) |
 
 ## Velocity tracking
 
@@ -23,12 +24,13 @@ lived inside `current-sprint.md`.
 | 1 | 24 | 0 | 0% | Scaffolded, never worked. No executable first step — the one task marked IN PROGRESS had a PENDING hard dependency |
 | 2 | 41 | 19 | 46% | Planned at 24; 17 pts added mid-sprint, all real defects found by running on the box. Ran 5 days past its end date |
 | 3 | 43 | 40 | 93% | Committed 10, all delivered by day 10; 33 pts of found-work added, 30 delivered. **Goal not met**: the DoD server runs never ran. Closed 35 days late, across a month with no box |
+| 4 | 58 | 38 | 66% | Committed 3, delivered. 55 pts added (18 found-work cards, 5 Phase C preparation), 35 delivered. **Measured, not decided**: densities, control and CVFN denominator exist; the slice decision waits on the D4 read |
 
-**Average delivered: 19.7 pts/sprint** over 3 sprints (0, 19, 40).
+**Average delivered: 24.3 pts/sprint** over 4 sprints (0, 19, 40, 38).
 
-Three uneven data points do not make a forecast. `/sprint-forecast` should be
-treated as indicative only until at least Sprint 4 closes. Sprint 3's 40 is
-mostly found-work over a 61-day actual window; its committed scope was 10.
+Four uneven data points do not make a forecast; treat `/sprint-forecast` as
+indicative only. Sprints 3 and 4 committed 10 and 3 and delivered 40 and 38,
+mostly found-work, over 61- and 36-day windows.
 Sprint 2's 46% is also measured
 against a denominator that grew 71% mid-sprint — against the *original* 24-pt
 plan it delivered 11 pts of planned work, also 46%.
@@ -37,10 +39,10 @@ plan it delivered 11 pts of planned work, also 46%.
 
 | Metric | Value |
 |--------|-------|
-| Sprints closed | 3 |
-| Total points planned | 108 |
-| Total points delivered | 59 |
-| Overall delivery rate | 55% |
+| Sprints closed | 4 |
+| Total points planned | 166 |
+| Total points delivered | 97 |
+| Overall delivery rate | 58% |
 
 ## Key milestones
 
@@ -53,12 +55,14 @@ plan it delivered 11 pts of planned work, also 46%.
 | 2026-08-19 | **All five machine gates exist in code** — T2/T4, novelty N0/N1, per-statement cost | 3 |
 | 2026-08-20 | **Committee mode runs end to end on the box** (Checkpoint 8, `committee_smoke_e`); first verified committee reuse, uncited (`committee_yolo_a`) | 3 |
 | 2026-09-09 | **The repo runs CI for the first time**, test suite and real Lean verifier | 3 |
+| 2026-11-07 | **First valid N1 density reading**, with a control that can fail (R4b at #82): control N1 4/52, core 6/20, ramification 7/21, decisive 0 | 4 |
+| 2026-11-09 | **First CVFN denominator from a real run** (R5e): vLLM serving at TP=2 on the restored box | 4 |
 
-Not yet reached: **Gate A** (archived mock-verified run must re-score to ~0
-verified novel statements), **Gate B** (one artifact through all five machine
-gates), and **a measured N1 density** for either ANT arc. Gate A and the
-density are Sprint 4's server runs.
+Not yet reached: **Gate A** as written (the control reads N0 10/52, not
+"essentially all"; decisive N1 is 0), **Gate B** (one artifact through all
+five machine gates), and **the slice decision**, which waits on the D4 read.
+Both open items are Sprint 5's; Gate B is Sprint 6's.
 
 ---
 
-*Last Updated: 2026-10-09*
+*Last Updated: 2026-11-13*

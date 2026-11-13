@@ -176,9 +176,9 @@ Deferred, not cancelled:
 - Soft-prompt genome arm: SPG-01, SPG-02, SPG-03 — all of it. The genome's fitness
   function *is* formalization success; evolving against a fitness signal that is
   ~0 for every genome is a flat landscape by construction. SPG resumes only if
-  Phase C shows dynamic range in proof success. *Amended 2026-11-05: Sprint 8's
+  Phase C shows dynamic range in proof success. *Amended 2026-11-05: Sprint 9's
   baseline on fixed probes can show that range too, since probes need no novelty.
-  See "After Sprint 7" in `upcoming-sprints.md`.*
+  See "After Sprint 8" in `upcoming-sprints.md`.*
 - `specs/interactive_society.md`, the benchmark release, any paper
 
 **Reframed 2026-09-04:** the shared kernel, ART, CNF and Stacks are no longer
