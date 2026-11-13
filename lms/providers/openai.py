@@ -1,12 +1,13 @@
 """OpenAI GPT provider."""
 
-from typing import cast
+import itertools
+from typing import Any, cast
 
 import httpx
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
-from lms.config import ProviderConfig
+from lms.config import SEED_SPACE, ProviderConfig
 from lms.providers.base import (
     BaseLLMProvider,
     GenerationResponse,
@@ -14,6 +15,12 @@ from lms.providers.base import (
     TokenUsage,
     split_thinking,
 )
+
+
+# One count for the whole process, so no two requests in a run share a seed,
+# even when each agent has a provider of its own built from the run's seed:
+# two agents given the same prompt and the same seed would answer alike.
+_REQUESTS = itertools.count()
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -69,10 +76,15 @@ class OpenAIProvider(BaseLLMProvider):
         raw_messages.extend([{"role": m.role, "content": m.content} for m in messages])
         api_messages = cast("list[ChatCompletionMessageParam]", raw_messages)
 
+        sampling: dict[str, Any] = {}
+        if self.config.seed is not None:
+            sampling["seed"] = (self.config.seed + next(_REQUESTS)) % SEED_SPACE
+
         response = await self.client.chat.completions.create(
             model=self.config.model,
             messages=api_messages,
             max_completion_tokens=effective_max_tokens,
+            **sampling,
         )
 
         # Extract cache tokens if available. Some OpenAI-compatible servers omit
