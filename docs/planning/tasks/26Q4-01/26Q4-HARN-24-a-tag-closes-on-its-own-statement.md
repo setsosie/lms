@@ -6,9 +6,9 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING: the matching rule needs the user's decision |
+| **Status** | 🔲 PENDING: rule A chosen 2026-11-13 |
 | **Branch** | `26Q4-HARN-24-a-tag-closes-on-its-own-statement` |
-| **Dependencies** | The rule (below). Option C needs `26Q3-HARN-28` (theorem cards and statement pinning) |
+| **Dependencies** | None for rule A. A later move to option C needs `26Q3-HARN-28` (theorem cards and statement pinning) |
 | **Gate** | full |
 | **PR Size Target** | <500 lines (max 1000) |
 | **Parts** | single PR |
@@ -31,24 +31,39 @@ grep -n "stacks_tag=group.config.task_tag" lms/society.py
 
 ---
 
-#### The decision this card needs
+#### Decision (2026-11-13): rule A now, refined over time
 
-What makes an artifact "that tag's statement"? Three candidate rules, cheapest first:
+Three rules were considered, cheapest first:
+- **A. Name rule:** the artifact's declared names must match the tag's name. Cheap and deterministic. It catches both r6 closures, but it is fuzzy on theorem tags.
+- **B. Review rule:** a reviewer call decides. General, but it is a model's judgement and costs tokens.
+- **C. Pinned statement:** Lean checks the artifact against a pinned statement for the tag. Robust, but it waits on `26Q3-HARN-28`.
 
-- **A. Name rule.** The artifact declares a top-level name matching the tag's concept (for example `Functor` for "Definition: Functor"), and nothing that redeclares a seed or foundation name. Cheap and deterministic, and it would have caught both r6 closures. It is brittle for theorems, whose names are free-form.
-- **B. Review rule.** A reviewer call (the review committee, or the chair) answers "does this formalize tag X's statement?" before the tag closes. General, but it is a model's judgement, so it can be gamed, and every closure costs tokens.
-- **C. Pinned statement.** Each tag carries a pinned Lean statement (`26Q3-HARN-28`), and an artifact closes the tag only if it proves or defines exactly that statement, checked by Lean. Robust, but it waits on statement pinning, which is Phase C's critical path anyway.
+**Rule A is the one to build.** It moves toward C as statement pinning arrives.
 
-A reasonable path is A now (it covers definition tags, which is what the kernel tracks mostly are) and C when HARN-28 lands. Whatever the rule, a verified artifact that fails it should still be promoted to the foundation (it compiled, and it may be useful); it just must not close the tag.
+**Rule A, as specified here.** Tag names come in two shapes:
+- concept names, for example `Definition: Functor` in `stacks-ch4-phase1`;
+- Stacks labels, for example `Definition: definition categories over C (Categories over categories)` and `Lemma: lemma composition cartesian (Fibred categories)` in the kernel tracks, where 32 of 60 tags are lemmas.
+
+So the match is on words, not on whole names:
+- **Tag words:** drop a leading `MILESTONE:` and the kind word (`Definition:`, `Lemma:`, …), drop a trailing parenthetical (the section title), lowercase, split on anything that is not a letter or digit, and drop kind words, articles and short prepositions (`definition`, `lemma`, `of`, `the`, `a`, `an`, `and`, `for`, `to`, `in`, `is`, `with`, `by`) and single letters.
+- **Artifact words:** the names after `def`, `structure`, `class`, `abbrev`, `inductive`, `instance`, `theorem` and `lemma` in the artifact's Lean code, split on dots, underscores and camelCase, then lowercased.
+- **A match** is a pair where one word is a prefix of the other and the shorter has at least 3 letters (`nat`/`natural`, `cat`/`categories`, `comp`/`composition`), or where the two share a prefix of at least 5 letters.
+- **The tag closes only if at least one pair matches.** Otherwise the artifact is still promoted (it compiled and may be useful), the tag goes back to available, and the run log prints `[goal] <tag> not closed by <artifact>: declares <names>, none matches "<tag name>"`.
+
+On r6's two cases: `CategoryDef` (category, def) against "Functor" has no pair, and `Functor` against "Natural Transformation" has no pair, so both are refused. A `NatTrans` against "Natural Transformation" matches.
+
+Known limits, to work up over time: abbreviations shorter than 3 letters (`op` for opposite), synonyms (`Hom` for morphism), and theorem names that share no word with the Stacks label. Each such case can be added as an alias, and option C ends the guessing.
 
 ---
 
 #### Acceptance Criteria
 
-To be written once the rule is chosen. At minimum:
-- [ ] A verified artifact that is not the assigned tag's statement leaves the tag open in the graph and in the goal, and the run log says why
-- [ ] r6's two cases, as fixtures (`CategoryDef` on 0014, `Functor` on 0015), close nothing
-- [ ] The collect read-back reports closures refused under the rule
+- [ ] In committee mode, a verified, promoted artifact closes its group's tag in both the dependency graph and the goal only if rule A matches; otherwise the tag returns to available and the run log prints the `[goal] … not closed by …` line
+- [ ] The same rule applies where flat and iterative modes close a tag from the artifact's own `stacks_tag`
+- [ ] Fixtures from r6: `CategoryDef` on 0014 and `Functor` on 0015 close nothing; a `Functor` on 0014 and a `NatTrans` on 0015 close their tags
+- [ ] Kernel-track fixtures: a `CatOverC` structure on "definition categories over C" closes it; a lemma `comp_cartesian` on "lemma composition cartesian" closes it
+- [ ] A refused closure still promotes the artifact to the foundation
+- [ ] `tests/test_tag_closure.py` covers each item above
 
 ---
 
