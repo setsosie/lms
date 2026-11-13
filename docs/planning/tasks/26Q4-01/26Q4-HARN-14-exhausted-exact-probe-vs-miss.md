@@ -8,7 +8,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | MEDIUM |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-14-exhausted-exact-probe-vs-miss` |
 | **Dependencies** | 26Q4-HARN-09 |
 | **Gate** | full |

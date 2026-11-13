@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-22-each-run-samples-its-own-seed` |
 | **Dependencies** | Stacked on `26Q4-HARN-04` (#94), which carries the provider changes of `26Q4-HARN-21` (#95). Phase C's I9 and S1 arms need it |
 | **Gate** | fast |

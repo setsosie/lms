@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-21-thinking-is-not-the-answer` |
 | **Dependencies** | None. Stacked on `26Q4-CHORE-02` so one commit carries both for the box. Before R6, R7 and every committee arm |
 | **Gate** | full |

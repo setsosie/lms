@@ -12,7 +12,7 @@ that a long committee or Phase C run is not lost to the scheduler.
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | MEDIUM |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-01-resumed-run-foundation-lean-importable` |
 | **Dependencies** | None |
 | **PR Size Target** | <500 lines (max 1000) |

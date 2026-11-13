@@ -8,7 +8,7 @@
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-09-novelty-control-can-fail-semantic-hits` |
 | **Dependencies** | None |
 | **PR Size Target** | <1000 lines (max 1500). Raised by the user on 2026-11-05, because tests are most of the diff |

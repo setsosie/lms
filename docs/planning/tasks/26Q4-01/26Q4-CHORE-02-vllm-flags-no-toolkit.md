@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-CHORE-02-vllm-flags-no-toolkit` |
 | **Dependencies** | None. Every GPU run after R5e needs it: R6, R7 and the Phase C arms |
 | **Gate** | fast |

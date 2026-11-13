@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-03-arm-comparison-report` |
 | **Dependencies** | None (reads the run-directory format `cvfn_report` already reads). Required by ADR 0003 (Accepted 2026-10-30) |
 | **PR Size Target** | <400 lines (max 800) |
