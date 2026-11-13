@@ -43,17 +43,23 @@ next-sprint pre-lock. Generated 2026-06-18.
 | 1 | ANT shakedown + local serving | 2026-06-16 → 2026-06-27 | 0 | 24 | 0 | ✅ Complete (0%) |
 | 2 | Make the harness incapable of lying | 2026-07-27 → 2026-08-07 | A | 41 | 19 | ✅ Complete (46%) |
 | 3 | Find out whether a calibratable slice exists | 2026-08-10 → 2026-09-04 | B | 43 | 40 | ✅ Complete (93%, goal not met) |
-| 4 | Get the number Sprint 3 was for | TBD | B | 3 | — | 🔄 Active |
-| 5 | Gate B + the calibration run | TBD | C | TBD | — | 🔲 Pre-locked |
-| 6 | Human D4 review | TBD | D | TBD | — | 🔲 Planned |
-| 7 | Verdict | TBD | E | TBD | — | 🔲 Planned |
-| 8 | Probe set, baseline, washout probe | TBD | After E | 10 | — | 🔲 Proposed |
-| 9 | Best-of-k and coordinator–worker arms | TBD | After E | 8 | — | 🔲 Proposed |
-| 10 | Promptbreeder | TBD | After E | 8 | — | 🔲 Proposed |
-| 11 | Bred prompt × organization | TBD | After E | TBD | — | 🔲 Proposed |
-| 12+ | Soft-prompt evolution | TBD | After E | TBD | — | 🔲 Proposed |
+| 4 | Get the number Sprint 3 was for | 2026-10-09 → 2026-11-13 | B | 58 | 38 | ✅ Complete (66%, measured, not decided) |
+| 5 | Make the slice decision, and freeze the harness | 2026-11-16 → 2026-11-27 | B → C | 11 | — | 🔄 Active |
+| 6 | Gate B + the calibration run | TBD | C | TBD | — | 🔲 Pre-locked |
+| 7 | Human D4 review | TBD | D | TBD | — | 🔲 Planned |
+| 8 | Verdict | TBD | E | TBD | — | 🔲 Planned |
+| 9 | Probe set, baseline, washout probe | TBD | After E | 10 | — | 🔲 Proposed |
+| 10 | Best-of-k and coordinator–worker arms | TBD | After E | 8 | — | 🔲 Proposed |
+| 11 | Promptbreeder | TBD | After E | 8 | — | 🔲 Proposed |
+| 12 | Bred prompt × organization | TBD | After E | TBD | — | 🔲 Proposed |
+| 13+ | Soft-prompt evolution | TBD | After E | TBD | — | 🔲 Proposed |
 
-See [After Sprint 7](#after-sprint-7-proposed-2026-11-05).
+See [After Sprint 8](#after-sprint-8-proposed-2026-11-05-renumbered-2026-11-13).
+
+**Renumbered at the Sprint 4 close (2026-11-13).** Sprint 4 measured the
+densities but did not write the slice decision, so Sprint 5 makes it and
+freezes the harness. The Phase C pre-lock and every later sprint move up by
+one.
 
 **Re-plan pending (2026-10-09).** Sprint 3 closed 35 days late with its server
 runs unrun, and the 2026-09-30 verdict date passed with Phases C–E not started.
@@ -62,8 +68,8 @@ one sprint each. All dates from Sprint 4 on are TBD until Sprint 4's DoD 1
 (measured N1 density) exists.
 
 Closed sprints: [`archive/README.md`](archive/README.md). Velocity across the
-three closed sprints is **19.7 pts/sprint** (0, 19, 40). Uneven data, not a
-forecast: Sprint 3's 40 is mostly found-work over a 61-day actual window.
+four closed sprints is **24.3 pts/sprint** (0, 19, 40, 38). Uneven data, not a
+forecast: Sprints 3 and 4 committed 10 and 3, and the rest was found-work.
 
 ## Two standing rules (adopted 2026-08-12)
 
@@ -163,8 +169,14 @@ INFRA-01 ─→ ANT shakedown ─→ Shared kernel (spectral seq) ─→ ART+CNF
 - **Not the constraint:** money. **The constraints are wall-clock throughput, the
   reuse phase-transition, and local-model capability** (escape hatch absorbs the last).
 
-## Pre-locked Sprint 5 — Gate B + Phase C (dates TBD)
+## Pre-locked Sprint 6 — Gate B + Phase C (dates TBD)
 
+> **Re-labelled again at the Sprint 4 close (2026-11-13).** Sprint 5 became
+> the slice decision and the harness freeze, so this moved from 5 to 6.
+> `26Q4-HARN-13`, `-15` and `-19` below are now Sprint 5's; `-14` merged
+> (#92); `26Q3-HARN-03`, `-27`, `26Q4-HARN-03` and `-04` merged in Sprints 3
+> and 4. `26Q3-HARN-25` and `-28` carry here from Sprint 4.
+>
 > **Re-labelled at the Sprint 3 close (2026-10-09).** This was Sprint 4's
 > pre-lock. Sprint 4 became the Sprint 3 server runs, so this content moved
 > here unchanged. Dates inside it, such as the 2026-09-07 harness freeze and
@@ -174,7 +186,7 @@ INFRA-01 ─→ ANT shakedown ─→ Shared kernel (spectral seq) ─→ ART+CNF
 Back to normal sprint length. Carries the Gate B work Sprint 3's 10-point ceiling
 could not fit, then runs the calibration itself. Detail in
 `calibration-program.md` §3, Phase C; the committed form lands in
-`current-sprint.md` at the Sprint 4 close.
+`current-sprint.md` at the Sprint 5 close.
 
 - **`26Q3-HARN-03`** (5) — T2/T4 machine gates, cut from Sprint 3. **Gate B
   cannot go green without it**, so it comes first.
@@ -247,34 +259,35 @@ could not fit, then runs the calibration itself. Detail in
 
 **Sizing note**: `26Q3-HARN-03` + Gate B + Phase C exceeds a lighter-sprint budget.
 The 3-agent local config is already cut (ADR 0001) — 1 and 9 test the
-population-size hypothesis at its extremes. Decide any further cut at Sprint 5
-planning with Sprint 4's N1 numbers in hand.
+population-size hypothesis at its extremes. Decide any further cut at Sprint 6
+planning with Sprint 5's slice decision in hand.
 
-**Entry condition**: Sprint 4's DoD item 1 done (carried from Sprint 3) —
-measured N1 density for both candidate arcs. If both measure ~zero, **do not start Phase C**; go straight to
-Phase E and write up "CVFN undefined at current scope."
+**Entry condition**: Sprint 5's DoD 1 (the written slice decision) and DoD 3
+(the harness frozen at a named commit). Sprint 4 measured the densities. If the
+slice decision reads ~zero, **do not start Phase C**; go straight to Phase E
+and write up "CVFN undefined at current scope."
 
 **The 2026-08-21 API-fallback pre-commitment is resolved (2026-09-04,
 `decisions/0001-phase-c-model-harness-control.md`).** It does not fire as a
 swap; the $300 funds the frontier control arm above.
 
-## After Sprint 7 (proposed 2026-11-05)
+## After Sprint 8 (proposed 2026-11-05, renumbered 2026-11-13)
 
 Provisional: the order depends on Phase E's verdict, and no dates are set. Phase
 C now compares model and organization; this adds the prompt as a third factor.
 
 | Sprint | Work | Server run | Why here |
 |---|---|---|---|
-| 8 | `26Q4-HARN-11` probe set (5), `26Q4-HARN-12` committee prompts (2), `26Q4-SPG-01` washout probe (3) | Hand-written prompt on every probe, including Yoneda; washout probe | Several experiments score on the probes, and the washout probe can stop the soft-prompt arm cheaply |
-| 9 | `26Q4-HARN-05` K9 (3), `26Q4-HARN-06` W9 (5) | Stage 1 of `org-structures.md` | Cheap, and retries that Lean selects among may explain much of any gain |
-| 10 | `26Q4-EVO-02` (3), `26Q4-EVO-03` (5) | Repeatability gate, first breeding generations | Needs the probes |
-| 11 | Hand-written vs bred prompt × S1 vs best organization | The 2×2 comparison | What a better prompt buys compared with better structure |
-| 12+ | `26Q2-SPG-03`, `26Q4-SPG-02`, `26Q2-SPG-01`, `26Q2-SPG-02`, `26Q4-SPG-03`; optionally `26Q4-SPG-04` | Serving, diversity, then evolution on the probes | Reuses the probes and fitness harness |
+| 9 | `26Q4-HARN-11` probe set (5), `26Q4-HARN-12` committee prompts (2), `26Q4-SPG-01` washout probe (3) | Hand-written prompt on every probe, including Yoneda; washout probe | Several experiments score on the probes, and the washout probe can stop the soft-prompt arm cheaply |
+| 10 | `26Q4-HARN-05` K9 (3), `26Q4-HARN-06` W9 (5) | Stage 1 of `org-structures.md` | Cheap, and retries that Lean selects among may explain much of any gain |
+| 11 | `26Q4-EVO-02` (3), `26Q4-EVO-03` (5) | Repeatability gate, first breeding generations | Needs the probes |
+| 12 | Hand-written vs bred prompt × S1 vs best organization | The 2×2 comparison | What a better prompt buys compared with better structure |
+| 13+ | `26Q2-SPG-03`, `26Q4-SPG-02`, `26Q2-SPG-01`, `26Q2-SPG-02`, `26Q4-SPG-03`; optionally `26Q4-SPG-04` | Serving, diversity, then evolution on the probes | Reuses the probes and fitness harness |
 
 Fixed so far:
 - **Probes come from the Stacks category chapter.** This does not settle Phase
   C's slice.
-- **The token cap comes from Sprint 8's baseline.**
+- **The token cap comes from Sprint 9's baseline.**
 - **The breeder is the strongest open model that fits on the server, with a
   documented training cutoff before 2026-11-04,** the day Axiom's Stacks library
   was released. The rule covers evaluated models on Stacks slices too. A release
@@ -284,7 +297,7 @@ Fixed so far:
 
 Branches:
 - **If Gate C is zero:** that may only mean nothing novel was verified. Probes
-  need no novelty, so Sprint 8 can still run. If even easy probes fail, stop as
+  need no novelty, so Sprint 9 can still run. If even easy probes fail, stop as
   `calibration-program.md` §7 says.
 - **If C9 does not beat I9:** P9 moves up beside K9, per `org-structures.md`.
 - **If the washout probe fails:** the soft-prompt arm stops before serving work,
@@ -340,7 +353,7 @@ or the local model needs heavy escape-hatch support.~~
 program, because there is not yet a single measured data point on the cost of a
 verified *novel* statement. The Q3 calibration program exists to produce exactly
 one number (CVFN) by **2026-09-30**. *That date passed with Phases C–E not
-started; the re-plan waits on Sprint 4's N1 density.* Three outcomes, all
+started; the re-plan waits on Sprint 5's slice decision.* Three outcomes, all
 acceptable:
 
 | Outcome | Consequence |

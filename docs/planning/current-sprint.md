@@ -1,141 +1,106 @@
-# Sprint 4: Get the number Sprint 3 was for
+# Sprint 5: Make the slice decision, and freeze the harness
 
-**Dates**: TBD (opened 2026-10-09; set at planning)
-**Quarter**: Q4 2026 by calendar · the carried card lives in folder `26Q3-01`
-**Program**: `docs/planning/calibration-program.md` — Phase B, completion
-**Sprint Goal**: Run the measurement Sprint 3 built but never ran, on the
-restored box: **measured N1 density for both ANT Ch. I candidate arcs, the
-Gate A control, and a CVFN denominator from a real run.** The density decides
-whether Phase C starts at all. If both arcs measure ~zero, it does not.
+**Dates**: 2026-11-16 → 2026-11-27 (two weeks; 2026-11-26 is a holiday)
+**Quarter**: Q4 2026 · folder `26Q4-01`
+**Program**: `docs/planning/calibration-program.md` — Phase B close, Phase C entry
+**Sprint Goal**: Turn Sprint 4's measurements into **a written slice
+decision**, and settle the rules that change the number Phase C reads, so the
+harness can freeze at a named commit and Sprint 6 can run Phase C.
 
 **Status**: 🔄 ACTIVE
 
-> **Phase C is not in this sprint.** Gate B, the two-arm calibration run and
-> the DAG-phase cards moved to the Sprint 5 pre-lock in `upcoming-sprints.md`.
-> All of them are entry-gated on DoD 1 below, and none of them can be sized
-> honestly until its number exists.
+> **Phase C is not in this sprint.** Gate B, the calibration run, `26Q3-HARN-25`
+> and `-28` are the Sprint 6 pre-lock in `upcoming-sprints.md`. They start
+> once DoD 1 and DoD 3 below are done.
 
-> **Every sprint runs something on the server.** This sprint's server runs are
-> the sprint goal: runbook R4 (DoD 1 and 3) and R5 (DoD 4). The user runs the
-> runbook and pastes the output back.
+> **Every sprint runs something on the server.** This sprint's are batch q2
+> (built 2026-11-13, runs the weekend of 2026-11-14) and the §7 density run.
+> The user runs the runbooks and sends the output back.
 
 ---
 
-## Sprint 3 close-out (26Q3-01): 40/43 pts, goal not met
+## Sprint 4 close-out (26Q4-01): 38/58 pts, measured, not decided
 
 | Metric | Value |
 |--------|-------|
-| Dates | 2026-08-10 → 2026-09-04 (closed 2026-10-09) |
-| Delivered | **40** (93% of 43; committed 10/10) |
-| Carried here | 3 pts across 1 task, plus DoD items 1, 3 and 4 |
-| N1 density | ❌ not measured. The 2026-08-19 reading is void (#63) |
+| Dates | 2026-10-09 → 2026-11-13 |
+| Delivered | **38** (66% of 58; committed 3/3) |
+| Carried here | 10 pts across 4 tasks; 10 more (HARN-25, -28) carried to Sprint 6 |
+| N1 density | ✅ measured. Slice decision ❌ not written; waits on the D4 read |
 
-Full record: [`archive/sprint-03-26Q3-01.md`](archive/sprint-03-26Q3-01.md).
+Full record: [`archive/sprint-04-26Q4-01.md`](archive/sprint-04-26Q4-01.md).
 
-All ten committed points landed by 2026-08-19, and 30 points of found-work
-followed. The measurement itself never ran. The box time went to committee
-runs, and then the box was unavailable 2026-09-08 → 2026-10-08.
+Every number Sprint 4's goal named exists: densities for core, ramification
+and Neukirch Ch. I §1–§6, the control run, and a CVFN denominator from R5e.
+The decision they feed is a human read of 37 statements, which Sprint 4 never
+sized. It is this sprint's first row.
 
-Velocity: **19.7 pts/sprint** over three sprints (0, 19, 40). Sprint 3's 40
-is mostly found-work, so commit to what this sprint actually needs, not to
-the mean.
+Velocity: **24.3 pts/sprint** over four sprints (0, 19, 40, 38). Sprints 3
+and 4 committed 10 and 3; the rest was found-work. This sprint commits 11,
+near the measured committed-scope rate, not the mean.
 
-## Sprint 4 Summary
+## Sprint 5 Summary
 
 | Metric | Value |
 |--------|-------|
-| Committed points | 3 |
-| Server runs | 3 DoD items, unpointed |
+| Committed points | 11 |
+| Server runs | batch q2 (4 rounds) + §7 density, unpointed |
+| Human read | D4 queue, 37 + 10 statements, unpointed |
 | Stretch | 0 |
-| Carryover | everything here is Sprint 3 carryover |
-| Window | TBD |
-| Track | Phase B: get the slice decision |
+| Window | 2026-11-16 → 2026-11-27 |
+| Track | Phase B close: slice decision, harness freeze |
 | Status | 🔄 ACTIVE |
 
-## Carryover from Sprint 3
+## The decision (the sprint goal)
+
+| Step | What | Owner | DoD | Status | Notes |
+|------|------|-------|-----|--------|-------|
+| D1 | D4 read of the §1–§6 queue (37 statements) | user | 1 | 🔄 IN PROGRESS | Sheet: `references/neukirch-ch1/d4_queue_s01-s06.md` (untracked), ordered Group 3, 2, 1. The classifier never recognises a special case (Group 2: 0 N0), and 13 of its 22 N1 labels are wrong |
+| D2 | §7 drafts elaborate and get a density, on the server | user runs | 1 | 🔲 PENDING | 10 statements, `data/ant_arcs/neukirch_ch1/s07_dirichlet_unit_theorem.json`. The local pinned library is gone, and the user chose not to rebuild it, so this runs on the box |
+| D3 | Restate or keep DoD 2's control bar | user | 2 | 🔲 PENDING | The control reads N0 10/52, INCONCLUSIVE 38, decisive N1 0. Either the bar becomes "decisive N1 = 0", or `26Q4-HARN-15` changes what the control can read |
+| D4 | Write the slice decision | Claude drafts, user decides | 1 | 🔲 PENDING | Names the arc and its statements, or records "~zero, go to Phase E". The calendar for Sprints 6–8 follows from it |
+
+## Carryover from Sprint 4
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q3-HARN-20: Gate 4 withholds N1 when its search could not have matched | 3 | HIGH | HARN | ✅ DONE | Part 1: #63, merged 2026-10-09; Part 2: #66, merged 2026-10-20 | Part 2: the import-namespace rule, the Yoneda regression fixture, flagging `forbidden_imports` runs in the CVFN report, and scoring the informal statement. Merged before R4, so the density run measures with the final classifier |
+| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. Library results can read decisive N1 at Gate 4. The choice of rule is the user's |
+| 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. All 10 control N0s came from name search, so this bears on D3. The choice of rule is the user's. The card's Notes record a neighbouring `.{u}` label-token leak from #82's review |
+| 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. Universe order, shadowing and dropped text can change a statement's meaning with the merged file still compiling. The choice of approach is the user's |
+| 26Q4-HARN-24: A tag closes only on an artifact that is that tag's statement | 2 | HIGH | HARN | 🔲 PENDING | — | From r6 (batch q1). Rule A (name match) chosen 2026-11-13; spec in the card |
+| 26Q3-HARN-25: Proof sketches become open leaves | 5 | MEDIUM | HARN | ⏭ Sprint 6 | — | Not committed here. Phase C preparation |
+| 26Q3-HARN-28: Theorem cards and statement pinning | 5 | MEDIUM | HARN | ⏭ Sprint 6 | — | Not committed here. Holds the ANT arc → goal converter; no ANT goal exists without it |
 
-## Server runs (the sprint goal)
+## Planned
 
-Runbook: [`docs/runbooks/2026-10-08-box-restore.md`](../runbooks/2026-10-08-box-restore.md).
-These rows carry no points; their code was counted with `-04` and `-05` in
-Sprint 3. They are still what this sprint is for.
+| Task | Points | Priority | Epic | Status | PR / Branch | Notes |
+|------|--------|----------|------|--------|-------------|-------|
+| 26Q4-HARN-20: A search that fails reads as unavailable instead of raising | 1 | MEDIUM | HARN | 🔲 PENDING | — | Card on main since #101; its user story and criteria are still template text |
+
+**Committed: 11 pts** (HARN-13 2, -15 3, -19 3, -24 2, -20 1).
+
+## Server runs
 
 | Step | What | DoD | Status | Notes |
 |------|------|-----|--------|-------|
-| R0 | Inventory (read-only) | — | ✅ DONE | The box was restored to an earlier state |
-| R1–R3 | Scratch routing, Lean toolchain + library build, Python env + suite | — | ✅ DONE | As one batch job on 2026-11-04, in a dedicated worktree: pinned toolchain, 937 passed, 1 sorry |
-| R4 | N1 density over both arcs + the Gate A control, one CPU batch job (`scripts/slurm/n1_density.sbatch`) | 1, 2 | 🔄 IN PROGRESS | Ran 2026-11-04, but its densities were mostly classifier misses and its control couldn't fail. Re-ran 2026-11-07 at #82's commit: control N1 4/52, core 6/20, ramification 7/21, decisive N1 0 on all three, as the replay forecast. Arc N1 bounds nothing, so the slice number comes from the D4 read of each statement's candidates, under way. Re-ran again in batch q1 (n1c, 2026-11-10 → 11-13) after #91 made every draft elaborate: control N0 10/52, N1 4, decisive 0; core N1 6/20; ramification 12/21. Neukirch Ch. I §1–§6 added: 57 statements, density 0.39 (0.65 with INCONCLUSIVE), D4 queue 37. Write-up: `docs/results/2026-11-13-batch-q1.md` (#99) |
-| R5 | CVFN denominator from a real run | 3 | ✅ DONE | No `attempts.json` survived, so R5b. It failed 2026-11-05: vLLM's kernels need a CUDA toolkit the node doesn't have on its default paths. Retry R5c hung in NCCL start-up; R5d passed NCCL on 2026-11-07, then died in vLLM's sampler, which compiles a FlashInfer kernel without checking for the toolkit. R5e turned that sampler off too and **passed** on 2026-11-09 (job 352): TP=2 served, 106/245/696 output tokens/s at 1/3/9 requests, and the small run spent 57,843 tokens in 208 s over 6 attempts (0 verified). The flags are in `lms_run.sbatch` via `26Q4-CHORE-02` (#93) |
-| R6 | Committee re-run, `committee_fix_c` config at TP=2 | — | ✅ DONE | Not a DoD item. Ran in batch q1 at `057b0bbf`: 10 of 10 generations, 1.74M tokens, 30 created, 2 verified. Both tag closures credit the wrong content, so no tag was earned; that is `26Q4-HARN-24`. Write-up in #99 |
-| R7 | Three groups on three tags: one committee generation on `stacks-kernel-track-b` | — | 🔄 IN PROGRESS | Not a DoD item: the box half of HARN-27's Outcome Demo. Both q1 jobs hung at vLLM start in NCCL (0 generations). Re-queued as r7b in batch q2 with `26Q4-CHORE-05`'s start ladder |
-
-## Found-work (unpointed)
-
-Card text for these is in `docs/planning/tasks/26Q4-01/`. None of them blocks
-R4 or R5, so per the risk register they belong to Sprint 5. They were
-worked during the box runs because the runs are the user's to execute.
-
-| Task | Points | Status | PR | Notes |
-|------|--------|--------|----|-------|
-| 26Q4-HARN-01: A resumed run keeps its foundation where Lean can import it | 2 | ✅ DONE | #68, merged 2026-10-30 | Worse than carded: a resume had no seed and no entries, and a walltime-killed job could not resume at all (no `metadata.json`). Adds `RESUME=1` to `lms_run.sbatch` and to R6 |
-| 26Q4-CHORE-01: Move the HARN-02 verify script's assertions into pytest | 1 | ✅ DONE | #70, merged 2026-10-30 | Two of its checks read an untracked archive, so it failed on every clean checkout |
-| 26Q4-HARN-02: Wire TraceStore so conversations.json records transcripts | 3 | ✅ DONE | #72, merged 2026-10-30 | Threads the store beside the cost ledger (the user's choice): one `ConversationLog` per ledgered exchange. Not blocking R6: committee transcripts already land in `textbook.json` |
-| 26Q4-HARN-09: The novelty control can fail, and semantic hits stop reading as N1 | 3 | ✅ DONE | #82, merged 2026-11-06 | From the 2026-11-04 R4 run, whose densities were mostly classifier misses. R4 re-runs at this commit; the slice number comes from D4 reading `candidates` |
-| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | 🔲 PENDING | — | Before Phase C. From #82's review: library results can read decisive N1 at Gate 4. The choice of rule is the user's |
-| 26Q4-HARN-14: Tell an exhausted exact? from a miss | 2 | ✅ DONE | #92, merged 2026-11-09 | Docs only: all 18 of R4b's `exact?` misses still miss with no heartbeat limit, so none was exhaustion. core-17 used 97% of the budget, so new statements could cross it |
-| 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | 🔲 PENDING | — | Before Phase C. From #82's reviews. All 10 control N0s at R4 came from name search, so the fix may leave the control with none. The choice of rule is the user's |
-| 26Q4-HARN-16: Foundation merge keeps universes the header doesn't bind | 1 | ✅ DONE | #84, merged 2026-11-09 | Before R6. From the 2026-11-06 team simulation: one artifact's `universe` line rolled back a whole generation |
-| 26Q4-HARN-17: A name collision can't discard a generation's verified work | 3 | ✅ DONE | #86, merged 2026-11-09 | Before R6. Refuses a differing re-declaration and rolls back per artifact |
-| 26Q4-HARN-18: Rollback reopens the goal tags it undid | 2 | ✅ DONE | #88, merged 2026-11-09 | Before the DAG run. A tag reads DONE only while the foundation holds work behind it. Also returns a gate-blocked committee tag to available, because leaving it in progress stalls a chain goal |
-| 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | 🔲 PENDING | — | Before Phase C. From the reviews of `-16` and `-17`: universe order, shadowing and dropped text can change a statement's meaning with the merged file still compiling. The choice of approach is the user's |
-| 26Q4-CHORE-03: The ANT arc drafts elaborate at the pin | 2 | ✅ DONE | #91, merged 2026-11-09 | Repairs the 12 drafts R4 couldn't measure |
-| 26Q4-CHORE-02: The run script serves on a node with no CUDA toolkit, and takes a budget | 1 | ✅ DONE | #93, merged 2026-11-12 | R5e's three flags and Triton prefill, plus `MAX_TOKENS` and `LMS_EXTRA_VLLM_ARGS` |
-| 26Q4-HARN-21: A thinking model's scratch work is not its answer | 2 | ✅ DONE | #95, merged 2026-11-13 | Cut r6's prompts about 3x against `committee_fix_c` |
-| 26Q4-CHORE-04: Rounds at different commits can wait in the queue together | 2 | ✅ DONE | #96, merged 2026-11-13 | The batch q1 kit |
-| 26Q4-HARN-23: A goal file names its own seed, and the kernel tracks start bare | 1 | ✅ DONE | #97, merged 2026-11-13 | From q1: two `Category` classes collided on track-b |
-| 26Q4-HARN-22: Each run samples from its own seed | 1 | ✅ DONE | #98, merged 2026-11-13 | From q1: the 8 I9 runs were token-for-token identical |
-| 26Q4-CHORE-05: A vLLM start that hangs in NCCL is retried, not fatal | 1 | ✅ DONE | #100, merged 2026-11-13 | From q1: 4 of 18 TP=2 starts hung. Logs physical GPUs and climbs a start ladder |
-| 26Q4-HARN-24: A tag closes only on an artifact that is that tag's statement | 2 | 🔲 PENDING | — | Carded in #99 from r6. The user chose rule A (name match) on 2026-11-13 |
-
-## Pulled forward: Phase C preparation (2026-10-30)
-
-The user waived the risk register's "no new card until R4 has run" rule for
-these five cards on 2026-10-30. The box runs are the user's to execute, and
-code finished now makes the Phase C arms runnable as soon as R4 picks the slice.
-None of them is a DoD item and none blocks R4–R6. Rows are ordered so that the
-file-disjoint cards come first: HARN-25 shares `society.py` with `26Q4-HARN-04`
-and `dependency.py` with HARN-27, and HARN-28 depends on HARN-25.
-`26Q4-HARN-03` and `-04` are carded in #71 (ADR 0003).
-
-| Task | Points | Status | PR | Notes |
-|------|--------|--------|----|-------|
-| 26Q4-HARN-04: Reset the foundation to its seed at every generation (the R9 arm) | 2 | ✅ DONE | #94, merged 2026-11-13 | ADR 0003's R9 arm; the flag defaults off. Rehearsed in batch q1's arms round |
-| 26Q4-HARN-03: Arm-comparison report: pooled isolated arm, distinct statements, paired tests | 3 | ✅ DONE | #77, merged 2026-11-04 | Reads saved run directories; reports C9 − I9 and C9 − R9 |
-| 26Q3-HARN-27: Source-anchored dependency edges | 3 | ✅ DONE | #75, merged 2026-11-03 | `stacks-kernel-track-a` and `-b` now start with 16 and 18 available statements; every other goal is still a chain |
-| 26Q3-HARN-25: Proof sketches become open leaves | 5 | 🔲 PENDING | — | Prerequisite for HARN-28's `statement` field |
-| 26Q3-HARN-28: Theorem cards and statement pinning | 5 | 🔲 PENDING | — | Depends on HARN-25. Holds the ANT arc → goal converter; no ANT goal exists without it |
+| q2 | Batch q2: r7b, arms2, thr2, hang, at pin `05aebc22` on `batch/q2-pins` | 4 | 🔲 QUEUED | Built 2026-11-13; runs the weekend of 2026-11-14. Delete `batch/q2-pins` once collected |
+| R7 | Three groups on three tags (`stacks-kernel-track-b`), as q2's r7b | 4 | 🔲 QUEUED | Both q1 jobs hung in NCCL; r7b has `26Q4-CHORE-05`'s start ladder |
+| arms2 | Phase C arms rehearsal: C9, I9 ×9, S1, R9 with per-run seeds | 4 | 🔲 QUEUED | Checks that `26Q4-HARN-22` gives distinct I9 runs and `-23` stops the track-b collision |
+| D2 | §7 density run | 1 | 🔲 PENDING | See the decision table |
 
 ## Definition of Done
 
-1. **N1 density measured for both ANT Ch. I arcs** at the pinned build, from
-   runbook R4. Record per arc: the N1 density, the density with INCONCLUSIVE
-   included, the D4 queue, `stages_run`, `statements_by_stages_run` and
-   `max_n1_confidence_reached`. On the arcs, decisive N1 is 0 by construction
-   (two search stages cap N1 at 0.6), so the slice decision reads D4 review of
-   the queue, not a decisive count.
-2. **Gate A control run**, from the same batch job: every artifact in the
-   committed control arc (`data/novelty_control/gate_a_control_arc.json`)
-   classified. N0 must account for essentially all of them.
-3. **A CVFN denominator exists**: tokens and wall-clock attributed per
-   statement, including failed attempts, on at least one real run (R5).
-4. **`26Q3-HARN-20` Part 2 merged.** ✅ #66, 2026-10-20.
-5. **The slice decision is written down.** It names the chosen arc, or
-   records "both ~zero, Phase C does not start, go to Phase E", and the
-   calendar re-plan for Sprints 5–7 follows from it.
+1. **The slice decision is written down** (Sprint 4's DoD 5). It names the
+   chosen arc and its statements from the D4 read, or records "both ~zero,
+   Phase C does not start, go to Phase E". The calendar for Sprints 6–8
+   follows from it.
+2. **DoD 2's control bar is settled**: kept and met, or restated with a reason
+   (for example, decisive N1 = 0), in the slice decision.
+3. **The harness freezes at a named commit.** `26Q4-HARN-13`, `-15`, `-19` and
+   `-24` merged, or explicitly deferred past Phase C with the reason written
+   down. The freeze SHA is the one Phase C runs.
+4. **Batch q2 is read.** R7 has a result or a diagnosed failure; arms2 shows
+   whether the I9 runs now differ.
 
 Read the gate histogram's *shape*, not its total.
 
@@ -143,54 +108,34 @@ Read the gate histogram's *shape*, not its total.
 
 | Risk | Mitigation | Task |
 |------|------------|------|
-| Found-work displaces the runs again, as it did all of Sprint 3 | No new card enters this sprint until R4 has run. New defects card to Sprint 5 unless they block R4 or R5. **Waived 2026-10-30 for the five Phase C preparation cards**: the runs are the user's, and the code work does not compete with them for box time | — |
-| The restored box is missing pieces (home contents, toolchain, library cache) | R0 is read-only and comes first. Re-provision from R1–R3, not from memory | R0–R3 |
-| Arc drafts fail to elaborate at the pin | 28/41 elaborated against a newer build; every failure was already SCHEMATIC. Repair any non-SCHEMATIC failure in one PR and re-run R4 | R4 |
-| Both arcs measure ~zero N1 | **That is the sprint succeeding.** CVFN is undefined at current scope; go to Phase E early. Do not widen the slice until something scores | DoD 5 |
-| No run's `attempts.json` survived the restore | R5b: a small real run produces one | R5 |
-| A third external result invites a third reframe | The pre-commitment exists to survive news. Get the number first | — |
+| The D4 read is the user's time, and the holiday week shortens the window | It is row D1, with an owner. Group 3 comes first, so a partial read still says the most | D1 |
+| Rule choices for `-13`, `-15`, `-19` stall the freeze | Each card states its options. Ask early in the sprint; a choice deferred past Phase C is allowed if written down | DoD 3 |
+| Found-work displaces the decision, as runs were displaced in Sprints 3 and 4 | New cards go to Sprint 6 unless they block DoD 1 or the freeze | — |
+| q2 hangs in NCCL again | `26Q4-CHORE-05`'s ladder (base → no-custom-ar → no-p2p); the hang round tries every GPU pair | q2 |
+| §7 can't elaborate locally | It runs on the server; do not rebuild the local library without the user's go-ahead (7.2 GB, disk 95% full) | D2 |
 
 ## Deferred — not this sprint
 
 | Task | Points | Why |
 |------|--------|-----|
-| Gate B + Phase C (two-arm calibration run, ADR 0001) | TBD | Sprint 5 pre-lock. Entry-gated on DoD 1 |
-| 26Q3-HARN-26: close leaves and auto-resolve parents | 5 | Sprint 5 pre-lock (`docs/planning/dag-phase.md`). HARN-25, -27 and -28 were pulled forward on 2026-10-30 |
-| 26Q3-HARN-06: D4 side-by-side review view | 3 | Needed before Phase D, whose dates are TBD |
+| Gate B + Phase C (S1 / C9 / I9 / R9 + frontier control, ADR 0001, 0003) | TBD | Sprint 6 pre-lock. Entry-gated on DoD 1 and DoD 3 |
+| 26Q3-HARN-25, 26Q3-HARN-28 | 10 | Sprint 6, with Phase C |
+| 26Q3-HARN-26: close leaves and auto-resolve parents | 5 | Sprint 6 pre-lock (`docs/planning/dag-phase.md`) |
+| 26Q3-HARN-06: D4 side-by-side review view | 3 | Needed before Phase D |
 | 26Q3-HARN-08: agents emit Lean 3, not Lean 4 | 2 | **Re-evidence or close.** Still no evidence the defect exists |
+| 26Q4-HARN-10: gated best-practice layer | 5 (placeholder) | Depends on `26Q3-HARN-28` |
 
 Task cards follow the shared task-card template (`templates/task-card.md` in
 the planning tooling). Cards for this sprint live under
-`docs/planning/tasks/26Q3-01/`.
+`docs/planning/tasks/26Q4-01/`.
 
 ## Sync Log
 
-- **2026-11-13** — 12 tasks reconciled: R5 done (R5e passed 2026-11-09), R6 done (batch q1), R7 in progress (q1's start hung, r7b queued in q2); `26Q4-HARN-14` (#92) and `-04` (#94) done; rows added for `26Q4-CHORE-02` to `-05`, `26Q4-HARN-21` to `-23` (all merged) and `-24` (carded). R4 waits on the D4 read of 37 Ch. I statements. Committed points unchanged at 3/3.
-- **2026-11-09** — 3 tasks reconciled: `26Q4-HARN-16`/`-17`/`-18` done (#84, #86, #88), so R6 has its harness fixes. R4 re-ran at #82's commit; the slice waits on the D4 read. R5 is on its fifth attempt (R5e). Committed points unchanged at 3/3.
-- **2026-11-06** — Server-run and task rows caught up with what has run and
-  merged since 2026-10-30. R0–R3 are done and R4 ran once; #82 merged, so R4
-  re-runs at that commit. `26Q4-HARN-15` to `-19` added. The DoD
-  numbers in the server-run table now match the DoD list.
-- **2026-10-30 (later)** — #72 (`26Q4-HARN-02`) merged, so all three
-  found-work cards are done and no PR is open. This frees `lms/society.py`
-  for `26Q4-HARN-04`.
-- **2026-10-30** — #68 (`26Q4-HARN-01`) and #70 (`26Q4-CHORE-01`) merged;
-  `26Q4-HARN-02` is in review as #72. Five Phase C preparation cards were
-  pulled forward from the Sprint 5 pre-lock and #71 (the reset flag and the
-  arm report from ADR 0003, plus HARN-25, -27 and -28), so the arms are
-  runnable once R4 picks the slice.
-
-- **2026-10-20** — The box is up; the user starts the runbook. #66
-  (`26Q3-HARN-20` Part 2, DoD 4) and #67 (R6 + sbatch knobs) merged, so R4
-  measures with the final classifier. HARN-16/17/18 card statuses corrected
-  to DONE (#50–#52, merged 2026-08-20). Found-work `26Q4-HARN-01` opened
-  as #68, `26Q4-CHORE-01` as #70.
-- **2026-10-09** — Sprint 3 closed at 40/43 pts (committed 10/10), goal not
-  met, archived to `archive/sprint-03-26Q3-01.md`. Sprint 4 opened with dates
-  TBD and scope cut to the Sprint 3 server runs plus `26Q3-HARN-20` Part 2.
-  The pre-locked Gate B + Phase C content moves to Sprint 5; Sprints 5–7 are
-  TBD until DoD 1's number exists. The 2026-09-30 verdict date has passed and
-  needs a re-plan.
+- **2026-11-13** — Sprint 4 closed at 38/58 pts (committed 3/3), measured but
+  not decided, archived to `archive/sprint-04-26Q4-01.md`. Sprint 5 opened
+  2026-11-16 → 2026-11-27 at 11 committed points: the slice decision and the
+  before-freeze cards. Gate B + Phase C move to the Sprint 6 pre-lock with
+  `26Q3-HARN-25` and `-28`.
 
 ---
 

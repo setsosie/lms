@@ -30,6 +30,8 @@ Sort: oldest → newest. New rows append to the bottom.
 |--------|-------|------|---------|-----------|-----------|-----------|-------|
 | Sprint 1 | 2026-06-16 → 2026-06-27 | code | 24 | 0 | 3 | — | — |
 | Sprint 2 | 2026-07-27 → 2026-08-12 | code | 41 | 19 | 22 | — | [link](retros/sprint-02-retro.md) |
+| Sprint 3 | 2026-08-10 → 2026-10-09 | mixed | 43 | 40 | 3 | — | — |
+| Sprint 4 | 2026-10-09 → 2026-11-13 | mixed | 58 | 38 | 20 | — | [link](retros/sprint-04-retro.md) |
 
 <!--
 Repo-specific notes, so `/sprint-forecast` isn't misled:
@@ -46,6 +48,17 @@ Repo-specific notes, so `/sprint-forecast` isn't misled:
   (shakedown runs on the 4×H100) but no task records it, so the column stays —.
   Both sprints classify as `code`: no task is experiment-tagged and 0% of
   delivered points are experiment points.
+- Sprint 3's row was added at the Sprint 4 close (2026-11-13) from
+  `archive/sprint-03-26Q3-01.md`; it has no retro. Its end date is the actual
+  close (2026-10-09), 35 days past the nominal 2026-09-04, across a month
+  with no box. Committed 10; 30 of the 40 were found-work.
+- Sprints 3 and 4 are `mixed`: their goals were unpointed server runs
+  (density, control, CVFN denominator, committee re-run), so 0% of points are
+  experiment points but the sprint existed for the runs.
+- Sprint 4's `Planned` is 58, the table at close. It committed 3; 55 pts were
+  added (18 found-work cards, 5 Phase C preparation cards pulled forward
+  2026-10-30), and 35 of those delivered. Carryover 20 = `26Q4-HARN-13`, `-15`,
+  `-19`, `-24` (10, to Sprint 5) and `26Q3-HARN-25`, `-28` (10, to Sprint 6).
 -->
 
-<!-- Generated/maintained by /retro --write. Last updated: 2026-08-12 -->
+<!-- Generated/maintained by /retro --write. Last updated: 2026-11-13 -->
