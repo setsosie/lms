@@ -5,14 +5,16 @@ import asyncio
 import json
 import math
 import os
+import secrets
 import signal
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from lms.agent import Agent
-from lms.config import Config
+from lms.config import SEED_SPACE, Config, ProviderConfig
 from lms.crash_log import CrashRecoveryLog
 from lms.goals import get_goal, list_goals, Goal
 from lms.lean.interface import LeanVerifier
@@ -127,6 +129,15 @@ def setup_signal_handlers(
     signal.signal(signal.SIGTERM, handle_signal)
 
 
+def _sampling_seed(given: int | None) -> int:
+    """The seed this run samples from: the one given, else a fresh draw."""
+    return given if given is not None else secrets.randbelow(SEED_SPACE)
+
+
+def _seeded(config: ProviderConfig, seed: int) -> ProviderConfig:
+    return replace(config, seed=seed)
+
+
 async def run_experiment(
     n_agents: int,
     n_generations: int,
@@ -145,6 +156,7 @@ async def run_experiment(
     n_working_groups: int = 3,
     max_repair_attempts: int = 2,
     reset_each_generation: bool = False,
+    sampling_seed: int | None = None,
 ) -> None:
     """Run an LMS experiment.
 
@@ -167,6 +179,8 @@ async def run_experiment(
         n_working_groups: Number of parallel working groups in committee mode
         max_repair_attempts: Scribe repair turns after a failed verify in
             committee mode (0 = one-shot)
+        sampling_seed: Seed every request is derived from. None draws one;
+            either way it is recorded in metadata.json
         reset_each_generation: Put the foundation back to its seed before
             every generation after the first (ADR 0003's R9 arm)
     """
@@ -198,6 +212,9 @@ async def run_experiment(
         print(f"  Goal: {goal.name}")
         print(f"  Definitions: {len(goal.definitions)} items")
 
+    seed = _sampling_seed(sampling_seed)
+    print(f"  Sampling seed: {seed}")
+
     # Create providers
     if mixed_providers:
         available = config.available_providers()
@@ -208,7 +225,7 @@ async def run_experiment(
         # Use first n_agents providers
         provider_names = available[:n_agents]
         providers = [
-            create_provider(name, config.get_provider_config(name))
+            create_provider(name, _seeded(config.get_provider_config(name), seed))
             for name in provider_names
         ]
 
@@ -223,7 +240,7 @@ async def run_experiment(
         provider_name = "mixed"  # For metadata
     else:
         # Single provider mode
-        provider_config = config.get_provider_config(provider_name)
+        provider_config = _seeded(config.get_provider_config(provider_name), seed)
         provider = create_provider(provider_name, provider_config)
 
         # Create society
@@ -293,6 +310,9 @@ async def run_experiment(
         "reset_each_generation": reset_each_generation,
         "total_tokens_used": 0,
         "max_tokens": max_tokens,
+        # Every request's seed derives from this one: with it, runs against
+        # freshly started servers no longer repeat one another.
+        "sampling_seed": seed,
         # Which machinery produced this run's results. Without it, a mock run
         # is indistinguishable from a real one after the fact.
         "verifier": society.verifier_metadata(),
@@ -494,6 +514,7 @@ async def resume_experiment(
     n_working_groups: int = 3,
     max_repair_attempts: int = 2,
     reset_each_generation: bool = False,
+    sampling_seed: int | None = None,
 ) -> None:
     """Resume an experiment from a checkpoint.
 
@@ -514,6 +535,8 @@ async def resume_experiment(
             committee mode (0 = one-shot)
         reset_each_generation: As for `run_experiment`. Taken from this
             command line; the checkpoint does not keep it
+        sampling_seed: As for `run_experiment`. A resume samples afresh
+            unless given one, and records it as `sampling_seed_resume`
     """
     # Load metadata to get provider info
     metadata = json.loads((checkpoint_dir / "metadata.json").read_text())
@@ -529,6 +552,9 @@ async def resume_experiment(
         print(f"  Mode: ITERATIVE ({max_attempts} attempts/agent)")
     print()
 
+    seed = _sampling_seed(sampling_seed)
+    print(f"  Sampling seed: {seed}")
+
     # Handle mixed provider mode
     if provider_name == "mixed":
         available = config.available_providers()
@@ -537,12 +563,12 @@ async def resume_experiment(
                 f"Mixed mode requires {n_agents} providers but only {len(available)} configured"
             )
         providers = [
-            create_provider(name, config.get_provider_config(name))
+            create_provider(name, _seeded(config.get_provider_config(name), seed))
             for name in available[:n_agents]
         ]
         provider = providers[0]  # For Society.load compatibility
     else:
-        provider_config = config.get_provider_config(provider_name)
+        provider_config = _seeded(config.get_provider_config(provider_name), seed)
         provider = create_provider(provider_name, provider_config)
         providers = None
 
@@ -603,6 +629,7 @@ async def resume_experiment(
     # Under its own key, like `prompt_overrides_resume`: the original run's
     # value stays as it was, and a mismatch between the two is visible.
     metadata["reset_each_generation_resume"] = reset_each_generation
+    metadata["sampling_seed_resume"] = seed
     if reset_each_generation:
         print("  Foundation: reset to seed every generation")
 
@@ -857,6 +884,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--seed",
+        type=_seed_arg,
+        default=None,
+        help="Sampling seed every request is derived from, 0 to 2^31-1. Falls "
+        "back to $LMS_SEED; with neither, the run draws one. Recorded in "
+        "metadata.json",
+    )
+
+    parser.add_argument(
         "--prompt-file",
         type=str,
         default=None,
@@ -868,9 +904,26 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _seed_arg(raw: str) -> int:
+    """argparse type for a sampling seed: a whole number in [0, 2^31)."""
+    try:
+        value = int(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a whole number: {raw!r}") from None
+    if not 0 <= value < SEED_SPACE:
+        raise argparse.ArgumentTypeError(f"must be 0 to {SEED_SPACE - 1}, got {value}")
+    return value
+
+
 def main() -> None:
     """Main CLI entry point."""
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.seed is None and (os.getenv("LMS_SEED") or "").strip():
+        try:
+            args.seed = _seed_arg(os.environ["LMS_SEED"].strip())
+        except argparse.ArgumentTypeError as e:
+            parser.error(f"LMS_SEED: {e}")
 
     # Committee mode has hard requirements; fail before any tokens are spent.
     if args.groups and not args.goal and not args.resume:
@@ -937,6 +990,7 @@ def main() -> None:
                 n_working_groups=args.n_groups,
                 max_repair_attempts=args.repair_attempts,
                 reset_each_generation=args.reset_each_generation,
+                sampling_seed=args.seed,
             )
         )
         return
@@ -1003,6 +1057,7 @@ def main() -> None:
             n_working_groups=args.n_groups,
             max_repair_attempts=args.repair_attempts,
             reset_each_generation=args.reset_each_generation,
+            sampling_seed=args.seed,
         )
     )
 

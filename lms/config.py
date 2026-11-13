@@ -34,6 +34,11 @@ def _max_tokens_from_env(var: str) -> int:
     return value
 
 
+#: Seeds are drawn from, and wrap within, [0, SEED_SPACE): what a 32-bit signed
+#: integer holds, which every OpenAI-compatible server accepts.
+SEED_SPACE = 2**31
+
+
 @dataclass
 class ProviderConfig:
     """Configuration for an LLM provider."""
@@ -43,6 +48,10 @@ class ProviderConfig:
     max_tokens: int = DEFAULT_MAX_TOKENS
     # OpenAI-compatible endpoint (vLLM, SGLang, Ollama). None = the hosted API.
     base_url: str | None = None
+    # The run's sampling seed. Set, every request carries a seed derived from
+    # it; None sends none. A local server otherwise samples from its own engine
+    # seed, so two runs against freshly started servers come out identical.
+    seed: int | None = None
 
 
 @dataclass
