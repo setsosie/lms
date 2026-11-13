@@ -46,24 +46,16 @@ Stacks Project (untracked; default `references/stacks-project/`, override with
 memory. To change a track's scope, edit the curation table in the script and
 regenerate — do not hand-edit the JSON.
 
-## Registration (one small patch, not yet applied)
+## Registration and foundation
 
-The CLI resolves `--goal` through `GOALS_REGISTRY` (`lms/goals.py:1341`), which
-holds Python-defined goals only. To make these files reachable, in `get_goal`
-(`lms/goals.py:1350`) fall back to the data directory before raising:
+`get_goal` falls back to this directory, so `--goal stacks-kernel-track-b`
+works with no code change. `Goal.load` restores the optional fields
+`allowed_imports`, `forbidden_imports`, `preamble`, `seed` and `seeded_tags`;
+a run-saved `goal.json` without them still loads.
 
-```python
-path = Path(__file__).resolve().parent.parent / "goals" / f"{name.replace('-', '_')}.json"
-if path.exists():
-    return Goal.load(path)
-```
-
-and extend `Goal.load` to restore the three optional fields it currently drops
-(`allowed_imports=data.get("allowed_imports")`,
-`forbidden_imports=data.get("forbidden_imports")`,
-`preamble=data.get("preamble")` — all backward-compatible with run-saved
-`goal.json` files, which lack the keys). That makes the invocation
-`--goal stacks-kernel-track-b`. This patch is deliberately **not** in this
-branch: `26Q3-HARN-12` is rewiring `lms/` in parallel and this directory must
-stay docs/data-only; land it as a follow-up once HARN-12 merges (see the
-26Q3-STACKS-01 card).
+`seed` picks the generation-0 foundation (`lms/seed/<name>.lean`). A file with
+no `seed` key gets the shipped default, a from-scratch `Category` class. Both
+kernel tracks set `"seed": ""`, a bare foundation, because they build on
+Mathlib's CategoryTheory: with the default seed, agents imported both
+`Category` classes and instance search failed between them (batch q1, 24 of
+73 artifacts on Track B).
