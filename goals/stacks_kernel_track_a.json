@@ -195,5 +195,6 @@
   ],
   "allowed_imports": null,
   "forbidden_imports": [],
-  "preamble": "/-\n  SHARED KERNEL: build ON Mathlib, do not rebuild it.\n\n  - Import Mathlib freely; prefer Mathlib.CategoryTheory.* as the substrate.\n  - Extend what exists (e.g. CategoryTheory.FiberedCategory.*) instead of\n    redefining it. A statement Mathlib already has is calibration only (N0)\n    and must not be re-proved from scratch.\n  - Cite the Stacks tag of the statement you formalize in a comment:\n    `-- Stacks Tag 02XM`.\n  - The compiled LMS corpus (LMS.Foundation) is importable and openable.\n-/"
+  "preamble": "/-\n  SHARED KERNEL: build ON Mathlib, do not rebuild it.\n\n  - Import Mathlib freely; prefer Mathlib.CategoryTheory.* as the substrate.\n  - Extend what exists (e.g. CategoryTheory.FiberedCategory.*) instead of\n    redefining it. A statement Mathlib already has is calibration only (N0)\n    and must not be re-proved from scratch.\n  - Cite the Stacks tag of the statement you formalize in a comment:\n    `-- Stacks Tag 02XM`.\n  - The compiled LMS corpus (LMS.Foundation) is importable and openable.\n-/",
+  "seed": ""
 }

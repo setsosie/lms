@@ -253,12 +253,13 @@ def build_goal(
         "description": description,
         "source": source,
         "definitions": definitions,
-        # NOTE: Goal.load() currently reads only the four fields above; the
-        # fields below are carried for the registration shim to apply (see
-        # goals/README.md) and are ignored by a plain Goal.load().
         "allowed_imports": None,
         "forbidden_imports": [],
         "preamble": preamble,
+        # A bare foundation. These goals build on Mathlib's CategoryTheory, and
+        # the shipped seed is a second, from-scratch `Category` class: agents
+        # importing both got `failed to synthesize CategoryTheory.Category`.
+        "seed": "",
     }
 
 
