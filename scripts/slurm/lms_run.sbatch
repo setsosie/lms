@@ -63,9 +63,15 @@ SERVED_NAME="${SERVED_NAME:-lms-generalist}"
 PORT="${PORT:-8000}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-131072}"
 TP_SIZE="${TP_SIZE:-4}"
-# Seconds to wait for the server to list its model. A cold load took about
-# 3 minutes on the box; the old loop said 600 s and really waited up to 20 min.
-READY_TIMEOUT="${READY_TIMEOUT:-900}"
+# Seconds each start attempt gets to list its model; "Start vLLM" below says
+# why there can be more than one. A healthy start answered in 70-80 s on the
+# box and a cold one in 195-212 s. READY_TIMEOUT is this limit's name from
+# when there was one attempt: a caller that sets it and not START_TIMEOUT gets
+# it as the limit for each attempt.
+START_TIMEOUT="${START_TIMEOUT:-${READY_TIMEOUT:-360}}"
+# The start attempts to make, in order, until one answers. START_LADDER=base
+# is the single attempt this script used to make.
+START_LADDER="${START_LADDER:-base no-custom-ar no-p2p}"
 # vLLM 0.33.0 compiles its DeepGEMM and FlashInfer kernels at load, which needs a
 # CUDA toolkit this node doesn't have on its default paths: it died in
 # find_cuda_toolkit. Its GDN prefill also picks FlashInfer without checking that
@@ -118,6 +124,7 @@ echo "agents=$AGENTS generations=$GENERATIONS goal=$GOAL iterative=$ITERATIVE n_
 echo "resume=$RESUME checkpoint_interval=$CHECKPOINT_INTERVAL out=$OUT_DIR"
 echo "max_tokens=${MAX_TOKENS:-unlimited}"
 echo "reset_each_generation=$RESET_EACH_GENERATION"
+echo "start_ladder=$START_LADDER start_timeout=${START_TIMEOUT}s"
 
 # Before vLLM loads, like the check below: a fresh run over a checkpoint
 # overwrites it, and a resume with no checkpoint has nothing to continue.
@@ -151,6 +158,23 @@ if [ "$N_GROUPS" -gt 0 ] && [ "$ITERATIVE" = "1" ]; then
   echo "FATAL: committee mode (N_GROUPS=$N_GROUPS) needs ITERATIVE=0"
   exit 2
 fi
+
+# A misspelt rung or limit would otherwise show only once the server is loading.
+if ! [[ "$START_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "FATAL: START_TIMEOUT=$START_TIMEOUT (or READY_TIMEOUT, when that is unset) is not a positive whole number of seconds"
+  exit 2
+fi
+read -ra LADDER <<< "$START_LADDER"
+if [ -z "${START_LADDER//[[:space:]]/}" ]; then
+  echo "FATAL: START_LADDER is empty; give it one or more of: base no-custom-ar no-p2p"
+  exit 2
+fi
+for rung in "${LADDER[@]}"; do
+  case "$rung" in
+    base|no-custom-ar|no-p2p) ;;
+    *) echo "FATAL: START_LADDER has '$rung'; the rungs are base, no-custom-ar, no-p2p"; exit 2 ;;
+  esac
+done
 echo "commit=$(git rev-parse --short HEAD) branch=$(git rev-parse --abbrev-ref HEAD)"
 echo "logs=$LOG_DIR"
 
@@ -175,6 +199,7 @@ done
 command -v lake >/dev/null 2>&1 || { echo "FATAL: lake not on PATH; check ELAN_HOME=$ELAN_HOME"; exit 1; }
 [ -d "lean/.lake" ] || { echo "FATAL: lean/.lake missing -- Mathlib not built on this node"; exit 1; }
 [ -x "$SCRATCH/vllm-env/bin/vllm" ] || { echo "FATAL: no vLLM venv at $SCRATCH/vllm-env"; exit 1; }
+command -v setsid >/dev/null 2>&1 || { echo "FATAL: setsid not on PATH; it stops a hung server's workers"; exit 1; }
 
 # Refuse to load onto a GPU that is already busy.
 #
@@ -184,12 +209,18 @@ command -v lake >/dev/null 2>&1 || { echo "FATAL: lake not on PATH; check ELAN_H
 #
 # Only the GPUs Slurm allocated are checked. Other people's jobs share this
 # node; a GPU busy with theirs is not ours to refuse over.
+#
+# busy_gpus prints those of them holding >1 GiB, e.g. "0 2 ". A start that
+# hangs is retried only once its GPUs read free again, by the same test.
+busy_gpus() {
+  nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits \
+    | awk -F', ' -v vis="${CUDA_VISIBLE_DEVICES:-}" '
+        BEGIN { n = split(vis, ids, ","); for (i = 1; i <= n; i++) mine[ids[i]] = 1 }
+        (n == 0 || ($1 in mine)) && $2 > 1024 { printf "%s ", $1 }'
+}
 echo "--- GPU state (allocated: ${CUDA_VISIBLE_DEVICES:-all}) ---"
 nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
-BUSY=$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits \
-  | awk -F', ' -v vis="${CUDA_VISIBLE_DEVICES:-}" '
-      BEGIN { n = split(vis, ids, ","); for (i = 1; i <= n; i++) mine[ids[i]] = 1 }
-      (n == 0 || ($1 in mine)) && $2 > 1024 { printf "%s ", $1 }')
+BUSY=$(busy_gpus)
 if [ -n "$BUSY" ]; then
   echo "FATAL: GPU(s) $BUSY already hold >1 GiB. A vLLM started outside Slurm"
   echo "       (e.g. in tmux) is invisible to the scheduler and will collide."
@@ -203,6 +234,18 @@ if curl -sS --max-time 3 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; t
   exit 1
 fi
 
+# --- Which GPUs, and how they are linked ------------------------------------
+# The gpus= line above does not say which physical cards the job got, and a
+# start that hangs (below) may depend on it: H100 NVL cards are NVLink-bridged
+# in pairs. Slurm's IDX field names the cards; `nvidia-smi topo -m` shows the
+# link between them (NV12 for a bridged pair). Neither may fail the job.
+echo "--- GPUs this job holds, and how they are linked ---"
+if [ -n "${SLURM_JOB_ID:-}" ]; then
+  GRES_IDX=$(scontrol show job -d "$SLURM_JOB_ID" 2>/dev/null | grep -o 'GRES=[^ ]*IDX:[^ ]*' | sort -u) || true
+  echo "${GRES_IDX:-scontrol gave no GRES IDX for job $SLURM_JOB_ID}"
+fi
+nvidia-smi topo -m 2>&1 || true
+
 # --- Start vLLM -------------------------------------------------------------
 # Absolute path into vLLM's OWN venv. Never `uv run vllm`: uv re-syncs uv.lock,
 # which downgrades the openai package the harness needs.
@@ -214,23 +257,82 @@ fi
 if [ -z "${SLURM_JOB_ID:-}" ]; then
   export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
 fi
-echo "--- starting vLLM on GPUs ${CUDA_VISIBLE_DEVICES:-all} (log: $VLLM_LOG) ---"
-"$SCRATCH/vllm-env/bin/vllm" serve "$MODEL_REPO" \
-  --port "$PORT" \
-  --tensor-parallel-size "$TP_SIZE" \
-  --max-model-len "$MAX_MODEL_LEN" \
-  --served-model-name "$SERVED_NAME" \
-  --gdn-prefill-backend "$GDN_PREFILL_BACKEND" \
-  $LMS_EXTRA_VLLM_ARGS \
-  > "$VLLM_LOG" 2>&1 &
-VLLM_PID=$!
+
+# A start can hang. In batch q1, 4 of 18 TP=2 starts logged "vLLM is using
+# nccl==2.30.7" and then nothing until vLLM's own 600 s engine timeout, where a
+# healthy start logs its all-reduce backends a second later and answers in
+# 70-80 s. Each hang cost the whole job. The one hung job that logged its GPUs
+# had cards 0 and 2; the starts that served ran on 0-1, a bridged pair. The
+# guess, not yet tested, is that custom all-reduce or NCCL peer-to-peer hangs
+# over PCIe on an unbridged pair. So a start that is alive but silent after
+# START_TIMEOUT is stopped and the next rung is tried:
+#   base          today's command and environment, unchanged
+#   no-custom-ar  base + --disable-custom-all-reduce
+#   no-p2p        no-custom-ar + NCCL_P2P_DISABLE=1, for the server only
+# A server that dies is not retried: that is a different failure. The rung
+# that served is printed as SERVED_BY=<rung>. A rung below base may be slower,
+# so report it next to the run's results.
+#
+# Each attempt logs to vllm.attempt-<rung>.log, and vllm.log is a second name
+# for the current attempt's log, so it ends as the log of the one that served.
+# A resumed job reuses this directory; an earlier job's attempts go first, as
+# its vllm.log always did.
+rm -f "$LOG_DIR"/vllm.attempt-*.log
+VLLM_PID=""
+ATTEMPT_LOG="$VLLM_LOG"
+
+# Each attempt runs in its own process group, because vLLM starts an engine
+# process and a worker per GPU, and a worker left behind keeps its GPU's
+# memory. A script's background job is not a group leader, so setsid runs the
+# server in place and $! is the new group's id.
+start_server() {
+  local rung=$1
+  local -a rung_args=() rung_env=()
+  case "$rung" in
+    no-custom-ar) rung_args=(--disable-custom-all-reduce) ;;
+    no-p2p) rung_args=(--disable-custom-all-reduce); rung_env=(NCCL_P2P_DISABLE=1) ;;
+  esac
+  ATTEMPT_LOG="$LOG_DIR/vllm.attempt-$rung.log"
+  : > "$ATTEMPT_LOG"
+  ln -f "$ATTEMPT_LOG" "$VLLM_LOG" 2>/dev/null || ln -sf "$(basename "$ATTEMPT_LOG")" "$VLLM_LOG"
+  echo "--- starting vLLM ($rung) on GPUs ${CUDA_VISIBLE_DEVICES:-all} (log: $ATTEMPT_LOG) ---"
+  env ${rung_env[@]+"${rung_env[@]}"} setsid "$SCRATCH/vllm-env/bin/vllm" serve "$MODEL_REPO" \
+    --port "$PORT" \
+    --tensor-parallel-size "$TP_SIZE" \
+    --max-model-len "$MAX_MODEL_LEN" \
+    --served-model-name "$SERVED_NAME" \
+    --gdn-prefill-backend "$GDN_PREFILL_BACKEND" \
+    $LMS_EXTRA_VLLM_ARGS \
+    ${rung_args[@]+"${rung_args[@]}"} \
+    > "$ATTEMPT_LOG" 2>&1 &
+  VLLM_PID=$!
+}
+
+# Stop an attempt's whole process group: TERM, then KILL whatever is left after
+# STOP_GRACE seconds. A process stuck inside NCCL never runs its TERM handler.
+STOP_GRACE="${STOP_GRACE:-20}"
+stop_server() {
+  local pid=$1 t0=$SECONDS
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+  while kill -0 -- "-$pid" 2>/dev/null && [ $((SECONDS - t0)) -lt "$STOP_GRACE" ]; do
+    sleep 1
+  done
+  kill -KILL -- "-$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  # KILL is not instant; give the group a moment to be gone.
+  t0=$SECONDS
+  while kill -0 -- "-$pid" 2>/dev/null && [ $((SECONDS - t0)) -lt 10 ]; do
+    sleep 1
+  done
+}
 
 # Kill the server on any exit path, or a failed job strands the H100s until the
 # walltime expires.
 cleanup() {
-  echo "--- tearing down vLLM (pid $VLLM_PID) ---"
-  kill "$VLLM_PID" 2>/dev/null
-  wait "$VLLM_PID" 2>/dev/null
+  [ -n "$VLLM_PID" ] || return 0
+  echo "--- tearing down vLLM (pid $VLLM_PID and its process group) ---"
+  stop_server "$VLLM_PID"
+  VLLM_PID=""
 }
 trap cleanup EXIT INT TERM
 
@@ -238,23 +340,75 @@ trap cleanup EXIT INT TERM
 # Poll rather than sleep: load time varies with page cache and is ~2-3 min cold.
 # vLLM binds the port long before it can answer, so a `curl` during load waits
 # out its own limit: time comes from the clock, not from counting loops.
-echo "--- waiting for vLLM on port $PORT (up to ${READY_TIMEOUT}s) ---"
-READY=0
-WAIT_START=$SECONDS
-while [ $((SECONDS - WAIT_START)) -lt "$READY_TIMEOUT" ]; do
+# Returns 0 once the server answers and 1 if it is alive but silent at
+# START_TIMEOUT; a server that dies ends the job.
+wait_for_server() {
+  local rung=$1
+  ATTEMPT_START=$SECONDS
+  while [ $((SECONDS - ATTEMPT_START)) -lt "$START_TIMEOUT" ]; do
+    kill -0 "$VLLM_PID" 2>/dev/null || break
+    if curl -sS --max-time 5 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 5
+  done
   if ! kill -0 "$VLLM_PID" 2>/dev/null; then
-    echo "FATAL: vLLM died during startup. Tail of $VLLM_LOG:"
-    tail -40 "$VLLM_LOG"
+    echo "FATAL: vLLM died during startup ($rung). Tail of $ATTEMPT_LOG:"
+    tail -40 "$ATTEMPT_LOG"
     exit 1
   fi
-  if curl -sS --max-time 5 "http://localhost:${PORT}/v1/models" >/dev/null 2>&1; then
-    READY=1
-    echo "vLLM ready after ~$((SECONDS - WAIT_START))s"
+  return 1
+}
+
+# A stopped attempt's GPUs must read free before the next one loads, or it
+# fails for that reason instead. Bounded: GPU_FREE_TIMEOUT seconds.
+GPU_FREE_TIMEOUT="${GPU_FREE_TIMEOUT:-60}"
+wait_for_free_gpus() {
+  local t0=$SECONDS busy
+  busy=$(busy_gpus)
+  while [ -n "$busy" ] && [ $((SECONDS - t0)) -lt "$GPU_FREE_TIMEOUT" ]; do
+    sleep 5
+    busy=$(busy_gpus)
+  done
+  [ -n "$busy" ] || return 0
+  echo "FATAL: GPU(s) $busy still hold >1 GiB ${GPU_FREE_TIMEOUT}s after the hung start was"
+  echo "       stopped; something outside its process group holds them."
+  nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
+  return 1
+}
+
+SERVED_BY=""
+TRIED=""
+LADDER_START=$SECONDS
+for rung in "${LADDER[@]}"; do
+  if [ -n "$TRIED" ]; then
+    wait_for_free_gpus || exit 1
+  fi
+  start_server "$rung"
+  echo "--- waiting for vLLM on port $PORT (up to ${START_TIMEOUT}s) ---"
+  if wait_for_server "$rung"; then
+    SERVED_BY=$rung
     break
   fi
-  sleep 5
+  TRIED="${TRIED:+$TRIED }$rung"
+  echo "WARN: vLLM ($rung) is alive but not answering after ${START_TIMEOUT}s. Its last lines:"
+  tail -3 "$ATTEMPT_LOG"
+  echo "--- stopping it (pid $VLLM_PID and its process group) ---"
+  stop_server "$VLLM_PID"
+  VLLM_PID=""
 done
-[ "$READY" -eq 1 ] || { echo "FATAL: vLLM not ready after ${READY_TIMEOUT}s"; tail -40 "$VLLM_LOG"; exit 1; }
+if [ -z "$SERVED_BY" ]; then
+  echo "FATAL: vLLM not ready after ${START_TIMEOUT}s on each rung tried: $TRIED"
+  tail -40 "$ATTEMPT_LOG"
+  exit 1
+fi
+READY_AFTER=$((SECONDS - ATTEMPT_START))
+echo "SERVED_BY=$SERVED_BY after ~${READY_AFTER}s"
+echo "vLLM ready after ~${READY_AFTER}s"
+if [ -n "$TRIED" ]; then
+  echo "NOTE: $TRIED hung; $SERVED_BY served ~$((SECONDS - LADDER_START))s after the first start."
+  echo "      It may be slower than base: report the rung with this run's results."
+fi
 
 grep -m1 "GPU KV cache size" "$VLLM_LOG" || true
 
