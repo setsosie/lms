@@ -7,6 +7,7 @@
 #   sbatch scripts/slurm/lms_run.sbatch
 #   sbatch --export=ALL,AGENTS=6,GENERATIONS=5 scripts/slurm/lms_run.sbatch
 #   sbatch --export=ALL,N_GROUPS=3,ITERATIVE=0 scripts/slurm/lms_run.sbatch   # committee mode
+#   sbatch --export=ALL,N_GROUPS=3,ITERATIVE=0,RESET_EACH_GENERATION=1 scripts/slurm/lms_run.sbatch  # R9 arm
 #   sbatch --export=ALL,RESUME=1,RUN_TAG=<tag>,... scripts/slurm/lms_run.sbatch  # after a walltime
 #
 # ---------------------------------------------------------------------------
@@ -41,6 +42,9 @@ ITERATIVE="${ITERATIVE:-1}"          # 1 = pass --iterative
 # silently ignores assignments to it.
 N_GROUPS="${N_GROUPS:-0}"
 REPAIR_ATTEMPTS="${REPAIR_ATTEMPTS:-2}"  # committee mode only
+# 1 = pass --reset-each-generation: the foundation goes back to its seed before
+# every generation after the first (ADR 0003's R9 arm). 0 or 1, nothing else.
+RESET_EACH_GENERATION="${RESET_EACH_GENERATION:-0}"
 # Token budget for the whole run (--max-tokens); empty = no limit. The harness
 # checks it when a generation starts, so a run stops at the first generation
 # boundary past the budget, not at the exact token.
@@ -113,6 +117,7 @@ echo "node=$(hostname)  job=${SLURM_JOB_ID:-none}  gpus=${CUDA_VISIBLE_DEVICES:-
 echo "agents=$AGENTS generations=$GENERATIONS goal=$GOAL iterative=$ITERATIVE n_groups=$N_GROUPS"
 echo "resume=$RESUME checkpoint_interval=$CHECKPOINT_INTERVAL out=$OUT_DIR"
 echo "max_tokens=${MAX_TOKENS:-unlimited}"
+echo "reset_each_generation=$RESET_EACH_GENERATION"
 
 # Before vLLM loads, like the check below: a fresh run over a checkpoint
 # overwrites it, and a resume with no checkpoint has nothing to continue.
@@ -131,6 +136,13 @@ fi
 # Same reason: argparse would reject it, but only after vLLM has loaded.
 if [ -n "$MAX_TOKENS" ] && ! [[ "$MAX_TOKENS" =~ ^[1-9][0-9]*$ ]]; then
   echo "FATAL: MAX_TOKENS=$MAX_TOKENS is not a positive whole number"
+  exit 2
+fi
+
+# Same reason, though nothing downstream would refuse it: anything but 1 would
+# quietly run the carried arm under the reset arm's name.
+if [ "$RESET_EACH_GENERATION" != "0" ] && [ "$RESET_EACH_GENERATION" != "1" ]; then
+  echo "FATAL: RESET_EACH_GENERATION=$RESET_EACH_GENERATION must be 0 or 1"
   exit 2
 fi
 
@@ -253,6 +265,8 @@ MODE_FLAGS=""
 [ "$N_GROUPS" -gt 0 ] && MODE_FLAGS="--groups --n-groups $N_GROUPS --repair-attempts $REPAIR_ATTEMPTS"
 BUDGET_ARGS=()
 [ -n "$MAX_TOKENS" ] && BUDGET_ARGS=(--max-tokens "$MAX_TOKENS")
+RESET_ARGS=()
+[ "$RESET_EACH_GENERATION" = "1" ] && RESET_ARGS=(--reset-each-generation)
 RESUME_ARGS=()
 TEE_ARGS=()
 if [ "$RESUME" = "1" ]; then
@@ -271,6 +285,7 @@ uv run python -m lms.run \
   $ITER_FLAG \
   $MODE_FLAGS \
   ${BUDGET_ARGS[@]+"${BUDGET_ARGS[@]}"} \
+  ${RESET_ARGS[@]+"${RESET_ARGS[@]}"} \
   ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   --checkpoint-interval "$CHECKPOINT_INTERVAL" \
   --output "$OUT_DIR" \

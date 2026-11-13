@@ -144,6 +144,7 @@ async def run_experiment(
     use_working_groups: bool = False,
     n_working_groups: int = 3,
     max_repair_attempts: int = 2,
+    reset_each_generation: bool = False,
 ) -> None:
     """Run an LMS experiment.
 
@@ -166,6 +167,8 @@ async def run_experiment(
         n_working_groups: Number of parallel working groups in committee mode
         max_repair_attempts: Scribe repair turns after a failed verify in
             committee mode (0 = one-shot)
+        reset_each_generation: Put the foundation back to its seed before
+            every generation after the first (ADR 0003's R9 arm)
     """
     print("\nStarting LMS Experiment")
     print(f"  Agents: {n_agents}")
@@ -244,6 +247,7 @@ async def run_experiment(
         society.use_working_groups = True
         society.n_working_groups = n_working_groups
         society.max_repair_attempts = max_repair_attempts
+    society.reset_foundation_each_generation = reset_each_generation
 
     # Clear the shared foundation before generation 1 proposes anything.
     # It lives inside the Lean project (imports must resolve through Lake), so
@@ -268,6 +272,8 @@ async def run_experiment(
         print(f"  Mode: COMMITTEE ({n_working_groups} groups)")
     elif iterative_mode:
         print(f"  Mode: ITERATIVE ({max_attempts} attempts/agent)")
+    if reset_each_generation:
+        print("  Foundation: reset to seed every generation")
     print()
 
     # Written now as well as at the end: a job killed at its walltime never
@@ -282,6 +288,9 @@ async def run_experiment(
         # None unless --prompt-file / LMS_PROMPT_FILE was applied; then the
         # source path and the exact override versions that ran.
         "prompt_overrides": active_overrides(),
+        # ADR 0003's R9 arm: the foundation went back to its seed every
+        # generation. Recorded either way, so an arm is never inferred.
+        "reset_each_generation": reset_each_generation,
         "total_tokens_used": 0,
         "max_tokens": max_tokens,
         # Which machinery produced this run's results. Without it, a mock run
@@ -484,6 +493,7 @@ async def resume_experiment(
     use_working_groups: bool = False,
     n_working_groups: int = 3,
     max_repair_attempts: int = 2,
+    reset_each_generation: bool = False,
 ) -> None:
     """Resume an experiment from a checkpoint.
 
@@ -502,6 +512,8 @@ async def resume_experiment(
         n_working_groups: Number of parallel working groups in committee mode
         max_repair_attempts: Scribe repair turns after a failed verify in
             committee mode (0 = one-shot)
+        reset_each_generation: As for `run_experiment`. Taken from this
+            command line; the checkpoint does not keep it
     """
     # Load metadata to get provider info
     metadata = json.loads((checkpoint_dir / "metadata.json").read_text())
@@ -587,6 +599,12 @@ async def resume_experiment(
         society.use_working_groups = True
         society.n_working_groups = n_working_groups
         society.max_repair_attempts = max_repair_attempts
+    society.reset_foundation_each_generation = reset_each_generation
+    # Under its own key, like `prompt_overrides_resume`: the original run's
+    # value stays as it was, and a mismatch between the two is visible.
+    metadata["reset_each_generation_resume"] = reset_each_generation
+    if reset_each_generation:
+        print("  Foundation: reset to seed every generation")
 
     # The resume counterpart of run_experiment's reset: the project's
     # Foundation.lean is whatever the last job left behind, not this run's.
@@ -830,6 +848,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--reset-each-generation",
+        action="store_true",
+        help="Put Foundation.lean back to its seed at the start of every "
+        "generation after the first, keeping the textbook, task statuses and "
+        "artifact library: the reset arm (R9) of ADR 0003. Not kept in "
+        "checkpoints; pass it again with --resume",
+    )
+
+    parser.add_argument(
         "--prompt-file",
         type=str,
         default=None,
@@ -909,6 +936,7 @@ def main() -> None:
                 use_working_groups=args.groups,
                 n_working_groups=args.n_groups,
                 max_repair_attempts=args.repair_attempts,
+                reset_each_generation=args.reset_each_generation,
             )
         )
         return
@@ -974,6 +1002,7 @@ def main() -> None:
             use_working_groups=args.groups,
             n_working_groups=args.n_groups,
             max_repair_attempts=args.repair_attempts,
+            reset_each_generation=args.reset_each_generation,
         )
     )
 

@@ -167,3 +167,50 @@ def test_a_server_that_never_answers_is_reported_with_the_real_limit(
 def test_the_gpu_request_uses_the_name_this_box_accepts() -> None:
     assert "#SBATCH --gres=gpu:nvidia_h100_nvl:4" in text()
     assert "gpu:h100:" not in text()
+
+
+# --- The R9 arm's knob: RESET_EACH_GENERATION=1 -------------------------------
+
+
+def test_the_reset_knob_reaches_the_harness(box: dict[str, str]) -> None:
+    result = run(box, RESET_EACH_GENERATION="1")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--reset-each-generation" in recorded(box, "uv.args")
+    assert "reset_each_generation=1" in result.stdout
+
+
+@pytest.mark.parametrize("knobs", [{}, {"RESET_EACH_GENERATION": "0"}])
+def test_no_reset_unless_the_knob_is_1(
+    box: dict[str, str], knobs: dict[str, str]
+) -> None:
+    result = run(box, **knobs)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "lms.run" in recorded(box, "uv.args")
+    assert "--reset-each-generation" not in recorded(box, "uv.args")
+    assert "reset_each_generation=0" in result.stdout
+
+
+def test_a_resumed_job_keeps_the_reset(box: dict[str, str]) -> None:
+    """The checkpoint does not keep the flag; the resubmission passes it again."""
+    out = Path(box["REPO"]) / "experiments" / box["RUN_TAG"]
+    out.mkdir(parents=True)
+    for name in ("results.json", "metadata.json", "foundation.json"):
+        (out / name).write_text("{}")
+
+    result = run(box, RESUME="1", RESET_EACH_GENERATION="1")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = recorded(box, "uv.args")
+    assert "--resume" in args
+    assert "--reset-each-generation" in args
+
+
+@pytest.mark.parametrize("bad", ["true", "yes", "2", "on"])
+def test_a_reset_knob_that_is_not_0_or_1_stops_before_the_server_loads(
+    box: dict[str, str], bad: str
+) -> None:
+    """`true` silently running the carried arm would cost a whole R9 run."""
+    result = run(box, RESET_EACH_GENERATION=bad)
+    assert result.returncode == 2
+    assert "RESET_EACH_GENERATION" in result.stdout
+    assert recorded(box, "vllm.args") == ""

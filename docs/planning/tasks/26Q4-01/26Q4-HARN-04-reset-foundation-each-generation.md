@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔄 IN PROGRESS |
 | **Branch** | `26Q4-HARN-04-reset-foundation-each-generation` |
 | **Dependencies** | None. Required by ADR 0003 (Accepted 2026-10-30) for the R9 arm |
 | **PR Size Target** | <250 lines (max 500) |
@@ -42,13 +42,13 @@ grep -n "reset" lms/run.py
 
 #### Acceptance Criteria
 
-- [ ] `Society.reset_foundation_each_generation: bool = False`
-- [ ] `reset_foundation()` keeps the seeded snapshot on the society; when the flag is set, every `run_generation()` after the first restores that snapshot and rebuilds before dispatching, via `_write_and_build_foundation()`, so `_last_good_foundation` becomes the seed state too
-- [ ] The per-generation restore does **not** call `goal.mark_seeded()` again or re-print the seed banner
-- [ ] `lms/run.py` adds `--reset-each-generation` (store_true, help text naming ADR 0003); `metadata.json` records `"reset_each_generation": true|false` on every run
-- [ ] Tests in `tests/test_foundation_persistence.py`: with the flag set, generation 1 starts with exactly the seed entries and `_derive_references` on code naming a generation-0 entry returns nothing; with the flag off, generation-0 entries carry into generation 1 (regression); the textbook and the dependency graph's statuses are unchanged by a reset; the flag is parsed and reaches the society (`tests/test_society.py` or the parser tests' existing location)
-- [ ] All tests pass: `uv run pytest tests/test_foundation_persistence.py tests/test_society.py -v`
-- [ ] `uv run ruff check lms/society.py lms/run.py` and `uv run mypy lms/society.py lms/run.py` clean
+- [x] `Society.reset_foundation_each_generation: bool = False`
+- [x] `reset_foundation()` keeps the seeded snapshot on the society; when the flag is set, every `run_generation()` after the first restores that snapshot and rebuilds before dispatching, via `_write_and_build_foundation()`, so `_last_good_foundation` becomes the seed state too
+- [x] The per-generation restore does **not** call `goal.mark_seeded()` again or re-print the seed banner
+- [x] `lms/run.py` adds `--reset-each-generation` (store_true, help text naming ADR 0003); `metadata.json` records `"reset_each_generation": true|false` on every run
+- [x] Tests in `tests/test_foundation_persistence.py`: with the flag set, generation 1 starts with exactly the seed entries and `_derive_references` on code naming a generation-0 entry returns nothing; with the flag off, generation-0 entries carry into generation 1 (regression); the textbook and the dependency graph's statuses are unchanged by a reset; the flag is parsed and reaches the society (`tests/test_society.py` or the parser tests' existing location)
+- [x] All tests pass: `uv run pytest tests/test_foundation_persistence.py tests/test_society.py -v`
+- [x] `uv run ruff check lms/society.py lms/run.py` and `uv run mypy lms/society.py lms/run.py` clean
 - [ ] A two-generation committee run on the box with the flag set shows a seed-only foundation entering generation 1 — accepted via Outcome Demo
 
 ---
@@ -71,6 +71,14 @@ grep -n "reset" lms/run.py
 - Mirror the HARN-22 rollback: `snapshot()` / `restore()` plus `_write_and_build_foundation()`. Do not add a second write or build path.
 - Mirror `--repair-attempts` for the CLI flag and how `run.py` copies it onto the society; mirror `prompt_overrides` for the metadata field.
 - A resumed run (`--resume`) takes the flag from the command line like every other run flag; do not persist it into checkpoints in this PR.
+
+**As built:**
+- Tag reconciliation after a generation (`_reopen_tags_without_foundation_work`) reopened every tag whose artifact the foundation no longer held, so a reset would have reopened all earlier generations' tags after the next verifying generation, contrary to ADR 0003. With the flag set it now takes the generation and skips artifacts from before it; a build that drops the current generation's work still reopens its tag.
+- `Society.load` sets the seed state from the checkpoint (`snapshot_before(0)`), so a resume with the flag keeps resetting.
+- The seed becomes `_last_good_foundation` before the rebuild. If the seed no longer builds, the generation raises `RuntimeError` instead of continuing on the previous generation's compiled module.
+- No reset when the token budget is already spent: that generation stops before doing anything, so the final checkpoint keeps the foundation the run ended on and the log counts only resets that preceded real work.
+- Each reset prints `[foundation] reset to seed for generation <n>: dropped <k> entries` (n 1-based, as in the run's progress line). `metadata.json` records `reset_each_generation`; a resume adds `reset_each_generation_resume`.
+- The batch script refuses any `RESET_EACH_GENERATION` other than 0 or 1 before vLLM loads.
 
 ---
 
@@ -107,7 +115,7 @@ sbatch --export=ALL,AGENTS=3,GENERATIONS=2,N_GROUPS=3,ITERATIVE=0,RESET_EACH_GEN
 # after it finishes, in the run directory:
 grep -o '"reset_each_generation": [a-z]*' metadata.json
 ```
-**Expect**: `"reset_each_generation": true`; the job log shows the seed banner once, at run start; no generation-1 artifact lists a generation-0 artifact in `references`.
+**Expect**: `"reset_each_generation": true`; the job log shows the seed banner once, at run start, and `[foundation] reset to seed for generation 2` once; no generation-1 artifact lists a generation-0 artifact in `references`.
 
 ---
 
