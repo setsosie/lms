@@ -42,7 +42,7 @@ def test_kernels_needing_a_toolkit_default_off_and_can_be_overridden() -> None:
 
 def test_the_prefill_backend_reaches_the_server() -> None:
     assert 'GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-triton}"' in text()
-    serve = text().split('vllm" serve', 1)[1].split('> "$VLLM_LOG"', 1)[0]
+    serve = text().split('vllm" serve', 1)[1].split('> "$ATTEMPT_LOG"', 1)[0]
     assert '--gdn-prefill-backend "$GDN_PREFILL_BACKEND"' in serve
 
 
