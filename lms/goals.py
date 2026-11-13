@@ -267,15 +267,22 @@ class Goal:
         data["forbidden_imports"] = self.forbidden_imports
         if self.preamble is not None:
             data["preamble"] = self.preamble
+        # Without these a goal file could not say which foundation it starts
+        # from, and every file-based goal got the shipped default.
+        if self.seed is not None:
+            data["seed"] = self.seed
+        if self.seeded_tags:
+            data["seeded_tags"] = self.seeded_tags
         path.write_text(json.dumps(data, indent=2))
 
     @classmethod
     def load(cls, path: Path) -> "Goal":
         """Load goal state from JSON.
 
-        The three policy fields are optional (`data.get`) so goal files saved
-        before they were serialized stay loadable; a definition without
-        `requires` takes the field's None default the same way.
+        The policy and seed fields are optional (`data.get`) so goal files
+        saved before they were serialized stay loadable; a definition without
+        `requires` takes the field's None default the same way. A file with no
+        `seed` key starts from the shipped default seed.
         """
         data = json.loads(path.read_text())
         return cls(
@@ -286,6 +293,8 @@ class Goal:
             allowed_imports=data.get("allowed_imports"),
             forbidden_imports=data.get("forbidden_imports"),
             preamble=data.get("preamble"),
+            seed=data.get("seed"),
+            seeded_tags=data.get("seeded_tags", []),
         )
 
 
