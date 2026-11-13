@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-CHORE-04-queued-rounds-kit` |
 | **Dependencies** | None. `26Q4-CHORE-02` gives the run script the settings GPU rounds need |
 | **Gate** | fast |

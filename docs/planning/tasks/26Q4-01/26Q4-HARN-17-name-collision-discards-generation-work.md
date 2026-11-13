@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-17-name-collision-discards-generation-work` |
 | **Dependencies** | None |
 | **Gate** | full |

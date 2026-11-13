@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-18-rollback-reopens-goal-tags` |
 | **Dependencies** | 26Q4-HARN-17 |
 | **Gate** | full |

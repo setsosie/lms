@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-CHORE-03-ant-drafts-elaborate-at-pin` |
 | **Dependencies** | None |
 | **Gate** | full |

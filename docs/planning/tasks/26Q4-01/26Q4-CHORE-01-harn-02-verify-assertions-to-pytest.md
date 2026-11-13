@@ -11,7 +11,7 @@ that only exists on one machine.
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | LOW |
-| **Status** | 🔲 PENDING |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-CHORE-01-harn-02-verify-assertions-to-pytest` |
 | **Dependencies** | None |
 | **PR Size Target** | <500 lines (max 1000) |

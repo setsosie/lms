@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-23-json-goals-carry-their-seed` |
 | **Dependencies** | Stacked on `26Q4-HARN-04` (#94). The re-run of R7 and the arms rehearsal need it |
 | **Gate** | fast |

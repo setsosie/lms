@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-04-reset-foundation-each-generation` |
 | **Dependencies** | None. Required by ADR 0003 (Accepted 2026-10-30) for the R9 arm |
 | **PR Size Target** | <250 lines (max 500) |

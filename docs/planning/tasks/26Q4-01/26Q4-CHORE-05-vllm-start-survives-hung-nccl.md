@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 1 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN PROGRESS |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-CHORE-05-vllm-start-survives-hung-nccl` |
 | **Dependencies** | Stacked on #94, which carries the run-script changes of #93 and #95. Every GPU run after batch q1 needs it |
 | **Gate** | fast |
