@@ -53,7 +53,7 @@ rc_is 0
 has "$D/out" "======== one"
 has "$D/out" "Queued lms-one-run: job 701"
 has "$D/out" "STOP: $(cut -c1-8 "$D/sha_main") lacks a file no commit has; nothing is queued"
-has "$D/out" "Queued lms-three-run: job 702, pin $(cut -c1-8 "$D/sha_main"), after job 701"
+has "$D/out" "Queued lms-three-run: job 702, lane 1, pin $(cut -c1-8 "$D/sha_main"), after job 701"
 has "$D/out" "======== summary (go)"
 has "$D/out" "one        QUEUED"
 has "$D/out" "two        GO STOPPED"

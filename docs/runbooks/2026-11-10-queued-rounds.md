@@ -23,11 +23,12 @@ Two things forced that:
 - **One checkout.** A job runs whatever commit the worktree holds when the job
   *starts*, which can be hours after it was queued.
 
-## The two rules
+## The rules
 
-1. **Every job waits for the LMS job queued before it.** `q_submit` adds
-   `--dependency=afterany:<id>`, where `<id>` is the newest job in the queue
-   whose name starts with `lms-`. The jobs form one line, in the order they
+1. **Every job waits for the LMS job queued before it in its lane.** `q_submit`
+   adds `--dependency=afterany:<id>`, where `<id>` is the newest job in the
+   queue whose name starts with `lms-` and that runs in the same lane's
+   worktree (see *Lanes*). Each lane's jobs form one line, in the order they
    were queued. `afterany` means a job that fails, is cancelled or hits its
    time limit still lets the next one start.
 2. **Every job checks out its own commit when it starts.** Jobs run
@@ -35,6 +36,13 @@ Two things forced that:
    back if a killed job left them modified, checks out the job's commit,
    confirms it, and then runs that commit's `scripts/slurm/lms_run.sbatch` (or
    another script named by `LMS_Q_RUN`) in the same process.
+
+3. **A job takes one GPU or all four, never two.** `Q_GPU` is one GPU
+   (`TP_SIZE=1`, which `q_submit` passes unless the variables set it);
+   `Q_GPU_ALL` is the whole box, for a job that sets `TP_SIZE=4`. A two-GPU
+   job tended to leave the other two idle for hours, and a pair without an
+   NVLink bridge hangs vLLM's start (batch q2: 4 of 4 such jobs hung; a single
+   GPU uses no NCCL at all).
 
 A job that uses neither the worktree nor the Lean tree (a serving benchmark,
 say) is submitted with `q_submit_free`. It is named `lmsfree-…`, waits for
@@ -65,13 +73,15 @@ q_round_guard                     # a second go queues nothing
 q_pin "$1"                        # stops unless a branch on origin holds the commit
 q_pin_has scripts/slurm/lms_run.sbatch 'MAX_TOKENS' "the budget knob"
 q_tag_free my_run                 # never overwrite a run
-q_submit a my_run "${Q_GPU[@]}" --time=04:00:00 -- TP_SIZE=2 AGENTS=1 MAX_TOKENS=2000000
+q_lanes 4                         # lanes 1-4 exist and are sound (makes missing ones)
+q_lane 2                          # the next jobs go to lane 2
+q_submit a my_run "${Q_GPU[@]}" --time=04:00:00 -- AGENTS=1 MAX_TOKENS=2000000
 q_show_queue
 ```
 
 `q_submit NAME TAG [sbatch options] -- [VAR=VALUE…]` names the job
 `lms-<round>-<NAME>` and appends
-`job=<id> name=<jobname> tag=<tag> pin=<sha8> after=<id|->` to
+`job=<id> name=<jobname> tag=<tag> pin=<sha8> after=<id|-> lane=<k>` to
 `~/lms_<round>.jobs`. If `sbatch` refuses a job, or anything else stops the
 script through `q_stop` after a submit, everything that `go` queued is
 cancelled: a round is queued whole or not at all. `q_pin` can be called again
@@ -102,6 +112,30 @@ source tests/slurm_queue/fakebox.sh   # fb_new, fb_install, fb_run, fb_run_job, 
 ```
 
 `tests/slurm_queue/test_kit.sh` shows every helper in use.
+
+## Lanes
+
+A lane is a worktree with its own Lean tree, so up to four LMS jobs can run
+at once, one GPU each. Lane 1 is `~/code/lms-box` with its lock
+`~/lms_q.lock`, as before lanes. Lane *k* (2 to 4) is `~/code/lms-box-l<k>`,
+with lock `~/lms_q-l<k>.lock`.
+
+- `q_lanes N` makes lanes 2..N where missing: a detached worktree of
+  `~/code/lms`, whose `lean/.lake` links to `$SCRATCH/lms-lanes/l<k>/lake`, a
+  directory holding only a `packages` link to lane 1's built library. Each
+  lane builds its own foundation; all of them read one library. It runs
+  `uv sync` for the lane's `.venv`, checks every lane, and prints the node's
+  memory, CPUs and GPUs from `sinfo`. Running it again changes nothing.
+- `q_lane K` sends the following `q_submit` calls to lane *K*. Each job
+  records `lane=<k>`; `q_job_wt LINE` and `q_copy_run` read a job from its
+  own lane. A line without `lane=` is lane 1.
+- Each lane serves vLLM on its own port, `8050 + k`, and lanes 2 to 4 compile
+  into their own vLLM cache (`$SCRATCH/cache/vllm-l<k>`), so servers starting
+  side by side never write the same files.
+- A job in lanes 2 to 4 first runs `lake build --no-build Mathlib`. If Lake
+  judged the shared library out of date, building it would rewrite files the
+  other lanes are reading; the job stops instead.
+- `q_tag_free` refuses a tag that holds a run in any lane.
 
 ## Queueing several rounds
 
@@ -143,9 +177,10 @@ printed say what each round did.
 
 ## Limits
 
-- LMS jobs run one at a time, on two of the four GPUs. Running two at once
-  needs a `lean/` tree per run (a Lake build directory each), which ADR 0003
-  deferred as untested on this box.
+- Lanes are new as of batch q3 and were tested only on the fake server. The
+  first use of each lane should be a short run. Whether four jobs fit at once
+  depends on the node's memory (96 GB each); a job held back for memory shows
+  `(Resources)` while a GPU is free.
 - The chain is built from the queue as it is when `go` runs. Two `go` scripts
   started at the same moment could each pick the same job to wait for.
   `lms_all_run.sh` runs them one after another.
