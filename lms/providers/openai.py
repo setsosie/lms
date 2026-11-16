@@ -28,22 +28,26 @@ class OpenAIProvider(BaseLLMProvider):
 
     name: str = "openai"
 
-    def __init__(self, config: ProviderConfig, timeout: float = 300.0) -> None:
+    def __init__(self, config: ProviderConfig, timeout: float | None = None) -> None:
         """Initialize the OpenAI provider.
 
         Args:
             config: Provider configuration with API key, model, and optional base_url
-            timeout: Request timeout in seconds (default 5 minutes)
+            timeout: Request timeout in seconds; None takes
+                `config.request_timeout_s`
         """
         super().__init__(config)
         # Use explicit timeout to prevent infinite hangs.
         # base_url=None is the SDK's own default, so an unset config leaves
         # hosted-OpenAI behavior untouched; setting it points the same code path
         # at a local vLLM/SGLang/Ollama `/v1`.
+        if timeout is None:
+            timeout = config.request_timeout_s
         self.client = AsyncOpenAI(
             api_key=config.api_key,
             base_url=config.base_url,
             timeout=httpx.Timeout(timeout, connect=30.0),
+            max_retries=config.max_retries,
         )
 
     async def generate(
@@ -79,6 +83,13 @@ class OpenAIProvider(BaseLLMProvider):
         sampling: dict[str, Any] = {}
         if self.config.seed is not None:
             sampling["seed"] = (self.config.seed + next(_REQUESTS)) % SEED_SPACE
+        # vLLM's own request field, outside the OpenAI schema, so the SDK sends
+        # it only through `extra_body`. Unset, nothing is added and a hosted
+        # endpoint sees the request it always did.
+        if self.config.thinking_budget is not None:
+            sampling["extra_body"] = {
+                "thinking_token_budget": self.config.thinking_budget
+            }
 
         response = await self.client.chat.completions.create(
             model=self.config.model,
@@ -113,11 +124,14 @@ class OpenAIProvider(BaseLLMProvider):
         # answer. Read whole, the first code fence a working group finds is the
         # first thing the model tried, and every reply pasted into the next
         # prompt carries its thinking along until the server refuses the
-        # prompt. A server with a reasoning parser has already split it off.
+        # prompt. A server with a reasoning parser has already split it off,
+        # into `reasoning` (what vLLM 0.33 sends) or the older
+        # `reasoning_content`.
         thinking, content = split_thinking(message.content or "")
-        separated = getattr(message, "reasoning_content", None)
-        if not thinking and isinstance(separated, str):
-            thinking = separated.strip()
+        for field in ("reasoning", "reasoning_content"):
+            separated = getattr(message, field, None)
+            if not thinking and isinstance(separated, str):
+                thinking = separated.strip()
 
         return GenerationResponse(
             content=content,

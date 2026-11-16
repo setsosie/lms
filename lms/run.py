@@ -134,8 +134,21 @@ def _sampling_seed(given: int | None) -> int:
     return given if given is not None else secrets.randbelow(SEED_SPACE)
 
 
-def _seeded(config: ProviderConfig, seed: int) -> ProviderConfig:
-    return replace(config, seed=seed)
+def _for_run(
+    config: ProviderConfig, seed: int, thinking_budget: int | None
+) -> ProviderConfig:
+    """A provider config carrying this run's seed and thinking budget."""
+    return replace(config, seed=seed, thinking_budget=thinking_budget)
+
+
+def _request_settings(config: ProviderConfig) -> dict[str, Any]:
+    """What bounds each request, as metadata.json keys. `max_tokens` there is
+    the run's budget, so the per-request cap goes under its own name."""
+    return {
+        "request_max_tokens": config.max_tokens,
+        "request_timeout_s": config.request_timeout_s,
+        "max_retries": config.max_retries,
+    }
 
 
 async def run_experiment(
@@ -157,6 +170,7 @@ async def run_experiment(
     max_repair_attempts: int = 2,
     reset_each_generation: bool = False,
     sampling_seed: int | None = None,
+    thinking_budget: int | None = None,
 ) -> None:
     """Run an LMS experiment.
 
@@ -181,6 +195,9 @@ async def run_experiment(
             committee mode (0 = one-shot)
         sampling_seed: Seed every request is derived from. None draws one;
             either way it is recorded in metadata.json
+        thinking_budget: Most thinking tokens any one reply may spend, sent
+            with every request. None leaves thinking unbounded. Recorded in
+            metadata.json with the per-request limits
         reset_each_generation: Put the foundation back to its seed before
             every generation after the first (ADR 0003's R9 arm)
     """
@@ -214,6 +231,9 @@ async def run_experiment(
 
     seed = _sampling_seed(sampling_seed)
     print(f"  Sampling seed: {seed}")
+    print(
+        f"  Thinking budget: {'unbounded' if thinking_budget is None else thinking_budget}"
+    )
 
     # Create providers
     if mixed_providers:
@@ -225,7 +245,10 @@ async def run_experiment(
         # Use first n_agents providers
         provider_names = available[:n_agents]
         providers = [
-            create_provider(name, _seeded(config.get_provider_config(name), seed))
+            create_provider(
+                name,
+                _for_run(config.get_provider_config(name), seed, thinking_budget),
+            )
             for name in provider_names
         ]
 
@@ -240,7 +263,9 @@ async def run_experiment(
         provider_name = "mixed"  # For metadata
     else:
         # Single provider mode
-        provider_config = _seeded(config.get_provider_config(provider_name), seed)
+        provider_config = _for_run(
+            config.get_provider_config(provider_name), seed, thinking_budget
+        )
         provider = create_provider(provider_name, provider_config)
 
         # Create society
@@ -313,17 +338,23 @@ async def run_experiment(
         # Every request's seed derives from this one: with it, runs against
         # freshly started servers no longer repeat one another.
         "sampling_seed": seed,
+        # How much each reply could think. None is unbounded, which is not
+        # the same arm as any number, so it is recorded either way.
+        "thinking_budget": thinking_budget,
         # Which machinery produced this run's results. Without it, a mock run
         # is indistinguishable from a real one after the fact.
         "verifier": society.verifier_metadata(),
     }
-    # Add provider details
+    # Add provider details. The per-request limits belong to each provider,
+    # so a mixed society records them per provider.
     if mixed_providers:
         metadata["providers"] = [
-            {"name": p.name, "model": p.config.model} for p in society.providers
+            {"name": p.name, "model": p.config.model, **_request_settings(p.config)}
+            for p in society.providers
         ]
     else:
         metadata["model"] = society.provider.config.model
+        metadata.update(_request_settings(society.provider.config))
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
@@ -515,6 +546,7 @@ async def resume_experiment(
     max_repair_attempts: int = 2,
     reset_each_generation: bool = False,
     sampling_seed: int | None = None,
+    thinking_budget: int | None = None,
 ) -> None:
     """Resume an experiment from a checkpoint.
 
@@ -537,6 +569,9 @@ async def resume_experiment(
             command line; the checkpoint does not keep it
         sampling_seed: As for `run_experiment`. A resume samples afresh
             unless given one, and records it as `sampling_seed_resume`
+        thinking_budget: As for `run_experiment`. Taken from this command
+            line, like the per-request limits, and recorded under `_resume`
+            keys
     """
     # Load metadata to get provider info
     metadata = json.loads((checkpoint_dir / "metadata.json").read_text())
@@ -554,6 +589,9 @@ async def resume_experiment(
 
     seed = _sampling_seed(sampling_seed)
     print(f"  Sampling seed: {seed}")
+    print(
+        f"  Thinking budget: {'unbounded' if thinking_budget is None else thinking_budget}"
+    )
 
     # Handle mixed provider mode
     if provider_name == "mixed":
@@ -563,12 +601,17 @@ async def resume_experiment(
                 f"Mixed mode requires {n_agents} providers but only {len(available)} configured"
             )
         providers = [
-            create_provider(name, _seeded(config.get_provider_config(name), seed))
+            create_provider(
+                name,
+                _for_run(config.get_provider_config(name), seed, thinking_budget),
+            )
             for name in available[:n_agents]
         ]
         provider = providers[0]  # For Society.load compatibility
     else:
-        provider_config = _seeded(config.get_provider_config(provider_name), seed)
+        provider_config = _for_run(
+            config.get_provider_config(provider_name), seed, thinking_budget
+        )
         provider = create_provider(provider_name, provider_config)
         providers = None
 
@@ -630,6 +673,15 @@ async def resume_experiment(
     # value stays as it was, and a mismatch between the two is visible.
     metadata["reset_each_generation_resume"] = reset_each_generation
     metadata["sampling_seed_resume"] = seed
+    metadata["thinking_budget_resume"] = thinking_budget
+    if providers:
+        metadata["providers_resume"] = [
+            {"name": p.name, "model": p.config.model, **_request_settings(p.config)}
+            for p in providers
+        ]
+    else:
+        for key, value in _request_settings(provider.config).items():
+            metadata[f"{key}_resume"] = value
     if reset_each_generation:
         print("  Foundation: reset to seed every generation")
 
@@ -893,6 +945,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--thinking-budget",
+        type=_thinking_budget_arg,
+        default=None,
+        metavar="N",
+        help="Most thinking tokens a reply may spend before the server makes "
+        "the model answer, sent as vLLM's thinking_token_budget (the server "
+        "needs --reasoning-parser). 0 or more. Falls back to "
+        "$LMS_THINKING_BUDGET; with neither, thinking is unbounded. Not kept "
+        "in checkpoints; pass it again with --resume. Recorded in metadata.json",
+    )
+
+    parser.add_argument(
         "--prompt-file",
         type=str,
         default=None,
@@ -915,6 +979,17 @@ def _seed_arg(raw: str) -> int:
     return value
 
 
+def _thinking_budget_arg(raw: str) -> int:
+    """argparse type for a thinking budget: a whole number, 0 or more."""
+    try:
+        value = int(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a whole number: {raw!r}") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError(f"must be 0 or more, got {value}")
+    return value
+
+
 def main() -> None:
     """Main CLI entry point."""
     parser = build_parser()
@@ -924,6 +999,12 @@ def main() -> None:
             args.seed = _seed_arg(os.environ["LMS_SEED"].strip())
         except argparse.ArgumentTypeError as e:
             parser.error(f"LMS_SEED: {e}")
+    budget = (os.getenv("LMS_THINKING_BUDGET") or "").strip()
+    if args.thinking_budget is None and budget:
+        try:
+            args.thinking_budget = _thinking_budget_arg(budget)
+        except argparse.ArgumentTypeError as e:
+            parser.error(f"LMS_THINKING_BUDGET: {e}")
 
     # Committee mode has hard requirements; fail before any tokens are spent.
     if args.groups and not args.goal and not args.resume:
@@ -991,6 +1072,7 @@ def main() -> None:
                 max_repair_attempts=args.repair_attempts,
                 reset_each_generation=args.reset_each_generation,
                 sampling_seed=args.seed,
+                thinking_budget=args.thinking_budget,
             )
         )
         return
@@ -1058,6 +1140,7 @@ def main() -> None:
             max_repair_attempts=args.repair_attempts,
             reset_each_generation=args.reset_each_generation,
             sampling_seed=args.seed,
+            thinking_budget=args.thinking_budget,
         )
     )
 
