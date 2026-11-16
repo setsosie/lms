@@ -38,7 +38,7 @@ fb_new() {
     H="$D/home"
     local s="$D/seed"
     mkdir -p "$H/code" "$D/bin" "$D/slurm" "$s/scripts/slurm" "$s/lean/LMS" "$s/logs" \
-        "$D/scratch/vllm-env/bin" "$D/scratch/hf/hub/models--Qwen--Qwen3.6-27B-FP8/snapshots" "$D/lake"
+        "$D/scratch/vllm-env/bin" "$D/scratch/hf/hub/models--Qwen--Qwen3.6-27B-FP8/snapshots" "$D/lake/packages"
     echo 701 > "$D/slurm/next"
     : > "$D/slurm/queue"
     : > "$D/slurm/done"
@@ -98,9 +98,17 @@ echo "\$id;cluster"
 STUB
     cat > "$D/bin/squeue" <<STUB
 #!/bin/bash
+# Prints id, name and state, and with %Z in the format also each job's working directory.
 [[ -n "\${FAKE_SQUEUE_FAIL:-}" ]] && exit 1
 [[ " \$* " == *" -h "* ]] || echo "   JOBID NAME STATE"
-cat "$D/slurm/queue"
+if [[ "\$*" == *%Z* ]]; then
+    while read -r id name state; do
+        [[ -n "\$id" ]] || continue
+        echo "\$id \$name \$state \$(cat "$D/slurm/dir.\${id%%_*}" 2> /dev/null || echo "$H/code/lms-box")"
+    done < "$D/slurm/queue"
+else
+    cat "$D/slurm/queue"
+fi
 STUB
     cat > "$D/bin/scancel" <<STUB
 #!/bin/bash
@@ -119,7 +127,9 @@ state="\$(awk -v id="\$id" '\$1 == id { s = \$2 } END { print s }' "$D/slurm/don
 [[ -n "\$state" ]] || exit 0
 if [[ "\$all" == *JobID* ]]; then echo "\$id \$state 0:0 00:10:00"; else echo "\$state"; fi
 STUB
-    printf '#!/bin/bash\necho "uv $*"\n' > "$D/bin/uv"
+    printf '#!/bin/bash\necho "uv $*"\n[[ "$1" == sync ]] && mkdir -p .venv\nexit 0\n' > "$D/bin/uv"
+    # lake: FAKE_LAKE_STALE=1 makes it report the library out of date.
+    printf '#!/bin/bash\necho "lake $* in $PWD"\n[[ -z "${FAKE_LAKE_STALE:-}" ]]\n' > "$D/bin/lake"
     printf '#!/bin/bash\n' > "$D/bin/nvidia-smi"
     chmod +x "$D/bin/"* "$D/scratch/vllm-env/bin/"*
     cp "$FB_KIT/lms_q_lib.sh" "$FB_KIT/lms_q_job.sbatch" "$H/"
@@ -129,7 +139,8 @@ fb_install() { cp "$@" "$H/"; }
 
 fb_env() {
     env -i HOME="$H" USER=tester PATH="$D/bin:/usr/bin:/bin" SCRATCH="$D/scratch" \
-        FAKE_SBATCH_FAIL_AT="${FAKE_SBATCH_FAIL_AT:-}" FAKE_SQUEUE_FAIL="${FAKE_SQUEUE_FAIL:-}" "$@"
+        FAKE_SBATCH_FAIL_AT="${FAKE_SBATCH_FAIL_AT:-}" FAKE_SQUEUE_FAIL="${FAKE_SQUEUE_FAIL:-}" \
+        FAKE_LAKE_STALE="${FAKE_LAKE_STALE:-}" "$@"
 }
 
 fb_run() {
@@ -139,7 +150,11 @@ fb_run() {
     echo $? > "$D/rc"
 }
 
-fb_queue_add() { echo "$1 $2 ${3:-RUNNING}" >> "$D/slurm/queue"; }
+# fb_queue_add ID NAME [STATE] [DIR]: a job queued some other way, running in DIR (default lane 1).
+fb_queue_add() {
+    echo "$1 $2 ${3:-RUNNING}" >> "$D/slurm/queue"
+    echo "${4:-$H/code/lms-box}" > "$D/slurm/dir.${1%%_*}"
+}
 
 fb_finish() {
     grep -v "^$1 " "$D/slurm/queue" > "$D/slurm/queue.new"
