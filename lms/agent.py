@@ -293,7 +293,9 @@ class Agent:
         )
         open_conversation(
             trace_store, self.id, self.generation, "propose", system_prompt.content
-        ).add_exchange(user_content, response.content, response.usage)
+        ).add_exchange(
+            user_content, response.content, response.usage, response.thinking
+        )
 
         # Parse artifacts from response
         proposed, referenced = self._parse_artifacts(response.content, response.usage)
@@ -405,7 +407,12 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                 conversation,
                 system_prompt=system_prompt.content,
             )
-            log.add_exchange(conversation[-1].content, response.content, response.usage)
+            log.add_exchange(
+                conversation[-1].content,
+                response.content,
+                response.usage,
+                response.thinking,
+            )
 
             tokens_used = response.usage.total_tokens if response.usage else 0
             total_tokens += tokens_used
@@ -493,6 +500,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                     conversation[-1].content,
                     writeup_response.content,
                     writeup_response.usage,
+                    writeup_response.thinking,
                 )
                 total_tokens += (
                     writeup_response.usage.total_tokens if writeup_response.usage else 0
@@ -547,6 +555,7 @@ Include error messages and how you fixed them. Be detailed - this helps future a
                     conversation[-1].content,
                     writeup_response.content,
                     writeup_response.usage,
+                    writeup_response.thinking,
                 )
                 total_tokens += (
                     writeup_response.usage.total_tokens if writeup_response.usage else 0
@@ -803,7 +812,9 @@ Include error messages and how you fixed them. Be detailed - this helps future a
         )
         open_conversation(
             trace_store, self.id, self.generation, "review", system_prompt.content
-        ).add_exchange(user_content, response.content, response.usage)
+        ).add_exchange(
+            user_content, response.content, response.usage, response.thinking
+        )
 
         # Parse review from response
         return self._parse_review(response.content, response.usage)
