@@ -9,6 +9,43 @@ import hashlib
 import re
 from pathlib import Path
 
+#: A Lean error at a source position, as Lake prints it (`error: F.lean:3:4: …`)
+#: or as Lean does (`F.lean:3:4: error: …`).
+_LEAN_ERROR = re.compile(r"^(?:error: \S+\.lean:\d+:\d+:|\S+\.lean:\d+:\d+: error)")
+
+#: A line that starts a message of its own rather than continuing the one above.
+_NEW_MESSAGE = re.compile(
+    r"^(?:(?:error|warning|info|trace|note):|\S+\.lean:\d+:\d+:|[✖⚠✔ℹ]|Some required)"
+)
+
+
+def lean_error_lines(output: str, limit: int = 20) -> list[str]:
+    """What Lean rejected, from a build's output: at most `limit` lines of 300 chars.
+
+    Lake's last line, `error: build failed`, says nothing about why. Each error
+    at a file position comes with the lines continuing its message; when there
+    are none, Lake's other `error:` lines stand in.
+    """
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    picked: list[str] = []
+    in_error = False
+    for line in lines:
+        in_error = bool(_LEAN_ERROR.match(line)) or (
+            in_error and not _NEW_MESSAGE.match(line)
+        )
+        if in_error:
+            picked.append(line)
+    if not picked:
+        picked = [
+            line
+            for line in lines
+            if line.startswith("error:") and line != "error: build failed"
+        ]
+    shown = [line[:300] for line in picked[:limit]]
+    if len(picked) > limit:
+        shown.append(f"... ({len(picked) - limit} more lines)")
+    return shown
+
 
 class LeanProject:
     """Manages the Lean project and ensures build consistency.
@@ -151,6 +188,11 @@ class LeanProject:
             # Log build error but don't fail - verification will catch it
             error_msg = stderr.decode("utf-8") if stderr else stdout.decode("utf-8")
             print(f"Lake build warning: {error_msg[:200]}")
+            # Lean's errors arrive on stdout, and stderr can hold nothing but
+            # Lake's summary, so the line above need not say why.
+            output = (stdout + b"\n" + stderr).decode("utf-8", errors="replace")
+            for line in lean_error_lines(output):
+                print(f"  {line}")
 
         return proc.returncode == 0
 

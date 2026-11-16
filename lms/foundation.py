@@ -158,6 +158,8 @@ class FoundationEntry:
         author: Agent that created this
         universes: Universe names its artifact bound beyond the header. On the
             entry so a rollback or a checkpoint keeps them with what uses them.
+        imports: Modules its artifact verified with beyond the header's, for
+            the same reason. The saved file imports the union of these.
     """
 
     artifact_id: str
@@ -168,6 +170,7 @@ class FoundationEntry:
     generation: int
     author: str
     universes: tuple[str, ...] = ()
+    imports: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -180,6 +183,7 @@ class FoundationEntry:
             "generation": self.generation,
             "author": self.author,
             "universes": list(self.universes),
+            "imports": list(self.imports),
         }
 
     #: Declarations whose indented body *is* the API an agent needs. An
@@ -617,6 +621,7 @@ class FoundationEntry:
             generation=d["generation"],
             author=d["author"],
             universes=tuple(d.get("universes", ())),
+            imports=tuple(d.get("imports", ())),
         )
 
 
@@ -703,6 +708,11 @@ namespace {FOUNDATION_NAMESPACE}
 
 """
 
+    #: The header's modules, read from it so the two can't disagree.
+    FOUNDATION_IMPORTS: tuple[str, ...] = tuple(
+        line.split()[1] for line in split_imports(FOUNDATION_HEADER)[0]
+    )
+
     FOUNDATION_FOOTER = f"""
 end {FOUNDATION_NAMESPACE}
 """
@@ -720,6 +730,9 @@ end {FOUNDATION_NAMESPACE}
         #: the seed's `scoped notation` lines are not declarations -- routing
         #: them through `_extract_entries` would silently drop `⟶`, `𝟙`, `≫`.
         self.seed_source: str = ""
+        #: Modules the seed imports beyond the header's. Kept apart from
+        #: `seed_source` because Lean takes imports only at the top of a file.
+        self.seed_imports: tuple[str, ...] = ()
         #: The seed's declarations, for agent context and name-claiming only.
         self.seed_entries: list[FoundationEntry] = []
         self.entries: list[FoundationEntry] = []
@@ -751,9 +764,16 @@ end {FOUNDATION_NAMESPACE}
         # its own `universe` line so the file stands alone for review and
         # standalone compilation; that line is normalised away on install.
         _, body = split_imports(source.strip())
+        self.seed_imports = self._own_imports(source)
         self.seed_source = "\n".join(strip_header_universes(body)).strip()
-        self.seed_entries = self._extract_entries(
-            self.seed_source, artifact_id="seed", generation=0, author="seed"
+        # `_extract_entries` invents a placeholder entry for code that
+        # declares nothing, and a seed of imports alone is no entry.
+        self.seed_entries = (
+            self._extract_entries(
+                self.seed_source, artifact_id="seed", generation=0, author="seed"
+            )
+            if self.seed_source
+            else []
         )
         for entry in self.seed_entries:
             self._definition_names.add(entry.name)
@@ -856,10 +876,12 @@ end {FOUNDATION_NAMESPACE}
             clean_code = clean_code[1:].lstrip("\n")
 
         # Remove problematic statements that conflict with Foundation wrapper:
-        # - import statements (must be at file top, Foundation has common imports)
+        # - import statements (Lean takes them only at the top of the file,
+        #   where `save` writes each entry's)
         # - universe declarations (the header's, and `save` scopes the rest)
         # - namespace/end statements (conflict with LMS.Foundation namespace)
         _, body_lines = split_imports(clean_code)
+        own_imports = self._own_imports(clean_code)
         own_universes = tuple(
             name
             for name in declared_universe_order(
@@ -896,6 +918,7 @@ end {FOUNDATION_NAMESPACE}
         )
         for entry in new_entries:
             entry.universes = own_universes
+            entry.imports = own_imports
 
         # Check for INCOMPATIBLE concept conflicts (different names, same concept)
         # e.g., Foundation has "Category", artifact defines "Cat" → reject entire artifact
@@ -1007,6 +1030,37 @@ end {FOUNDATION_NAMESPACE}
             replacement = " " * len(match.group())
             result = result[: match.start()] + replacement + result[match.end() :]
         return result
+
+    def _own_imports(self, code: str) -> tuple[str, ...]:
+        """The modules `code` imports beyond the header's, first-seen first.
+
+        An `import` line in a comment imports nothing; written into the header
+        it would name a module that may not exist. The foundation's own module,
+        named after its namespace, would import itself.
+        """
+        modules: dict[str, None] = {}
+        for line in split_imports(self._strip_block_comments(code))[0]:
+            modules.update(dict.fromkeys(line.split("--", 1)[0].split()[1:]))
+        return tuple(
+            module
+            for module in modules
+            if module != self.NAMESPACE and module not in self.FOUNDATION_IMPORTS
+        )
+
+    def extra_imports(self) -> list[str]:
+        """What the seed and the entries import beyond the header, sorted.
+
+        Derived from the entries, not kept beside them, so a rollback, a reset
+        to the seed or a resume keeps exactly the imports of what is left.
+        """
+        modules = set(self.seed_imports)
+        for entry in self.entries:
+            modules.update(entry.imports)
+        return sorted(modules)
+
+    def imports(self) -> list[str]:
+        """Every module the foundation imports, so `import LMS.Foundation` brings."""
+        return [*self.FOUNDATION_IMPORTS, *self.extra_imports()]
 
     def _extract_entries(
         self,
@@ -1197,7 +1251,7 @@ end {FOUNDATION_NAMESPACE}
         Returns:
             Context string to include in agent prompts
         """
-        if not self.entries and not self.seed_entries:
+        if not self.entries and not self.seed_entries and not self.seed_imports:
             return """═══════════════════════════════════════════════════════════════════════════════
                             FOUNDATION: EMPTY
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1222,14 +1276,27 @@ Create foundational definitions that future generations can build upon.
             f"write `{self.NAMESPACE}.Category` in full; a bare `Category` is "
             f"an unknown identifier.",
             "",
-            "⚠ Mathlib's own category API does NOT exist here — no "
-            "`Mathlib.CategoryTheory` import, and none of its lemmas. The "
-            "ONLY fields and constants available are the ones printed below. "
-            "Writing Mathlib lemma names against these definitions is the "
-            "single most common verification failure. Read the declarations "
-            "below and use exactly those.",
+            f"`{self.get_import_statement()}` brings these imports with it; "
+            "you do not need to repeat them:",
+            "",
+            *(f"    import {module}" for module in self.imports()),
             "",
         ]
+        # True only of a seed with its own `Category` and no Mathlib category
+        # import. A goal built on Mathlib's `Category` needs that API.
+        if any(
+            self.CORE_CONCEPTS.get(entry.name) == "category"
+            for entry in self.seed_entries
+        ) and not any(m.startswith("Mathlib.CategoryTheory") for m in self.imports()):
+            lines += [
+                "⚠ Mathlib's own category API does NOT exist here — no "
+                "`Mathlib.CategoryTheory` import, and none of its lemmas. The "
+                "ONLY fields and constants available are the ones printed below. "
+                "Writing Mathlib lemma names against these definitions is the "
+                "single most common verification failure. Read the declarations "
+                "below and use exactly those.",
+                "",
+            ]
 
         if self.seed_entries:
             lines.extend(self._seed_context_lines())
@@ -1307,8 +1374,11 @@ Create foundational definitions that future generations can build upon.
         # Ensure directory exists
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Build Lean file content
-        lean_content = self.FOUNDATION_HEADER
+        # Build Lean file content. Lean takes imports only at the top, so the
+        # entries' go right after the header's own.
+        last = f"import {self.FOUNDATION_IMPORTS[-1]}\n"
+        extra = "".join(f"import {module}\n" for module in self.extra_imports())
+        lean_content = self.FOUNDATION_HEADER.replace(last, last + extra, 1)
 
         # The seed goes verbatim, above every agent entry: later entries are
         # written in insertion order and may depend on it.
@@ -1374,6 +1444,7 @@ Create foundational definitions that future generations can build upon.
             # Persisted so a resumed run rebuilds the same axiom layer rather
             # than silently dropping it and letting agents redefine `Category`.
             "seed_source": self.seed_source,
+            "seed_imports": list(self.seed_imports),
         }
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -1408,8 +1479,12 @@ Create foundational definitions that future generations can build upon.
                     foundation._claimed_concepts.add(cls.CORE_CONCEPTS[entry.name])
             # Reinstall the seed last: it claims its own names on top of the
             # rebuilt sets, so a resumed run protects the axiom layer exactly
-            # as the original run did.
-            if metadata.get("seed_source"):
-                foundation.set_seed(metadata["seed_source"])
+            # as the original run did. A seed may be imports alone.
+            seed_imports = metadata.get("seed_imports", [])
+            if metadata.get("seed_source") or seed_imports:
+                foundation.set_seed(
+                    "".join(f"import {module}\n" for module in seed_imports)
+                    + metadata.get("seed_source", "")
+                )
 
         return foundation
