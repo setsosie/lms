@@ -160,6 +160,9 @@ class FoundationEntry:
             entry so a rollback or a checkpoint keeps them with what uses them.
         imports: Modules its artifact verified with beyond the header's, for
             the same reason. The saved file imports the union of these.
+        context: Its artifact's lines above the artifact's first declaration,
+            such as `open` and `variable`. The saved file writes them in a
+            section with the artifact's entries.
     """
 
     artifact_id: str
@@ -171,6 +174,7 @@ class FoundationEntry:
     author: str
     universes: tuple[str, ...] = ()
     imports: tuple[str, ...] = ()
+    context: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -184,6 +188,7 @@ class FoundationEntry:
             "author": self.author,
             "universes": list(self.universes),
             "imports": list(self.imports),
+            "context": list(self.context),
         }
 
     #: Declarations whose indented body *is* the API an agent needs. An
@@ -622,6 +627,7 @@ class FoundationEntry:
             author=d["author"],
             universes=tuple(d.get("universes", ())),
             imports=tuple(d.get("imports", ())),
+            context=tuple(d.get("context", ())),
         )
 
 
@@ -889,24 +895,45 @@ end {FOUNDATION_NAMESPACE}
             )
             if name not in FOUNDATION_UNIVERSES
         )
+        # Commands are recognised with block comments blanked, so a comment
+        # line that happens to begin with `end` or `namespace` stays a comment.
+        bare_lines = self._mask_block_comments("\n".join(body_lines)).split("\n")
         clean_lines = []
-        for line in body_lines:
-            stripped = line.strip()
+        # The namespaces and sections open at this line, innermost last, as
+        # (is_namespace, name). Entries live in the foundation's namespace, so
+        # an artifact's own namespaces go, with the `end`s that close them. Its
+        # sections stay, with their `end`s, so what they scope stays scoped.
+        scopes: list[tuple[bool, str]] = []
+        for line, bare in zip(body_lines, bare_lines, strict=True):
+            stripped = FoundationEntry._strip_line_comment(bare.strip())
             if stripped.startswith("universe "):
                 # `universe u in def f ...` on one line still holds a declaration.
                 scoped = re.match(
                     r"universe\s+(?:[^\W\d][\w'!?]*\s+)*?in\s+(\S.*)",
-                    FoundationEntry._strip_line_comment(stripped),
+                    FoundationEntry._strip_line_comment(line.strip()),
                 )
                 if scoped:
                     clean_lines.append(scoped.group(1))
                 continue
-            # Remove namespace and end statements (they break Foundation wrapper)
-            if stripped.startswith("namespace "):
+            namespace = re.match(r"namespace\s+(\S+)$", stripped)
+            if namespace:
+                scopes.append((True, namespace.group(1)))
                 continue
-            if stripped.startswith("end "):
-                continue
+            section = re.match(r"(?:noncomputable\s+)?section(?:\s+(\S+))?$", stripped)
+            if section:
+                scopes.append((False, section.group(1) or ""))
+            elif re.match(r"end(?:\s+\S+)?$", stripped):
+                # An `end` with nothing open would close the foundation's own
+                # namespace, so it goes too.
+                if not scopes or scopes.pop()[0]:
+                    continue
             clean_lines.append(line)
+        # Lean closes the sections a file leaves open. Here the file goes on.
+        clean_lines.extend(
+            f"end {name}".rstrip()
+            for is_namespace, name in reversed(scopes)
+            if not is_namespace
+        )
         clean_code = "\n".join(clean_lines).strip()
 
         # Extract definitions from the code
@@ -916,9 +943,11 @@ end {FOUNDATION_NAMESPACE}
             artifact.generation,
             artifact.created_by,
         )
+        context = self._preamble(clean_code)
         for entry in new_entries:
             entry.universes = own_universes
             entry.imports = own_imports
+            entry.context = context
 
         # Check for INCOMPATIBLE concept conflicts (different names, same concept)
         # e.g., Foundation has "Category", artifact defines "Cat" → reject entire artifact
@@ -1030,6 +1059,33 @@ end {FOUNDATION_NAMESPACE}
             replacement = " " * len(match.group())
             result = result[: match.start()] + replacement + result[match.end() :]
         return result
+
+    def _mask_block_comments(self, code: str) -> str:
+        """Blank block comments like `_strip_block_comments`, keeping their line breaks.
+
+        Line for line with `code`, so a line can be read without its comments
+        and still be written as it was.
+        """
+        return self.BLOCK_COMMENT_PATTERN.sub(
+            lambda match: re.sub(r"[^\n]", " ", match.group()), code
+        )
+
+    def _preamble(self, code: str) -> tuple[str, ...]:
+        """The lines above the first declaration, without comments or blank lines.
+
+        `_extract_entries` slices from each declaration to the next, so these
+        are the only lines of an artifact that no entry holds. In practice they
+        are its `open` and `variable` lines, which its declarations verified
+        under and which `save` writes above them.
+        """
+        first = self.DEFINITION_PATTERN.search(self._strip_block_comments(code))
+        if first is None:
+            return ()
+        return tuple(
+            line.rstrip()
+            for line in self._mask_block_comments(code[: first.start()]).split("\n")
+            if FoundationEntry._strip_line_comment(line.strip())
+        )
 
     def _own_imports(self, code: str) -> tuple[str, ...]:
         """The modules `code` imports beyond the header's, first-seen first.
@@ -1298,6 +1354,15 @@ Create foundational definitions that future generations can build upon.
                 "",
             ]
 
+        if any(entry.context for entry in self.entries):
+            lines += [
+                "Some definitions are listed `under:` the `open` and `variable` "
+                "lines they were written with. Each `variable` binder a "
+                "definition uses becomes one of its leading arguments: pass "
+                "the `( )` ones yourself; Lean fills in the `{ }` and `[ ]` ones.",
+                "",
+            ]
+
         if self.seed_entries:
             lines.extend(self._seed_context_lines())
 
@@ -1311,6 +1376,8 @@ Create foundational definitions that future generations can build upon.
         omitted = 0
         rendered = 0
         truncated = 0
+        # An artifact's context is shown once, above its first entry shown.
+        shown_context: set[str] = set()
         for gen in sorted(by_gen.keys()):
             gen_entries = by_gen[gen]
             lines.append(f"── Generation {gen} ──")
@@ -1341,6 +1408,12 @@ Create foundational definitions that future generations can build upon.
                     lines.append(f"    begins: {header}")
                     continue
 
+                # Without its `variable` lines a signature names binders that
+                # appear nowhere, such as `S` and `p` in `{X Y : S}`.
+                if entry.context and entry.artifact_id not in shown_context:
+                    shown_context.add(entry.artifact_id)
+                    lines.append("  under:")
+                    lines.extend(f"    {line.strip()}" for line in entry.context)
                 lines.append(f"  {header}")
 
                 # The rest of the API surface, with types. Names alone hide
@@ -1413,9 +1486,12 @@ Create foundational definitions that future generations can build upon.
                 # artifacts may pick the same name, and a later `def f.{u₁}`
                 # fails if `u₁` is already bound around it.
                 universes = [n for n in entry.universes if n not in seed_universes]
-                if universes:
-                    lean_content += f"section\nuniverse {' '.join(universes)}\n"
+                if universes or entry.context:
+                    lean_content += "section\n"
                     section_open = True
+                if universes:
+                    lean_content += f"universe {' '.join(universes)}\n"
+                lean_content += "".join(f"{line}\n" for line in entry.context)
 
             # Write only this entry's code
             lean_content += entry.lean_code
