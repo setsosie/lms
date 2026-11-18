@@ -64,9 +64,9 @@ near the measured committed-scope rate, not the mean.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. Library results can read decisive N1 at Gate 4. The choice of rule is the user's |
-| 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. All 10 control N0s came from name search, so this bears on D3. The choice of rule is the user's. The card's Notes record a neighbouring `.{u}` label-token leak from #82's review |
-| 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. Universe order, shadowing and dropped text can change a statement's meaning with the merged file still compiling. The choice of approach is the user's |
+| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (a) chosen 2026-11-18:** during calibration no N1 counts without D4 review |
+| 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (c) chosen 2026-11-18:** a name or Loogle hit reads INCONCLUSIVE now; N0 on Lean confirmation is a later card. All 10 control N0s came from name search, so D3's bar likely becomes "decisive N1 = 0". The card's Notes record a neighbouring `.{u}` label-token leak from #82's review |
+| 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Section approach chosen 2026-11-18:** each artifact's own `section` carries its universe context, extending `26Q4-HARN-31`'s (#107). Starts after #105 and #107 merge |
 | 26Q4-HARN-24: A tag closes only on an artifact that is that tag's statement | 2 | HIGH | HARN | 🔲 PENDING | — | From r6 (batch q1). Rule A (name match) chosen 2026-11-13; spec in the card |
 | 26Q3-HARN-25: Proof sketches become open leaves | 5 | MEDIUM | HARN | ⏭ Sprint 6 | — | Not committed here. Phase C preparation |
 | 26Q3-HARN-28: Theorem cards and statement pinning | 5 | MEDIUM | HARN | ⏭ Sprint 6 | — | Not committed here. Holds the ANT arc → goal converter; no ANT goal exists without it |
@@ -79,14 +79,32 @@ near the measured committed-scope rate, not the mean.
 
 **Committed: 11 pts** (HARN-13 2, -15 3, -19 3, -24 2, -20 1).
 
+## Found work
+
+| Task | Points | Priority | Epic | Status | PR / Branch | Notes |
+|------|--------|----------|------|--------|-------------|-------|
+| 26Q4-CHORE-06: LMS jobs run on one GPU each, in up to four lanes | 2 | HIGH | CHORE | 🔄 IN REVIEW | #104 | Batch q3 and q4 ran on it (pins `38da6dde`, `a0c98b77`) |
+| 26Q4-HARN-29: The foundation keeps the imports its entries verified with | 2 | HIGH | HARN | 🔄 IN REVIEW | #105 | From batch q2: 13 of 15 verified artifacts rolled back |
+| 26Q4-HARN-30: Thinking is recorded, and its budget is a setting | 2 | HIGH | HARN | 🔄 IN REVIEW | #106 | From batch q2: thinking was ~80% of output, unbounded |
+| 26Q4-HARN-31: The foundation keeps the `open` and `variable` lines its entries verified under | 2 | HIGH | HARN | 🔄 IN REVIEW | #107 | From batch q3: track B kept 0 of 25. Stacked on #105 |
+| 26Q4-HARN-32: A verified artifact is read against its statement, part by part | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Attempted after the committed scope; carries to Sprint 6 if not landed |
+| 26Q4-HARN-33: A statement covered in part stays open, and the next group extends it | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Needs `-32` and `-24`. Attempted after the committed scope; carries to Sprint 6 if not landed |
+
+Found work is not committed scope. `-32` and `-33` come from the user's D4
+call on batch q4's 003T artifact (partial credit: the opening and condition
+(2) of Definition 4.35.1, not (1)). They let a partial formalization stay
+in the foundation as a step, rather than close its statement or be lost.
+
 ## Server runs
 
 | Step | What | DoD | Status | Notes |
 |------|------|-----|--------|-------|
-| q2 | Batch q2: r7b, arms2, thr2, hang, at pin `05aebc22` on `batch/q2-pins` | 4 | 🔲 QUEUED | Built 2026-11-13; runs the weekend of 2026-11-14. Delete `batch/q2-pins` once collected |
-| R7 | Three groups on three tags (`stacks-kernel-track-b`), as q2's r7b | 4 | 🔲 QUEUED | Both q1 jobs hung in NCCL; r7b has `26Q4-CHORE-05`'s start ladder |
-| arms2 | Phase C arms rehearsal: C9, I9 ×9, S1, R9 with per-run seeds | 4 | 🔲 QUEUED | Checks that `26Q4-HARN-22` gives distinct I9 runs and `-23` stops the track-b collision |
+| q2 | Batch q2: r7b, arms2, thr2, hang, at pin `05aebc22` on `batch/q2-pins` | 4 | ✅ READ | 2026-11-16, write-up #103. Promotion dropped artifact imports (13 of 15 verified rolled back), fixed by `26Q4-HARN-29` |
+| R7 | Three groups on three tags (`stacks-kernel-track-b`), as q2's r7b | 4 | ✅ PASS | r7b's check passes: the chair listed three different tags and the groups worked them. q4's four runs pass it too |
+| arms2 | Phase C arms rehearsal: C9, I9 ×9, S1, R9 with per-run seeds | 4 | ✅ READ | The runs are distinct (`26Q4-HARN-22` works) and only one `Category` class is left (`-23` works). The arms sit at the floor: C9 1, R9 1, the rest 0 |
 | D2 | §7 density run | 1 | 🔲 PENDING | See the decision table |
+| q3 | Batch q3: 7 runs in lanes, at pin `38da6dde` | — | ✅ READ | 2026-11-17, write-up #108. Track B kept 0 of 25 (promotion dropped the preamble), fixed by `26Q4-HARN-31` |
+| q4 | Batch q4: the keep test, 4 × track B, 10 generations, at pin `a0c98b77` | — | ✅ READ | 2026-11-18, write-up not yet opened. The foundation keeps work (checks pass; 27/27 q3 artifacts build on real Mathlib). The pre-committed read is KEPT AND BUILT ON, on one artifact that D4 gave partial credit. That led to `26Q4-HARN-32`/`-33` |
 
 ## Definition of Done
 
@@ -98,7 +116,11 @@ near the measured committed-scope rate, not the mean.
    (for example, decisive N1 = 0), in the slice decision.
 3. **The harness freezes at a named commit.** `26Q4-HARN-13`, `-15`, `-19` and
    `-24` merged, or explicitly deferred past Phase C with the reason written
-   down. The freeze SHA is the one Phase C runs.
+   down. The freeze SHA is the one Phase C runs. **The user decided on
+   2026-11-18:** if `26Q4-HARN-32` and `-33` land by 2026-11-27, the freeze
+   includes them. Otherwise the freeze moves into Sprint 6 with them, because
+   without `-33` every statement closes on its first verified artifact and
+   Phase C's ratchet read is near zero by construction.
 4. **Batch q2 is read.** R7 has a result or a diagnosed failure; arms2 shows
    whether the I9 runs now differ.
 
@@ -131,6 +153,12 @@ the planning tooling). Cards for this sprint live under
 
 ## Sync Log
 
+- **2026-11-18** — Batch q2, q3 and q4 read. Their fixes are found-work,
+  in review as #104–#107. The user chose rules for `26Q4-HARN-13` (a), `-15`
+  (c) and `-19` (section). From q4's D4 call came `26Q4-HARN-32`/`-33`, found
+  work after the committed scope, and the freeze waits on them if they land by
+  2026-11-27.
+
 - **2026-11-13** — Sprint 4 closed at 38/58 pts (committed 3/3), measured but
   not decided, archived to `archive/sprint-04-26Q4-01.md`. Sprint 5 opened
   2026-11-16 → 2026-11-27 at 11 committed points: the slice decision and the
@@ -139,4 +167,4 @@ the planning tooling). Cards for this sprint live under
 
 ---
 
-*Last Updated: 2026-11-13*
+*Last Updated: 2026-11-18*
