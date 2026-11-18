@@ -411,3 +411,49 @@ class TestFoundationCollisions:
             "@[reducible] def rep : Nat := 1\n\ntheorem one : rep = 1 := rfl",
         )
         assert errors == ""
+
+
+class TestFoundationPreamble:
+    """An artifact's `open` and `variable` lines compile with its entries.
+
+    Core-Lean stand-ins for batch q3's track B, where every verified artifact
+    lost `open CategoryTheory` and 12 lost their `variable` binders, so the
+    merged module failed and each was rolled back.
+    """
+
+    _compile = staticmethod(TestFoundationCollisions._compile)
+
+    def test_variable_binders_reach_the_merged_module(self, tmp_path: Path) -> None:
+        foundation, errors = self._compile(
+            tmp_path,
+            "variable {α : Type} (x : α)\n\ndef pick : α := x\n\n"
+            "theorem pick_eq : pick x = x := rfl",
+        )
+        assert errors == ""
+        assert {"pick", "pick_eq"} <= foundation._definition_names
+
+    def test_an_open_reaches_the_merged_module(self, tmp_path: Path) -> None:
+        _, errors = self._compile(
+            tmp_path, "open Nat\n\ndef two : Nat := succ (succ zero)"
+        )
+        assert errors == ""
+
+    def test_two_artifacts_reusing_a_variable_name_compile_together(
+        self, tmp_path: Path
+    ) -> None:
+        _, errors = self._compile(
+            tmp_path,
+            "variable (n : Nat)\n\ndef addN (m : Nat) : Nat := n + m",
+            "variable (n : String)\n\ndef lenN : Nat := n.length",
+            'def useBoth : Nat := addN 1 2 + lenN "ab"',
+        )
+        assert errors == ""
+
+    def test_named_and_unclosed_sections_compile(self, tmp_path: Path) -> None:
+        _, errors = self._compile(
+            tmp_path,
+            "namespace Outer\nsection Inner\nvariable (k : Nat)\n\n"
+            "def addK (m : Nat) : Nat := k + m\n\nend Inner\nend Outer",
+            "noncomputable section\n\nopen Nat\n\ndef three : Nat := succ 2",
+        )
+        assert errors == ""
