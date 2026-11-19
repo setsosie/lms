@@ -22,6 +22,9 @@ class ConversationTurn:
     content: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     tokens: int = 0
+    # A reply's scratch work, kept beside `content` (the answer) so it can be
+    # read without ever being parsed as one. Its tokens are in `tokens`.
+    thinking: str = ""
 
 
 @dataclass
@@ -41,25 +44,39 @@ class ConversationLog:
     artifacts_produced: list[str] = field(default_factory=list)
     errors_encountered: list[str] = field(default_factory=list)
 
-    def add_turn(self, role: str, content: str, tokens: int = 0) -> None:
+    def add_turn(
+        self, role: str, content: str, tokens: int = 0, thinking: str = ""
+    ) -> None:
         """Add a conversation turn."""
         self.turns.append(
             ConversationTurn(
                 role=role,
                 content=content,
                 tokens=tokens,
+                thinking=thinking,
             )
         )
 
-    def add_exchange(self, prompt: str, reply: str, usage: "TokenUsage | None") -> None:
+    def add_exchange(
+        self,
+        prompt: str,
+        reply: str,
+        usage: "TokenUsage | None",
+        thinking: str = "",
+    ) -> None:
         """Add one request and its reply.
 
         The prompt turn carries the call's input tokens and the reply its
         output tokens, so a log totals what the cost ledger records for the
-        same calls.
+        same calls. `thinking` is the reply's scratch work, if any.
         """
         self.add_turn("user", prompt, tokens=usage.input_tokens if usage else 0)
-        self.add_turn("assistant", reply, tokens=usage.output_tokens if usage else 0)
+        self.add_turn(
+            "assistant",
+            reply,
+            tokens=usage.output_tokens if usage else 0,
+            thinking=thinking,
+        )
 
     def total_tokens(self) -> int:
         """Total tokens across all turns."""
@@ -80,6 +97,7 @@ class ConversationLog:
                     "content": t.content,
                     "timestamp": t.timestamp,
                     "tokens": t.tokens,
+                    "thinking": t.thinking,
                 }
                 for t in self.turns
             ],
@@ -238,6 +256,8 @@ class TraceStore:
                             content=turn_data["content"],
                             timestamp=turn_data.get("timestamp", ""),
                             tokens=turn_data.get("tokens", 0),
+                            # Absent from files written before it was kept.
+                            thinking=turn_data.get("thinking", ""),
                         )
                     )
                 store.conversations.append(log)

@@ -420,7 +420,7 @@ class PlanningPanel:
         content = self._extract_content(response)
         open_conversation(
             self.trace_store, member_id, generation, "planning", system_prompt
-        ).add_exchange(prompt, content, usage)
+        ).add_exchange(prompt, content, usage, getattr(response, "thinking", ""))
         return content
 
     async def _get_chair_proposal(self, session: PlanningSession) -> PlanningProposal:
