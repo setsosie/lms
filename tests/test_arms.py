@@ -24,13 +24,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def novel(tag, **kw):
-    """A verified artifact that clears Gate 4 (decisive N1)."""
+    """A verified artifact that counts as novel: a D4 verdict."""
     return {
         "id": f"a-{tag}",
         "status": "verified_lean",
         "stacks_tag": tag,
-        "novelty_level": "N1",
-        "novelty_confidence": 0.9,
+        "novelty_level": "N2",
         **kw,
     }
 

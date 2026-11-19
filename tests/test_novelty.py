@@ -820,12 +820,13 @@ def make_artifact(lean_code: str | None) -> Artifact:
 
 
 class TestNoveltyGate:
-    def test_decisive_n1_counts_as_novel(self):
+    def test_decisive_n1_waits_on_d4(self):
         decision = apply_novelty_gate(
             make_artifact(NOVEL), NoveltyClassifier(four_empty_stages())
         )
-        assert decision.counts_as_novel is True
-        assert decision.needs_human_review is False
+        assert decision.result.confidence == pytest.approx(0.9)
+        assert decision.counts_as_novel is False
+        assert decision.needs_human_review is True
 
     def test_n0_fails_gate(self):
         name = RecordedBackend(
@@ -1414,11 +1415,11 @@ class TestNearHit:
         assert decision.needs_human_review is True
         assert counts_as_novel(artifact.to_dict()) is False
 
-    def test_a_decisive_n1_still_reaches_cvfn(self):
+    def test_a_decisive_n1_reaches_cvfn_only_through_d4(self):
         artifact = make_artifact(NOVEL)
         decision = apply_novelty_gate(artifact, NoveltyClassifier(four_empty_stages()))
-        assert decision.counts_as_novel is True
-        assert counts_as_novel(artifact.to_dict()) is True
+        assert decision.counts_as_novel is False
+        assert counts_as_novel(artifact.to_dict()) is False
 
     def test_the_gate_stamps_candidates_on_the_artifact(self):
         artifact = make_artifact(RESTATEMENT)
