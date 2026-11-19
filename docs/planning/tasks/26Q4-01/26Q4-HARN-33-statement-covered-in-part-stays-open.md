@@ -28,6 +28,7 @@ Evidence: batch q4, run s3.
 - 003T was never offered again, so the five remaining generations never had the chance to add condition (1).
 - In q4, 10 later artifacts used a kept entry and 1 of them verified. A partial entry plus an explicit "add (1)" brief is the case where building on prior work is the obvious next step.
 - 19 of track B's 40 statements have two or three numbered parts.
+- **The name rule can't catch a wrong statement on track B.** Track B's tag names share their vocabulary ("fibred/fibre" is in 26 of 40, "category/categories" in 20). So the `26Q4-HARN-24` name rule lets a renamed `structure CategoryDef` close 20 of 40 track B tags; on track A it closes 0 of 20. Requiring half the tag's words to match brings that to 3, but refuses 2 of the 31 real q3/q4 closures, and `FibredCategory` still closes 23. Only a read of the statement's text can tell these statements apart: that is `26Q4-HARN-32`'s coverage read.
 
 **Investigation**:
 ```bash
@@ -47,6 +48,9 @@ grep -n "refusing demotion" lms/dependency.py
 - **PARTIAL tags are offered again,** ahead of AVAILABLE ones, and the group's brief says what exists and what is missing.
 - **A later artifact on the same tag** that verifies with no part missing makes it DONE. One that covers more makes the missing list shorter.
 - **PARTIAL does not release dependents.** A tag whose `requires` includes a PARTIAL tag stays BLOCKED, as with an unfinished tag today.
+- **An artifact that covers no part closes nothing.** If the coverage read marks every part `missing`, the artifact is the wrong statement, not a partial one:
+  - It stays promoted, as a `26Q4-HARN-24` name-rule refusal does.
+  - The tag goes back to AVAILABLE, not to PARTIAL. The next group is not told to extend it.
 
 ---
 
@@ -54,6 +58,7 @@ grep -n "refusing demotion" lms/dependency.py
 
 - [ ] `TaskStatus.PARTIAL = "partial"` exists. `available_tasks()` returns PARTIAL nodes ahead of AVAILABLE ones. PARTIAL does not count as done for dependents or for `progress()`. Covered by `tests/test_partial_status.py::test_partial_*`.
 - [ ] Take an artifact that verifies, passes the gates and the name rule, and whose `coverage` lists a `missing` part. Its tag becomes PARTIAL, not DONE. The goal entry records `partial: true` and `missing: ["(1)"]`, and `formalized` stays false. The run log prints `[goal] 003T partial: CategoryFibredInGroupoids covers opening, (2); missing (1)`. Covered by `test_003t_partial`.
+- [ ] An artifact whose `coverage` marks every part `missing` leaves its tag AVAILABLE, neither PARTIAL nor DONE, and stays promoted. The run log prints `[goal] 02XP not closed by CategoryDef: covers no part of the statement`. Covered by `test_no_part_covered_reopens`.
 - [ ] Coverage of `None` (not read) closes the tag as today. The run log prints `[goal] 003T closed without a coverage read`, and the summary counts these. Covered by `test_unread_coverage_closes_as_before`.
 - [ ] Coverage with no part missing closes the tag as today (DONE, `formalized: true`). Covered by `test_full_coverage_closes`.
 - [ ] A group assigned a PARTIAL tag gets this in its brief (`guidance`): the partial entry's name, its kind and signature line from the foundation, the parts it covers and the parts missing, and the instruction to declare a new name that builds on it (for example `structure IsFibredInGroupoids extends CategoryFibredInGroupoids C where …`) rather than redeclare it. Covered by `test_partial_brief`.
