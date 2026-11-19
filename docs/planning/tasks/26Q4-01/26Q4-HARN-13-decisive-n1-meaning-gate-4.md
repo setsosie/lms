@@ -106,3 +106,11 @@ From the independent review at the final gate of `26Q4-HARN-09` (2026-11-06, at 
 
 - **Binder case can flip a verdict to decisive N1.** `extract_identifiers` drops a dotted name with a lowercase head. `theorem t (R : Type) [CommRing R] (P : Ideal R) (hP : P.IsPrime) : (P.comap (RingHom.id R)).IsPrime := sorry` with hit `Ideal.IsPrime.comap`, in Gate 4's configuration with the other stages empty, reads INCONCLUSIVE 0.5. Renaming `P` to `p` loses the `is` and `prime` tokens and reads N1 0.90, counted without review. "Renaming a binder changes no verdict" holds only for capital-to-capital renames.
 - **Real-data impact:** none seen. Lowercasing every capital single-letter binder used dotted, across the 15 core and ramification statements in the recorded-hits fixture, flipped nothing in either configuration.
+- **Built 2026-11-18, option (a)**, by changing what counts, not by capping the classifier's confidence (the Implementation Note's suggestion). The user chose this on 2026-11-18.
+  - `apply_novelty_gate` never counts an N1 and sends every N1 to D4. `counts_as_novel` counts only N2/N3 D4 verdicts.
+  - The classifier's confidences, the densities and the decisive line are unchanged. So the novelty control and the arc densities still measure what the search found, and D3's control bar keeps its meaning.
+  - All 8 statements above still read N1 0.90 at Gate 4 and now count for nothing until D4.
+- **Consequence for Gate 4 (Decision Gates: "the choice working"):** it can no longer pass anything on its own.
+  - D4 sign-offs aren't recorded anywhere yet; the review log is `26Q3-HARN-06`'s.
+  - Until they are, the CVFN novel denominator reads 0 and "awaiting D4 review" is the number to read.
+  - Society only stamps the labels, so promotion and what a run keeps are unchanged.

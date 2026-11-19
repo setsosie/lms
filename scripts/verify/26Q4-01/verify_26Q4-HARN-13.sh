@@ -8,6 +8,15 @@
 # Behavior is proven in tests/ (CI runs it every commit) — call pytest on it from here.
 set -e
 
-# TODO: fill in checks once the card's choice is made.
+# 1. The chosen rule is pinned on the recorded statements
+grep -q "class TestNoN1CountsWithoutReview" tests/test_novelty.py
+grep -q "What counts during calibration" specs/faithfulness_protocol.md
+
+# 2. Tests pass: the gate, the CVFN report and the arm comparison read the same rule
+uv run pytest tests/test_novelty.py tests/test_accounting.py tests/test_arms.py -q
+
+# 3. Code quality
+uv run ruff check lms/ tests/test_novelty.py tests/test_accounting.py tests/test_arms.py
+uv run mypy lms/
 
 echo "26Q4-HARN-13: verification passed"
