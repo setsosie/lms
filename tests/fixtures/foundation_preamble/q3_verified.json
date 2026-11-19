@@ -1,0 +1,167 @@
+{
+ "source": "batch q3 (2026-11-17): every artifact that verified in Lean",
+ "artifacts": [
+  {
+   "id": "IsCartesian-bf42ea63",
+   "run": "trackb",
+   "generation": 3,
+   "lean_code": "import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  import LMS.Foundation\n  open LMS.Foundation\n  open CategoryTheory\n  open scoped CategoryTheory\n\n  universe u v\n\n  variable {C : Type u} [Category C]\n  variable {S : Type v} [Category S]\n  variable (p : S ⥤ C)\n\n  /-- \n  A morphism `α : X ⟶ Y` in `S` is cartesian over `f : p.obj X ⟶ p.obj Y` in `C`\n  if `p.map α = f` and it satisfies the universal lifting property:\n  for any `Z`, any `β : Z ⟶ Y`, and any `g : p.obj Z ⟶ p.obj X` with `p.map β = g ≫ f`,\n  there exists a unique `h : Z ⟶ X` such that `h ≫ α = β` and `p.map h = g`.\n  -/\n  def IsCartesian {X Y : S} (α : X ⟶ Y) (f : p.obj X ⟶ p.obj Y) : Prop :=\n    p.map α = f ∧ ∀ (Z : S) (β : Z ⟶ Y) (g : p.obj Z ⟶ p.obj X),\n      p.map β = g ≫ f → ∃! (h : Z ⟶ X), h ≫ α = β ∧ p.map h = g"
+  },
+  {
+   "id": "IsCartesian-34205f2b",
+   "run": "trackb",
+   "generation": 6,
+   "lean_code": "import LMS.Foundation\nimport Mathlib.CategoryTheory.Category.Basic\nimport Mathlib.CategoryTheory.Functor.Basic\n\nopen LMS.Foundation\nopen CategoryTheory\n\nuniverse u v\n\nnamespace FiberedCategories\n\nvariable {C : Type u} {S : Type v} [Category C] [Category S]\n\n/-- \nA morphism `f` in `S` is cartesian over `P f` in `C` if it satisfies the \nuniversal lifting property: for any object `Z`, any morphism `h : Z ⟶ Y` \nand any base morphism `k : P.obj Z ⟶ P.obj X` such that `k ≫ P.map f = P.map h`, \nthere exists a unique morphism `u : Z ⟶ X` over `k` factoring `h` through `f`.\nCorresponds to Stacks Project Tag 02XK.\n-/\ndef IsCartesian (P : S ⥤ C) {X Y : S} (f : X ⟶ Y) : Prop :=\n  ∀ (Z : S) (h : Z ⟶ Y) (k : P.obj Z ⟶ P.obj X),\n    k ≫ P.map f = P.map h →\n    ∃! (u : Z ⟶ X), u ≫ f = h ∧ P.map u = k\n\nend FiberedCategories"
+  },
+  {
+   "id": "IsCartesian-981fa294",
+   "run": "trackb",
+   "generation": 8,
+   "lean_code": "import LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open LMS.Foundation\n  open CategoryTheory\n\n  /--\n  A morphism `f : y ⟶ x` in a category `S` over a base category `C` via a functor `F : S ⥤ C`\n  is cartesian (Stacks Tag 02XK) if for every object `z`, any pair of morphisms\n  `g : z ⟶ x` and `h : F.obj z ⟶ F.obj y` satisfying the compatibility condition\n  `F.map g = h ≫ F.map f` factors uniquely through `f`.\n  -/\n  structure IsCartesian {S C : Type*} [Category S] [Category C] {x y : S} (F : S ⥤ C) (f : y ⟶ x) where\n    /-- The unique lift of `g` and `h` along `f`. -/\n    lift : ∀ {z : S} (g : z ⟶ x) (h : F.obj z ⟶ F.obj y) (w : F.map g = h ≫ F.map f), z ⟶ y\n\n    /-- The lift composed with `f` recovers `g`. -/\n    lift_comp_eq : ∀ {z : S} (g : z ⟶ x) (h : F.obj z ⟶ F.obj y) (w : F.map g = h ≫ F.map f),\n      lift g h w ≫ f = g\n\n    /-- The image of the lift under `F` recovers `h`. -/\n    lift_F_eq : ∀ {z : S} (g : z ⟶ x) (h : F.obj z ⟶ F.obj y) (w : F.map g = h ≫ F.map f),\n      F.map (lift g h w) = h\n\n    /-- Any other morphism `u` satisfying the same properties coincides with the lift. -/\n    unique : ∀ {z : S} (g : z ⟶ x) (h : F.obj z ⟶ F.obj y) (w : F.map g = h ≫ F.map f)\n        (u : z ⟶ y) (hu : u ≫ f = g) (hw : F.map u = h),\n      u = lift g h w"
+  },
+  {
+   "id": "IsCartesian-aa5ce218",
+   "run": "trackb",
+   "generation": 15,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Functor.Basic\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.Tactic\n  open CategoryTheory\n\n  universe u v\n\n  variable {C : Type u} [Category C] {S : Type v} [Category S]\n  variable {X Y : S}\n\n  /-- The pullback of hom-sets used in the definition of cartesian morphisms. -/\n  def PullbackHom (p : S ⥤ C) (f : Y ⟶ X) (Z : S) : Type _ :=\n    { xy : (Z ⟶ X) × (p.obj Z ⟶ p.obj Y) // p.map xy.1 = xy.2 ≫ p.map f }\n\n  /-- The canonical map from `Hom(Z, Y)` to the pullback of hom-sets. -/\n  def toPullbackHom (p : S ⥤ C) (f : Y ⟶ X) (Z : S) : (Z ⟶ Y) → PullbackHom p f Z\n    | ψ => ⟨(ψ ≫ f, p.map ψ), by simp [Functor.map_comp]⟩\n\n  /-- A morphism `f` is cartesian over `p` if the canonical map to the pullback of hom-sets \n      is a bijection for all objects `Z` in the total category. -/\n  def IsCartesian (p : S ⥤ C) (f : Y ⟶ X) : Prop :=\n    ∀ Z : S, Function.Bijective (toPullbackHom p f Z)"
+  },
+  {
+   "id": "IsCartesianOver-7124754e",
+   "run": "trackb",
+   "generation": 18,
+   "lean_code": "import Mathlib.CategoryTheory.Category.Basic\nimport Mathlib.CategoryTheory.Functor.Basic\nimport Mathlib.Logic.Equiv.Basic\nimport LMS.Foundation\n\nopen LMS.Foundation\nopen CategoryTheory\n\nuniverse u v\n\n/-- The fiber product of hom-sets used in the definition of cartesian morphisms.\n    For a functor `p : S ⥤ C` and a morphism `φ : y ⟶ x` in `S`, this type\n    consists of pairs `(g, h)` where `g : z ⟶ x` in `S`, `h : p.obj z ⟶ p.obj y` in `C`,\n    such that `p.map g = h ≫ p.map φ`. -/\ndef FiberProdHom {C : Type u} {S : Type v} [Category C] [Category S]\n    (p : S ⥤ C) {x y : S} (φ : y ⟶ x) (z : S) : Type _ :=\n  { g : (z ⟶ x) × (p.obj z ⟶ p.obj y) // p.map g.1 = g.2 ≫ p.map φ }\n\n/-- A morphism `φ : y ⟶ x` in `S` is strongly cartesian over `p : S ⥤ C` if,\n    for every object `z : S`, the canonical map\n    `ψ ↦ (ψ ≫ φ, p.map ψ)` from `Hom(z, y)` to the fiber product\n    `Hom(z, x) ×_{Hom(p z, p x)} Hom(p z, p y)` is an equivalence.\n\n    We store the full `Equiv` to satisfy constructive formalization requirements,\n    and enforce the canonical forward direction via `toFun_eq`. -/\nstructure IsCartesianOver {C : Type u} {S : Type v} [Category C] [Category S]\n    (p : S ⥤ C) {x y : S} (φ : y ⟶ x) : Type _ where\n  -- The equivalence for each object `z`\n  equiv : ∀ (z : S), (z ⟶ y) ≃ FiberProdHom p φ z\n  -- The forward direction of the equivalence must match the canonical composition map\n  toFun_eq : ∀ (z : S) (ψ : z ⟶ y), (equiv z ψ).val = (ψ ≫ φ, p.map ψ)"
+  },
+  {
+   "id": "IsStronglyCartesian-e99c8d85",
+   "run": "trackb",
+   "generation": 19,
+   "lean_code": "import LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open LMS.Foundation\n  open CategoryTheory\n\n  universe u v\n\n  /-- A morphism `f : X ⟶ Y` is strongly cartesian over `C` with respect to `p : S ⥤ C` if for every object `Z`\n  in `S`, every morphism `g : Z ⟶ Y`, and every morphism `σ : p.obj Z ⟶ p.obj X` such that `p.map g = σ ≫ p.map f`,\n  there exists a unique morphism `h : Z ⟶ X` such that `p.map h = σ` and `h ≫ f = g`. -/\n  def IsStronglyCartesian {C : Type u} {S : Type v} [Category C] [Category S]\n    (p : S ⥤ C) {X Y : S} (f : X ⟶ Y) : Prop :=\n  ∀ Z (g : Z ⟶ Y) (σ : p.obj Z ⟶ p.obj X),\n    p.map g = σ ≫ p.map f → ∃! (h : Z ⟶ X), p.map h = σ ∧ h ≫ f = g"
+  },
+  {
+   "id": "IsCartesian-6555afae",
+   "run": "trackb",
+   "generation": 24,
+   "lean_code": "import LMS.Foundation\nopen LMS.Foundation\nimport Mathlib.CategoryTheory.Category.Basic\nimport Mathlib.CategoryTheory.Functor.Basic\nimport Mathlib.Logic.Basic\n\nopen CategoryTheory\n\nuniverse u v\n\nvariable {C : Type u} {S : Type v} [Category C] [Category S]\nvariable (p : S ⥤ C)\n\n/-- A morphism `f : X ⟶ Y` is cartesian with respect to `p` if for any object `Z`,\nmorphism `g : Z ⟶ Y`, and morphism `u : p.obj Z ⟶ p.obj X` satisfying `u ≫ p.map f = p.map g`,\nthere exists a unique morphism `k : Z ⟶ X` such that `p.map k = u` and `k ≫ f = g`.\nCorresponds to Stacks Tag 02XK. -/\ndef IsCartesian {X Y : S} (f : X ⟶ Y) : Prop :=\n  ∀ (Z : S) (g : Z ⟶ Y) (u : p.obj Z ⟶ p.obj X),\n    u ≫ p.map f = p.map g →\n    ∃! k : Z ⟶ X, p.map k = u ∧ k ≫ f = g"
+  },
+  {
+   "id": "CategoryOver-f576f25b",
+   "run": "trackb",
+   "generation": 28,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  open CategoryTheory\n\n  /-- A category over a category `C` consists of a total space `S`, a category structure on `S`,\n    and a functor `F : S ⥤ C`. This formalizes Tag 003Y. -/\n  structure CategoryOver (C : Type u) [inst : Category C] where\n    S : Type v\n    toCategory : Category S\n    F : S ⥤ C\n\n  /-- The category instance on the total space of a category over `C`. -/\n  @[instance]\n  def CategoryOver.instCategory {C : Type u} [Category C] (p : CategoryOver C) : Category p.S :=\n    p.toCategory"
+  },
+  {
+   "id": "IsStronglyCartesian-655556f3",
+   "run": "trackb",
+   "generation": 30,
+   "lean_code": "import LMS.Foundation\nopen LMS.Foundation\nimport Mathlib.CategoryTheory.Category.Basic\nimport Mathlib.CategoryTheory.Functor.Basic\nopen CategoryTheory\n\nuniverse u v\n\nvariable {C : Type u} [Category C] {S : Type v} [Category S] (p : S ⥤ C)\n\n/-- \nA morphism `f` in a category `S` fibred over `C` via `p` is **strongly cartesian** \n(Stacks Project Tag 02XK) if it satisfies the unique lifting property. \nFor any test object `z`, any morphism `g` in the base, and any `h` in `S` that \ncommutes with `f` after applying `p`, there exists a unique lift `a` in `S`. -/\ndef IsStronglyCartesian {X Y : S} (f : X ⟶ Y) : Prop :=\n  ∀ (z : S) \n    (g : p.obj z ⟶ p.obj X) \n    (h : z ⟶ Y) \n    (w : p.map h = g ≫ p.map f),\n  ∃! (a : z ⟶ X), p.map a = g ∧ a ≫ f = h"
+  },
+  {
+   "id": "CategoryOver-b11cf1fb",
+   "run": "trackb",
+   "generation": 32,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open CategoryTheory\n\n  universe u₀ u₁\n\n  /-- A category over `C` consists of a domain category `D` and a functor `F : D ⥤ C`. -/\n  structure CategoryOver (C : Type u₀) [Category C] where\n    D : Type u₁\n    instD : Category D\n    F : D ⥤ C"
+  },
+  {
+   "id": "IsStronglyCartesian-7344a24a",
+   "run": "trackb",
+   "generation": 32,
+   "lean_code": "import LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open LMS.Foundation\n  open CategoryTheory\n\n  universe u v\n\n  /--\n  A morphism `φ : y ⟶ x` in the total category `S` of a functor `p : S ⥤ C`\n  is **strongly cartesian** if for any object `z` in `S`, morphism `g : z ⟶ x`,\n  and morphism `f : p.obj z ⟶ p.obj y` in the base category `C` such that\n  the triangle condition `p.map g = f ≫ p.map φ` holds, there exists a unique\n  morphism `h : z ⟶ y` such that `h ≫ φ = g` and `p.map h = f`.\n\n  This corresponds to Stacks Project Tag 02XK.\n  -/\n  def IsStronglyCartesian {C : Type u} {S : Type v} [Category C] [Category S]\n      (p : S ⥤ C) {x y : S} (φ : y ⟶ x) : Prop :=\n    ∀ (z : S) (g : z ⟶ x) (f : p.obj z ⟶ p.obj y),\n      p.map g = f ≫ p.map φ →\n      ∃! h : z ⟶ y, h ≫ φ = g ∧ p.map h = f"
+  },
+  {
+   "id": "IsCartesian-8c0e0f37",
+   "run": "think8k",
+   "generation": 2,
+   "lean_code": "import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  import LMS.Foundation\n  open LMS.Foundation\n  open CategoryTheory\n\n  universe u v\n  variable {C : Type u} [Category.{v} C] {S : Type u} [Category.{v} S] (P : S ⥤ C)\n\n  --/ A morphism `f : X ⟶ Y` is cartesian (fibred) over `C` if it has the unique lifting property.\n  --/ Corresponds to Stacks Project Tag 02XK.\n  def IsCartesian {X Y : S} (f : X ⟶ Y) : Prop :=\n    ∀ (Z : S) (h : Z ⟶ Y) (a : P.obj Z ⟶ P.obj X),\n      P.map h = a ≫ P.map f →\n      ∃! k : Z ⟶ X, k ≫ f = h ∧ P.map k = a"
+  },
+  {
+   "id": "IsCartesian-d27c5d79",
+   "run": "think8k",
+   "generation": 6,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  open CategoryTheory\n\n  universe u v\n\n  variable (C : Type u) [Category C]\n  variable (S : Type v) [Category S]\n\n  /-- A morphism `φ : y ⟶ x` is cartesian over `p` if it satisfies the universal\n      lifting property: for every commutative triangle over `C`, there exists a\n      unique lift in `S`. \n\n      Defined purely as a `Prop` to avoid computational loops associated with \n      bundling the hom-set bijection and pullback type. The bijection will be \n      established downstream as a lemma. -/\n  def IsCartesian (p : S ⥤ C) {x y : S} (φ : y ⟶ x) : Prop :=\n    ∀ (z : S) (g : z ⟶ x) (h : p.obj z ⟶ p.obj y),\n      h ≫ p.map φ = p.map g →\n      ∃! (ψ : z ⟶ y), ψ ≫ φ = g ∧ p.map ψ = h"
+  },
+  {
+   "id": "IsCartesian-aeb99c3e",
+   "run": "think8k",
+   "generation": 7,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open CategoryTheory\n\n  universe u v\n\n  /--\n  A morphism `f : X ⟶ Y` is cartesian over `C` with respect to `P : S ⥤ C` if it satisfies\n  the unique lifting property: for any `Z`, `g : Z ⟶ Y`, and `v : P.obj Z ⟶ P.obj X` with\n  `v ≫ P.map f = P.map g`, there exists a unique `h : Z ⟶ X` such that `P.map h = v` and\n  `h ≫ f = g`.\n  -/\n  def IsCartesian {S : Type u} [Category S] {C : Type v} [Category C]\n      (P : S ⥤ C) {X Y : S} (f : X ⟶ Y) : Prop :=\n    ∀ (Z : S) (g : Z ⟶ Y) (v : P.obj Z ⟶ P.obj X),\n      v ≫ P.map f = P.map g →\n      ∃! (h : Z ⟶ X), P.map h = v ∧ h ≫ f = g"
+  },
+  {
+   "id": "CategoryOverC-9651cfe5",
+   "run": "think64k",
+   "generation": 6,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  open CategoryTheory\n\n  universe u v\n\n  /--\n  An object in the 2-category of categories over a base category `C`.\n  Corresponds to Stacks Project Tag 003Y.\n  -/\n  structure CategoryOverC (C : Type u) [Category C] where\n    S : Type v\n    [inst : Category S]\n    p : S ⥤ C"
+  },
+  {
+   "id": "IsCartesian-a93834ac",
+   "run": "think64k",
+   "generation": 7,
+   "lean_code": "import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  import LMS.Foundation\n  open LMS.Foundation\n  open CategoryTheory\n\n  universe u v w\n  variable {C : Type u} [Category.{v} C]\n  variable {S : Type w} [Category.{v} S]\n  variable (p : S ⥤ C)\n\n  /-- \n  A morphism `f : Y ⟶ X` is cartesian over `p` if for every `g : Z ⟶ X` \n  and `u : p.obj Z ⟶ p.obj Y` with `p.map g = u ≫ p.map f`, there exists a \n  unique `h : Z ⟶ Y` such that `h ≫ f = g` and `p.map h = u`.\n  Tag: 02XK - Strongly Cartesian Morphisms\n  -/\n  structure IsCartesian {Y X : S} (f : Y ⟶ X) where\n    -- The universal lift: takes total morphism `g`, base morphism `u`, \n    -- and proof that they commute over `p`.\n    lift : ∀ {Z : S} (g : Z ⟶ X) (u : p.obj Z ⟶ p.obj Y) \n      (h : p.map g = u ≫ p.map f), Z ⟶ Y\n\n    -- Commutativity over `S`: lift ≫ f = g\n    lift_over : ∀ {Z : S} (g : Z ⟶ X) (u : p.obj Z ⟶ p.obj Y) \n      (h : p.map g = u ≫ p.map f), lift g u h ≫ f = g\n\n    -- Commutativity over `C`: p.map (lift) = u\n    lift_base : ∀ {Z : S} (g : Z ⟶ X) (u : p.obj Z ⟶ p.obj Y) \n      (h : p.map g = u ≫ p.map f), p.map (lift g u h) = u\n\n    -- Uniqueness of the lift\n    unique : ∀ {Z : S} (g : Z ⟶ X) (u : p.obj Z ⟶ p.obj Y) \n      (h : p.map g = u ≫ p.map f) (h' : Z ⟶ Y),\n      h' ≫ f = g → p.map h' = u → h' = lift g u h"
+  },
+  {
+   "id": "IsCartesian-211b18db",
+   "run": "think64k",
+   "generation": 8,
+   "lean_code": "import LMS.Foundation\nopen LMS.Foundation\nimport Mathlib.CategoryTheory.Category.Basic\nimport Mathlib.CategoryTheory.Functor.Basic\n\nopen CategoryTheory\n\nuniverse u v\n\n/--\nA morphism `f : y ⟶ x` in `S` is *cartesian over C* (with respect to `p : S ⥤ C`) \nif it satisfies the direct universal property: for every `z : S`, `g : z ⟶ x`, \nand `h : p.obj z ⟶ p.obj y` such that `p.map g = h ≫ p.map f`, there exists \na unique `k : z ⟶ y` with `k ≫ f = g` and `p.map k = h`.\n\nThis formulation replaces the pullback bijection from Stacks 02XK with explicit \nquantification over lifts, avoiding early dependency on limit constructions.\n-/\ndef IsCartesian {C : Type u} [Category C] {S : Type v} [Category S]\n    (p : S ⥤ C) {x y : S} (f : y ⟶ x) : Prop :=\n  ∀ {z : S} (g : z ⟶ x) (h : p.obj z ⟶ p.obj y),\n    p.map g = h ≫ p.map f → ∃! k : z ⟶ y, k ≫ f = g ∧ p.map k = h\n\n/--\nCurried notation for working within a fixed categorical fibration context.\n-/\ndef isCartesianOver {C : Type u} [Category C] {S : Type v} [Category S]\n    {p : S ⥤ C} {x y : S} (f : y ⟶ x) : Prop :=\n  IsCartesian p f"
+  },
+  {
+   "id": "IsCartesian-4c9b64cf",
+   "run": "think64k",
+   "generation": 10,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open CategoryTheory\n\n  universe u v\n\n  /--\n  A morphism `g : Y ⟶ Z` in a category `S` over a base category `C` via functor `p : S ⥤ C`\n  is **cartesian** if it satisfies the universal lifting property: for any object `X` in `S`,\n  any morphism `h : X ⟶ Z`, and any morphism `k : p.obj X ⟶ p.obj Y` such that\n  `p.map h = k ≫ p.map g`, there exists a unique morphism `f : X ⟶ Y` such that\n  `f ≫ g = h` and `p.map f = k`.\n\n  This matches Stacks Tag 02XK. The universal property is encoded as a single `Prop`-valued\n  predicate to avoid splitting existence and uniqueness, ensuring compatibility with downstream\n  rewriting and functoriality proofs.\n  -/\n  def IsCartesian {C : Type u} {S : Type v} [Category C] [Category S]\n    (p : S ⥤ C) {Y Z : S} (g : Y ⟶ Z) : Prop :=\n  ∀ (X : S) (k : p.obj X ⟶ p.obj Y) (h : X ⟶ Z),\n    p.map h = k ≫ p.map g → ∃! (f : X ⟶ Y), f ≫ g = h ∧ p.map f = k"
+  },
+  {
+   "id": "IsStronglyCartesian-a7273670",
+   "run": "think32b",
+   "generation": 2,
+   "lean_code": "import LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open CategoryTheory\n  open LMS.Foundation\n\n  universe u v w\n\n  /-- **Definition 02XK**: A morphism `φ : Y ⟶ X` lying over `f : p.obj Y ⟶ p.obj X` is strongly \n  cartesian if it satisfies the universal lifting property. \n\n  For every object `Z`, every morphism `v : p.obj Z ⟶ p.obj Y`, and every `ψ : Z ⟶ X` \n  compatible with `f` (i.e., `p.map ψ = v ≫ f`), there exists a unique morphism \n  `α : Z ⟶ Y` such that `α` lifts `v` (`p.map α = v`) and factors `ψ` through `φ` (`α ≫ φ = ψ`). -/\n  def IsStronglyCartesian {C : Type u} [Category.{v} C] {S : Type w} [Category.{v} S]\n    (p : S ⥤ C) (X Y : S) (φ : Y ⟶ X) (f : p.obj Y ⟶ p.obj X) (pf : p.map φ = f) : Prop :=\n    ∀ (Z : S) (v : p.obj Z ⟶ p.obj Y) (ψ : Z ⟶ X),\n      p.map ψ = v ≫ f →\n      ∃! (α : Z ⟶ Y), α ≫ φ = ψ ∧ p.map α = v"
+  },
+  {
+   "id": "IsCartesian-73f124b3",
+   "run": "think32b",
+   "generation": 4,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open CategoryTheory\n\n  universe u v\n\n  variable {C : Type u} {S : Type v}\n  variable [Category C] [Category S]\n  variable (p : S ⥤ C)\n\n  /-- A morphism `φ` in `S` is **cartesian** (strongly cartesian) over `C` with respect to `p` \n  if it satisfies the explicit unique lifting property: for any `z`, any `u : p.obj z ⟶ p.obj y`, \n  and any `v : z ⟶ x` such that `u ≫ p.map φ = p.map v`, there exists a unique `w : z ⟶ y` \n  satisfying `p.map w = u` and `w ≫ φ = v`. -/\n  def IsCartesian {x y : S} (φ : y ⟶ x) : Prop :=\n    ∀ {z : S} (u : p.obj z ⟶ p.obj y) (v : z ⟶ x) (h : u ≫ p.map φ = p.map v),\n      ∃! w : z ⟶ y, p.map w = u ∧ w ≫ φ = v"
+  },
+  {
+   "id": "StronglyCartesian-310a8e8f",
+   "run": "think32b",
+   "generation": 6,
+   "lean_code": "import LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open CategoryTheory\n  open LMS.Foundation\n\n  universe u v\n\n  /--\n  A morphism `f : Y ⟶ X` in the total category `𝒮` of a functor `p : 𝒮 ⥤ 𝒞` is\n  strongly cartesian if it satisfies the universal lifting property.\n  See Stacks Project Tag 02XK.\n  -/\n  def StronglyCartesian\n    {𝒞 : Type u} [Category 𝒞]\n    {𝒮 : Type v} [Category 𝒮]\n    (p : 𝒮 ⥤ 𝒞)\n    {X Y : 𝒮} (f : Y ⟶ X) : Prop :=\n  ∀ (Z : 𝒮) (g : Z ⟶ X) (k : p.obj Z ⟶ p.obj Y),\n    p.map g = k ≫ p.map f →\n    ∃! (h : Z ⟶ Y), p.map h = k ∧ h ≫ f = g"
+  },
+  {
+   "id": "IsCartesian-424c08c5",
+   "run": "think32b",
+   "generation": 8,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  open CategoryTheory\n\n  universe u v\n\n  variable {X : Type u} {C : Type v} [Category X] [Category C]\n\n  /--\n  A morphism `f : y ⟶ x` in `X` is strongly cartesian over `C` with respect to\n  the functor `p : X ⥤ C` if it satisfies the universal lifting property.\n  For any `z : X` and `g : p.obj z ⟶ p.obj y`, any morphism `α : z ⟶ x` \n  whose image under `p` factors through `p.map f` via `g` factors uniquely\n  through `f`.\n  -/\n  structure IsCartesian (p : X ⥤ C) (y x : X) (f : y ⟶ x) : Prop where\n    /--\n    Existence: any compatible `α : z ⟶ x` factors through `f` via some `β : z ⟶ y`\n    that strictly commutes with `g` and `p.map f`.\n    -/\n    lift_factor : ∀ {z : X} (g : p.obj z ⟶ p.obj y) (α : z ⟶ x) (h : p.map α = g ≫ p.map f),\n      ∃ β : z ⟶ y, β ≫ f = α ∧ p.map β = g\n\n    /--\n    Uniqueness: the factor `β` is unique given the same target `g` and composite `α`.\n    Commutativity with `g` is kept explicit to match `lift_factor` and aid rewriting.\n    -/\n    lift_unique : ∀ {z : X} (g : p.obj z ⟶ p.obj y) (α : z ⟶ x) (β₁ β₂ : z ⟶ y),\n      β₁ ≫ f = α → β₂ ≫ f = α → p.map β₁ = g → p.map β₂ = g → β₁ = β₂"
+  },
+  {
+   "id": "IsCartesian-d3c3b9f8",
+   "run": "think32b",
+   "generation": 10,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  open CategoryTheory\n\n  universe u v\n\n  variable (C : Type u) [Category C] (S : Type v) [Category S]\n\n  /--\n  A morphism `φ : y ⟶ x` in `S` is cartesian (strongly `\\mathcal{C}`-cartesian) \n  with respect to the functor `p : S ⥤ C` if the canonical map from \n  `Hom_S(z, y)` to the pullback `Hom_S(z, x) ×_{Hom_C(p z, p x)} Hom_C(p z, p y)` \n  is a bijection for every `z`. We decompose this bijectivity into explicit \n  existence (`lift`), commutation (`comm`), and uniqueness (`uniq`) components.\n  -/\n  structure IsCartesian (p : S ⥤ C) (x y : S) (φ : y ⟶ x) where\n    /-- Given `z`, `g : z ⟶ x`, `a : p.obj z ⟶ p.obj y`, and a compatibility \n        witness `w : p.map g = a ≫ p.map φ`, produces the lifted morphism `z ⟶ y`. -/\n    lift : ∀ (z : S) (g : z ⟶ x) (a : p.obj z ⟶ p.obj y) \n            (w : p.map g = a ≫ p.map φ), z ⟶ y\n\n    /-- The lifted morphism commutes with `g` via `φ` and maps to `a` via `p`. -/\n    comm : ∀ (z : S) (g : z ⟶ x) (a : p.obj z ⟶ p.obj y) \n             (w : p.map g = a ≫ p.map φ),\n      p.map (lift z g a w) = a ∧ g = lift z g a w ≫ φ\n\n    /-- Any other morphism `h'` satisfying the same triangle conditions must equal `lift`. -/\n    uniq : ∀ (z : S) (g : z ⟶ x) (a : p.obj z ⟶ p.obj y) \n             (w : p.map g = a ≫ p.map φ) (h' : z ⟶ y),\n      g = h' ≫ φ → p.map h' = a → h' = lift z g a w"
+  },
+  {
+   "id": "category_over_cleavage-43f3de9c",
+   "run": "c9",
+   "generation": 4,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n  import Mathlib.Data.Sigma.Basic\n\n  open CategoryTheory\n\n  universe u v\n\n  --/ A category `S` equipped with a functor `p : S ⥤ C`. -/\n  structure CategoryOver (C : Type u) [Category C] where\n    S : Type v\n    inst : Category S\n    p : S ⥤ C\n\n  attribute [instance] CategoryOver.inst\n\n  namespace CategoryOver\n  variable {C : Type u} [Category C]\n\n  --/ A cleavage chooses, for every object `y : S` and base morphism `f : x ⟶ p.obj y`,\n  --/    a lift morphism `g : z ⟶ y` in `S` along with its source `z`.\n  --/\n  --/    Note: We explicitly exclude functoriality, coherence, the lifting condition `p.obj_map g = f`,\n  --/    and the cartesian property from this definition. These will be verified separately\n  --/    in an `IsCleavage` predicate or dedicated lemmas. -/\n  structure Cleavage (cat : CategoryOver C) where\n    choose : ∀ (y : cat.S) (x : C) (f : x ⟶ cat.p.obj y), Σ z : cat.S, z ⟶ y\n\n  end CategoryOver"
+  },
+  {
+   "id": "is_cartesian-85caebf4",
+   "run": "r9",
+   "generation": 4,
+   "lean_code": "import LMS.Foundation\n  import Mathlib.CategoryTheory.Category.Basic\n  import Mathlib.CategoryTheory.Functor.Basic\n\n  open LMS.Foundation\n  open CategoryTheory\n  open scoped CategoryTheory\n\n  universe u\n\n  variable {C : Type u} {S : Type u} [Category C] [Category S] (p : S ⥤ C)\n\n  /--\n  A morphism `φ : y ⟶ x` in `S` is strongly cartesian over `C` if it satisfies the\n  unique lifting property. This corresponds to Stacks Project Tag 02XK.\n  -/\n  def IsCartesian {x y : S} (φ : y ⟶ x) : Prop :=\n    ∀ {z : S} (g : z ⟶ x) (h : p.obj z ⟶ p.obj y),\n      p.map g = h ≫ p.map φ →\n      ∃! (k : z ⟶ y), p.map k = h ∧ k ≫ φ = g"
+  },
+  {
+   "id": "filtered_complex_ss_converges-76427f2b",
+   "run": "tracka",
+   "generation": 5,
+   "lean_code": "import LMS.Foundation\n  open LMS.Foundation\n\n  universe u\n\n  /-- Minimal abstract spectral sequence capturing only the E∞ page required for convergence. -/\n  structure SpectralSequence where\n    E_infty : ℤ × ℤ → Type u\n\n  /-- A decreasing filtration on an object `C`. -/\n  structure Filtration (C : Type u) where\n    /-- The p-th filtration piece F^p C. -/\n    sub : ℤ → Type u\n    /-- Inclusion maps F^{p+1} C ↪ F^p C. -/\n    mono : ∀ p, sub (p + 1) → sub p\n    /-- Structure maps to the underlying object. -/\n    toC : ∀ p, sub p → C\n    /-- The associated graded piece gr^p C = F^p C / F^{p+1} C. -/\n    gr : ℤ → Type u\n    /-- Projection maps F^p C → gr^p C. -/\n    to_gr : ∀ p, sub p → gr p\n\n  /-- Strong convergence of a spectral sequence to a filtered object (Stacks 012U). -/\n  structure ConvergesTo (C : Type u) (F : Filtration C) (SS : SpectralSequence) where\n    /-- Abutment: natural equivalence between the E∞ page and the associated graded. -/\n    abutment : ∀ n p : ℤ, SS.E_infty (p, n - p) ≃ F.gr p\n    /-- Boundedness: filtration vanishes outside a finite band (or uniformly bounded). -/\n    bounded : Prop\n    /-- Regularity: the filtration stabilizes or satisfies exactness on cohomology. -/\n    regular : Prop\n    /-- Completeness: the filtration satisfies the inverse limit condition. -/\n    complete : Prop"
+  },
+  {
+   "id": "ExactCouple-adf0aaf0",
+   "run": "tracka",
+   "generation": 7,
+   "lean_code": "import Mathlib\n\n/-- An exact couple consists of two additive groups `C` and `D` and three additive \nhomomorphisms forming a cycle, satisfying exactness conditions at each vertex. \nThis corresponds to Stacks Tag 011Q, with naming aligned to the guidance \n(`f : C → C`, `g : C → D`, `h : D → C`). -/\nstructure ExactCouple (C D : Type*) [AddCommGroup C] [AddCommGroup D] where\n  f : C →+ C\n  g : C →+ D\n  h : D →+ C\n  -- Exactness at the first copy of C: Im(h) = Ker(f)\n  exact_f : ∀ x : C, f x = 0 ↔ ∃ y : D, h y = x\n  -- Exactness at D: Im(g) = Ker(h)\n  exact_h : ∀ x : D, h x = 0 ↔ ∃ y : C, g y = x\n  -- Exactness at the second copy of C: Im(f) = Ker(g)\n  exact_g : ∀ x : C, g x = 0 ↔ ∃ y : C, f y = x"
+  }
+ ]
+}
