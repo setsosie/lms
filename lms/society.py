@@ -69,6 +69,64 @@ _DECL_NAME_RE = re.compile(
 _LINE_COMMENT_RE = re.compile(r"--.*$", re.MULTILINE)
 _BLOCK_COMMENT_RE = re.compile(r"/-.*?-/", re.DOTALL)
 
+# For `tag_name_matches`. Kind words and short function words say nothing
+# about which statement a tag is; everything else in its name does.
+_TAG_KIND_WORDS = frozenset(
+    {"definition", "lemma", "theorem", "proposition", "corollary", "remark", "example"}
+)
+_TAG_STOP_WORDS = _TAG_KIND_WORDS | frozenset(
+    {"of", "the", "a", "an", "and", "for", "to", "in", "is", "with", "by"}
+)
+_TAG_PREFIX_RE = re.compile(r"^\s*(?:MILESTONE\s*:\s*)?(?:[A-Za-z]+\s*:\s*)?")
+_TAG_SECTION_TITLE_RE = re.compile(r"\s*\([^()]*\)\s*$")
+_CAMEL_WORD_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
+
+
+def _tag_words(tag_name: str) -> set[str]:
+    """The words of a tag's name that identify its statement.
+
+    Drops a `MILESTONE:` marker, the kind (`Definition:`), and a trailing
+    parenthetical, which in the kernel tracks is the section title and names
+    the neighbourhood, not the statement.
+    """
+    text = _TAG_SECTION_TITLE_RE.sub("", _TAG_PREFIX_RE.sub("", tag_name, count=1))
+    return {
+        w
+        for w in re.split(r"[^a-z0-9]+", text.lower())
+        if len(w) > 1 and w not in _TAG_STOP_WORDS
+    }
+
+
+def _declared_words(lean_code: str) -> set[str]:
+    """Words of the names an artifact declares, split on dots, `_` and case."""
+    words: set[str] = set()
+    for decl in named_declarations(lean_code):
+        for part in re.split(r"[._]+", decl.name or ""):
+            words.update(w.lower() for w in _CAMEL_WORD_RE.findall(part))
+    return words
+
+
+def _words_match(a: str, b: str) -> bool:
+    """One word is a prefix of the other (3+ letters), or they share 5."""
+    short, long_ = sorted((a, b), key=len)
+    if len(short) >= 3 and long_.startswith(short):
+        return True
+    return len(short) >= 5 and short[:5] == long_[:5]
+
+
+def tag_name_matches(tag_name: str, lean_code: str) -> bool:
+    """Whether an artifact declares a name that is its tag's statement.
+
+    The match is on words, not on whole names: `NatTrans` matches "Natural
+    Transformation" and `comp_cartesian` matches "lemma composition cartesian".
+    A verified artifact that matches nothing still compiled and may be useful,
+    but it is not evidence the tag's statement exists.
+    """
+    tag_words = _tag_words(tag_name)
+    return any(
+        _words_match(t, a) for t in tag_words for a in _declared_words(lean_code)
+    )
+
 
 class BudgetExceeded(Exception):
     """Raised when token budget is exceeded."""
@@ -844,7 +902,12 @@ class Society:
                         self.library.add_reference(artifact.id, ref_id)
 
                 # Track goal progress
-                if self.goal and artifact.stacks_tag and artifact.verified:
+                if (
+                    self.goal
+                    and artifact.stacks_tag
+                    and artifact.verified
+                    and self._closes_tag(artifact.stacks_tag, artifact)
+                ):
                     self.goal.mark_formalized(artifact.stacks_tag, artifact.id)
 
         # Add rejected items to library (unverified, with rejection reason)
@@ -941,6 +1004,35 @@ class Society:
                 artifact.notes or ""
             ) + f"\n[Not promoted to foundation — {reason}]"
             print(f"  [foundation] refused {artifact.id}: {reason}")
+
+    def _tag_name(self, tag: str) -> str | None:
+        """The name of a tag's statement, from the goal, else the task graph."""
+        normalized = tag.strip("\"'")
+        if self.goal:
+            for defn in self.goal.definitions:
+                if defn.tag == normalized:
+                    return defn.name
+        graph = self.dependency_graph
+        if graph is not None and normalized in graph.nodes:
+            return graph.nodes[normalized].name
+        return None
+
+    def _closes_tag(self, tag: str, artifact: Artifact) -> bool:
+        """Whether a verified artifact closes `tag`: it must declare its statement.
+
+        A tag with no known name has nothing to match against and closes as
+        before; `mark_formalized` ignores a tag the goal doesn't have anyway.
+        """
+        name = self._tag_name(tag)
+        code = artifact.lean_code or ""
+        if name is None or tag_name_matches(name, code):
+            return True
+        declared = ", ".join(d.name for d in named_declarations(code) if d.name)
+        print(
+            f"  [goal] {tag} not closed by {artifact.id}: "
+            f'declares {declared or "nothing"}, none matches "{name}"'
+        )
+        return False
 
     def _release_gate_blocked_task(self, tag: str, artifact: Artifact) -> None:
         """Offer a task again after a gate kept its artifact out.
@@ -1202,7 +1294,11 @@ class Society:
                         )
 
                     # Track goal progress
-                    if self.goal and artifact.stacks_tag:
+                    if (
+                        self.goal
+                        and artifact.stacks_tag
+                        and self._closes_tag(artifact.stacks_tag, artifact)
+                    ):
                         self.goal.mark_formalized(artifact.stacks_tag, artifact.id)
 
                 # Add to library
@@ -1629,14 +1725,21 @@ class Society:
                     else:
                         self._promote_to_foundation(artifact)
 
-                        # Update dependency graph
-                        self.dependency_graph.update_status(
-                            group.config.task_tag, TaskStatus.DONE, artifact.id
-                        )
-
-                        # Update goal progress
-                        if self.goal and artifact.stacks_tag:
-                            self.goal.mark_formalized(artifact.stacks_tag, artifact.id)
+                        # Promotion and closure are separate: the artifact
+                        # compiled and may be useful whatever it declares,
+                        # but only the tag's own statement closes the tag.
+                        if self._closes_tag(group.config.task_tag, artifact):
+                            self.dependency_graph.update_status(
+                                group.config.task_tag, TaskStatus.DONE, artifact.id
+                            )
+                            if self.goal and artifact.stacks_tag:
+                                self.goal.mark_formalized(
+                                    artifact.stacks_tag, artifact.id
+                                )
+                        else:
+                            self.dependency_graph.update_status(
+                                group.config.task_tag, TaskStatus.AVAILABLE
+                            )
 
                     # Add to textbook
                     self.textbook.add(
