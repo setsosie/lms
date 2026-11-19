@@ -36,8 +36,9 @@ from typing import Any
 #: Statement key for spend that cannot be attributed to any statement.
 OVERHEAD_KEY = "__overhead__"
 
-#: Novelty levels that count toward the CVFN denominator (populated by the
-#: HARN-04 classifier; absent on runs predating it).
+#: Novelty levels that count toward the CVFN denominator once D4 has signed
+#: them off. The classifier proposes N0, N1 or INCONCLUSIVE; absent on runs
+#: predating it.
 NOVEL_LEVELS = frozenset({"N1", "N2", "N3"})
 
 #: Where the search's N1 is called decisive in reports. It no longer decides
@@ -336,14 +337,52 @@ def _forbidden_mathlib(run_dir: Path) -> list[str] | None:
     ]
 
 
-def counts_as_novel(artifact: dict[str, Any]) -> bool:
-    """Whether an artifact's novelty label clears Gate 4.
+def load_d4_verdicts(run_dir: Path) -> dict[str, str]:
+    """D4's novelty verdict per statement key, from the run's `review_log.json`.
 
-    Only an N2/N3 D4 verdict. During calibration an N1 is the search's
-    proposal, however confident, and waits on D4: on recorded hits, statements
-    in the library read N1 at 0.90. Readers outside this module call this
-    rather than restating the rule.
+    Reads the entries `_load_review_minutes` reads; an entry with a
+    `novelty_verdict` (`N0`..`N3`) records D4's call on that statement, and a
+    later entry for the same key overrides an earlier one. Entries with only
+    minutes are no verdict.
     """
+    path = Path(run_dir) / "review_log.json"
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text())
+    if isinstance(data, dict):
+        data = data.get("entries", [])
+    verdicts: dict[str, str] = {}
+    for entry in data:
+        key, verdict = entry.get("statement_key"), entry.get("novelty_verdict")
+        if key and verdict:
+            verdicts[key] = verdict
+    return verdicts
+
+
+def _artifact_statement_key(artifact: dict[str, Any]) -> str:
+    """The statement key D4 verdicts are recorded under, for one artifact."""
+    return statement_key(
+        (artifact.get("stacks_tag") or "").strip("\"'") or None,
+        artifact.get("lean_code"),
+        artifact.get("natural_language"),
+    )
+
+
+def counts_as_novel(
+    artifact: dict[str, Any], d4_verdicts: dict[str, str] | None = None
+) -> bool:
+    """Whether an artifact counts as novel, which only D4 can decide.
+
+    D4's verdict for the artifact's statement, when the review log has one,
+    decides. Otherwise only an N2/N3 label counts, since only D4 assigns those.
+    During calibration an N1 from the search is a proposal, however
+    confident: on recorded hits, statements in the library read N1 at 0.90.
+    Readers outside this module call this rather than restating the rule.
+    """
+    if d4_verdicts:
+        verdict = d4_verdicts.get(_artifact_statement_key(artifact))
+        if verdict is not None:
+            return verdict in NOVEL_LEVELS
     level = artifact.get("novelty_level")
     return level in NOVEL_LEVELS and level != "N1"
 
@@ -399,13 +438,14 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
     has_novelty = any(a.get("novelty_level") for a in artifacts)
     awaiting_review = 0
     if has_novelty:
-        denominator = sum(1 for a in verified if _counts_as_novel(a))
+        verdicts = load_d4_verdicts(run_dir)
+        denominator = sum(1 for a in verified if _counts_as_novel(a, verdicts))
         denominator_kind = "verified_novel"
         awaiting_review = sum(
             1
             for a in verified
             if a.get("novelty_level") in ("N1", "INCONCLUSIVE")
-            and not _counts_as_novel(a)
+            and _artifact_statement_key(a) not in verdicts
         )
     else:
         denominator = len(verified)

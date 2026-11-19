@@ -32,6 +32,7 @@ from lms.accounting import (
     calculate_cvfn,
     counts_as_novel,
     cvfn_report,
+    load_d4_verdicts,
     statement_key,
 )
 
@@ -46,11 +47,13 @@ def _load_artifacts(run_dir: Path) -> tuple[list[dict[str, Any]], bool]:
     return artifacts, any(a.get("novelty_level") for a in artifacts)
 
 
-def _counted(artifact: dict[str, Any], has_novelty: bool) -> bool:
+def _counted(
+    artifact: dict[str, Any], has_novelty: bool, d4_verdicts: dict[str, str]
+) -> bool:
     """The rule `cvfn_report` applies to one artifact, without the tally."""
     if artifact.get("status") != "verified_lean":
         return False
-    return counts_as_novel(artifact) if has_novelty else True
+    return counts_as_novel(artifact, d4_verdicts) if has_novelty else True
 
 
 def _tag_key(tag: str | None) -> str | None:
@@ -72,12 +75,13 @@ def statement_outcomes(run_dir: Path) -> dict[str, bool]:
     unrelated `foo`s count as one statement.
     """
     artifacts, has_novelty = _load_artifacts(run_dir)
+    verdicts = load_d4_verdicts(run_dir)
     outcomes: dict[str, bool] = {}
     for a in artifacts:
         key = _tag_key(a.get("stacks_tag"))
         if key is None:
             continue
-        outcomes[key] = outcomes.get(key, False) or _counted(a, has_novelty)
+        outcomes[key] = outcomes.get(key, False) or _counted(a, has_novelty, verdicts)
     return outcomes
 
 
@@ -181,8 +185,9 @@ def arm_report(name: str, run_dirs: list[Path]) -> ArmReport:
     untagged = 0
     for d in run_dirs:
         artifacts, has_novelty = _load_artifacts(Path(d))
+        verdicts = load_d4_verdicts(Path(d))
         for a in artifacts:
-            if not _counted(a, has_novelty):
+            if not _counted(a, has_novelty, verdicts):
                 continue
             key = _tag_key(a.get("stacks_tag"))
             if key is None:
