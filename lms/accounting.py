@@ -40,8 +40,9 @@ OVERHEAD_KEY = "__overhead__"
 #: HARN-04 classifier; absent on runs predating it).
 NOVEL_LEVELS = frozenset({"N1", "N2", "N3"})
 
-#: An N1 below this confidence waits on D4 sign-off instead of counting. Mirrors
-#: `lms.novelty.DECISIVE_CONFIDENCE`, which this module cannot import.
+#: Where the search's N1 is called decisive in reports. It no longer decides
+#: what counts: no N1 does without D4. Mirrors `lms.novelty.DECISIVE_CONFIDENCE`,
+#: which this module cannot import.
 DECISIVE_N1_CONFIDENCE = 0.8
 
 _DECL_RE = re.compile(
@@ -338,16 +339,13 @@ def _forbidden_mathlib(run_dir: Path) -> list[str] | None:
 def counts_as_novel(artifact: dict[str, Any]) -> bool:
     """Whether an artifact's novelty label clears Gate 4.
 
-    A decisive N1, or an N2/N3 D4 verdict. Readers outside this module call
-    this rather than restating the rule.
+    Only an N2/N3 D4 verdict. During calibration an N1 is the search's
+    proposal, however confident, and waits on D4: on recorded hits, statements
+    in the library read N1 at 0.90. Readers outside this module call this
+    rather than restating the rule.
     """
     level = artifact.get("novelty_level")
-    if level not in NOVEL_LEVELS:
-        return False
-    if level != "N1":
-        return True  # N2/N3 are D4 verdicts, already signed off
-    confidence = artifact.get("novelty_confidence")
-    return confidence is not None and confidence >= DECISIVE_N1_CONFIDENCE
+    return level in NOVEL_LEVELS and level != "N1"
 
 
 _counts_as_novel = counts_as_novel
@@ -360,7 +358,7 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
     the society totals in `results.json`, which were always complete even when
     attribution was not. Novelty labels are honored when the artifacts carry
     them; without them the denominator is the unfiltered verified count and is
-    labelled as such. Only a decisive N1 counts, as at Gate 4; the rest are
+    labelled as such. No N1 counts without D4, as at Gate 4; the N1s are
     reported as awaiting D4 review.
 
     A goal that forbids part of Mathlib makes agents rebuild it from scratch,

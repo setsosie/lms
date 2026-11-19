@@ -4,9 +4,11 @@ Wraps `lms.novelty.classify_novelty` as a pass/fail gate over an `Artifact`
 and stamps the classification onto the artifact so `artifacts.json` carries
 the auditable record.
 
-Gate semantics: only a *decisive* N1 counts as novel. N0 fails the gate.
-INCONCLUSIVE and low-confidence N1 do not pass — they route to D4 human
-review, because a wrong novelty label is worse than no label.
+Gate semantics: during calibration no N1 counts as novel on the search's
+word alone, however confident. Every N1 routes to D4 human review, as do
+INCONCLUSIVE results; N0 fails the gate. On recorded hits, statements in the
+library read N1 at 0.90 whenever the stages that could find a differently
+named statement came up empty, and a wrong novelty label is worse than none.
 """
 
 from dataclasses import dataclass
@@ -94,21 +96,21 @@ def apply_novelty_gate(
     artifact.novelty_evidence = list(result.evidence)
     artifact.novelty_candidates = list(result.candidates)
 
-    counts = result.level is NoveltyLevel.N1 and not result.needs_review
-    if counts:
-        reason = f"decisive N1 (confidence {result.confidence:.2f})"
-    elif result.level is NoveltyLevel.N0:
+    # The search only proposes N1; D4 is what makes it count. Agrees with
+    # `lms.accounting.counts_as_novel`, which the CVFN report reads.
+    needs_review = result.needs_review or result.level is NoveltyLevel.N1
+    if result.level is NoveltyLevel.N0:
         reason = (
             f"N0 — found in Mathlib: {'; '.join(result.evidence[:2]) or 'see evidence'}"
         )
-    elif result.needs_review:
+    elif needs_review:
         reason = f"{result.level.value} at confidence {result.confidence:.2f} — routed to D4 review"
     else:
         reason = f"{result.level.value} (confidence {result.confidence:.2f})"
 
     return NoveltyGateDecision(
         result=result,
-        counts_as_novel=counts,
-        needs_human_review=result.needs_review,
+        counts_as_novel=False,
+        needs_human_review=needs_review,
         reason=reason,
     )
