@@ -8,7 +8,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔲 PENDING: option (a) chosen 2026-11-18 |
 | **Branch** | `26Q4-HARN-13-decisive-n1-meaning-gate-4` |
 | **Dependencies** | 26Q4-HARN-09 |
 | **Gate** | full |
@@ -33,7 +33,7 @@
 
 #### Acceptance Criteria
 
-- [ ] The user has chosen, and the choice is recorded in this card, between: (a) during calibration no N1 counts without D4 review; (b) an N1 counts only if a stage that can find a differently named statement ran, meaning `exact?` on a single declaration; (c) keep the current rule and report the count of unreviewed N1s beside CVFN — accepted via Outcome Demo
+- [x] The user has chosen, and the choice is recorded in this card. **Chosen 2026-11-18: (a), during calibration no N1 counts without D4 review.** The options were: (a) during calibration no N1 counts without D4 review; (b) an N1 counts only if a stage that can find a differently named statement ran, meaning `exact?` on a single declaration; (c) keep the current rule and report the count of unreviewed N1s beside CVFN — accepted via Outcome Demo
 - [ ] `tests/test_novelty.py` pins the choice on the 8 statements above, replayed in Gate 4's configuration
 - [ ] `lms.accounting.counts_as_novel` and `apply_novelty_gate` still agree on every case in those tests
 - [ ] `uv run pytest -q` passes, and `uv run ruff check .` and `uv run mypy lms/` are clean
