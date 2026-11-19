@@ -64,7 +64,7 @@ near the measured committed-scope rate, not the mean.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (a) chosen 2026-11-18:** during calibration no N1 counts without D4 review |
+| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (a) chosen 2026-11-18:** during calibration no N1 counts without D4 review. Built in #111: Gate 4 now passes nothing on its own (the card's "choice working"). D4 verdicts, written per run in `review_log.json`, are what count, so CVFN and every Phase C arm read 0 until they exist |
 | 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (c) chosen 2026-11-18:** a name or Loogle hit reads INCONCLUSIVE now; N0 on Lean confirmation is a later card. All 10 control N0s came from name search, so D3's bar likely becomes "decisive N1 = 0". The card's Notes record a neighbouring `.{u}` label-token leak from #82's review |
 | 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Section approach chosen 2026-11-18:** each artifact's own `section` carries its universe context, extending `26Q4-HARN-31`'s (#107). Starts after #105 and #107 merge |
 | 26Q4-HARN-24: A tag closes only on an artifact that is that tag's statement | 2 | HIGH | HARN | 🔲 PENDING | — | From r6 (batch q1). Rule A (name match) chosen 2026-11-13; spec in the card |
