@@ -157,6 +157,11 @@ failed exactly here. Protocol:
 | N3 | Theorem absent from the source texts and (so far as searchable) the literature | the genuine prize |
 | N4 | New definition that earns sustained reuse across WCs | new *concept* — the strongest possible outcome |
 
+**What counts during calibration (decided 2026-11-18).**
+- **The search ladder proposes an N1; it never makes one count.** On recorded hits, statements in the library read N1 at confidence 0.90 whenever the stages that could find a differently named statement came up empty.
+- **So no N1 counts toward CVFN without D4 sign-off**, however confident the search was. Gate 4 sends every N1 to D4. The CVFN report lists N1s as awaiting D4 review, and counts only D4 verdicts.
+- **The confidence is still recorded and reported.** The densities, including the decisive line at 0.8, keep measuring what the search found.
+
 ### 6.2 Certification requirements by level
 
 **N1** (default): T1–T4 only. The source anchor *is* the faithfulness certificate.
