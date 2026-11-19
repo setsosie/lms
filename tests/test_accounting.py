@@ -510,12 +510,7 @@ class TestCVFN:
                 {
                     "artifacts": [
                         {"id": "a1", "status": "verified_lean", "novelty_level": "N0"},
-                        {
-                            "id": "a2",
-                            "status": "verified_lean",
-                            "novelty_level": "N1",
-                            "novelty_confidence": 0.9,
-                        },
+                        {"id": "a2", "status": "verified_lean", "novelty_level": "N2"},
                         {
                             "id": "a3",
                             "status": "failed",
@@ -573,9 +568,13 @@ DECISIVE_N1 = {
     "novelty_confidence": 0.9,
 }
 
+#: A statement D4 signed off as novel, the only kind that counts.
+D4_VERDICT = {"id": "a1", "status": "verified_lean", "novelty_level": "N2"}
+
 
 class TestCVFNNovelty:
-    def test_only_decisive_n1_enters_the_denominator(self, tmp_path):
+    def test_no_n1_enters_the_denominator_without_d4(self, tmp_path):
+        signed_off = {**D4_VERDICT, "id": "a5"}
         low = {**DECISIVE_N1, "id": "a2", "novelty_confidence": 0.75}
         unlabelled_confidence = {
             "id": "a3",
@@ -586,14 +585,14 @@ class TestCVFNNovelty:
         report = cvfn_report(
             write_run(
                 tmp_path / "run",
-                [DECISIVE_N1, low, unlabelled_confidence, inconclusive],
+                [DECISIVE_N1, low, unlabelled_confidence, inconclusive, signed_off],
             )
         )
         assert report.denominator == 1
         assert report.cvfn_tokens_per_statement == 1_000
-        # The rest wait on D4 sign-off rather than vanishing from the report.
-        assert report.awaiting_review == 3
-        assert "awaiting D4 review: 3" in report.format()
+        # Even the 0.90 N1 waits on D4 sign-off, rather than vanishing from the report.
+        assert report.awaiting_review == 4
+        assert "awaiting D4 review: 4" in report.format()
 
     def test_the_threshold_is_the_gates(self):
         from lms.novelty import DECISIVE_CONFIDENCE
@@ -605,7 +604,7 @@ class TestCVFNNovelty:
             "name": "stacks-ch4-phase1",
             "forbidden_imports": ["Mathlib.CategoryTheory"],
         }
-        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        report = cvfn_report(write_run(tmp_path / "run", [D4_VERDICT], goal))
         assert report.cvfn_tokens_per_statement is None
         assert report.denominator_kind == "unmeasurable"
         assert "Mathlib.CategoryTheory" in report.unmeasurable_reason
@@ -613,14 +612,14 @@ class TestCVFNNovelty:
 
     def test_a_goal_without_forbidden_mathlib_is_measured(self, tmp_path):
         goal = {"name": "ant", "forbidden_imports": []}
-        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        report = cvfn_report(write_run(tmp_path / "run", [D4_VERDICT], goal))
         assert report.cvfn_tokens_per_statement == 1_000
         assert report.unmeasurable_reason is None
 
     def test_a_goal_saved_before_the_field_existed_is_unchecked(self, tmp_path):
         """Goals saved before 2026-08-19 have no forbidden_imports key at all."""
         goal = {"name": "Stacks Chapter 4 FROM SCRATCH"}
-        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1], goal))
+        report = cvfn_report(write_run(tmp_path / "run", [D4_VERDICT], goal))
         assert report.goal_recorded is False
         assert "forbidden_imports unchecked" in report.format()
 
@@ -633,7 +632,7 @@ class TestCVFNNovelty:
         assert saved["forbidden_imports"] is None
 
     def test_a_run_without_its_goal_says_so(self, tmp_path):
-        report = cvfn_report(write_run(tmp_path / "run", [DECISIVE_N1]))
+        report = cvfn_report(write_run(tmp_path / "run", [D4_VERDICT]))
         assert report.cvfn_tokens_per_statement == 1_000
         assert "goal.json missing" in report.format()
 
@@ -656,3 +655,90 @@ class TestLedgerPersistence:
         )
         assert resumed.ledger.total_tokens == society.ledger.total_tokens
         assert len(resumed.ledger) == len(society.ledger)
+
+
+def write_review_log(run_dir, entries):
+    """D4 verdicts for a run, as the review log records them."""
+    (run_dir / "review_log.json").write_text(json.dumps(entries))
+    return run_dir
+
+
+class TestD4VerdictsCount:
+    """An N1 counts once D4 signs it off in the run's review log, and only then."""
+
+    TAGGED_N1 = {**DECISIVE_N1, "stacks_tag": "003T"}
+
+    def test_a_reviewed_n1_counts(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [self.TAGGED_N1])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": "N1"}]
+        )
+        report = cvfn_report(run_dir)
+        assert report.denominator == 1
+        assert report.awaiting_review == 0
+
+    def test_d4_calling_it_n0_keeps_it_out(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [self.TAGGED_N1])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": "N0"}]
+        )
+        report = cvfn_report(run_dir)
+        assert report.denominator == 0
+        # Reviewed, so no longer waiting on D4.
+        assert report.awaiting_review == 0
+
+    def test_review_minutes_alone_are_no_verdict(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [self.TAGGED_N1])
+        write_review_log(run_dir, [{"statement_key": "tag:003T", "minutes": 2.0}])
+        report = cvfn_report(run_dir)
+        assert report.denominator == 0
+        assert report.awaiting_review == 1
+        assert report.review_minutes == 2.0
+
+
+class TestD4VerdictKeys:
+    """A verdict finds its artifact however the tag was quoted, and an unknown one is no verdict."""
+
+    @pytest.mark.parametrize(
+        ("artifact_tag", "logged_key"),
+        [
+            ("003T", 'tag:"003T"'),
+            ('"003T"', "tag:003T"),
+            ("003T ", "tag:003T"),
+            ("003T", " tag:003T"),
+        ],
+    )
+    def test_quotes_and_spaces_do_not_lose_a_verdict(
+        self, tmp_path, artifact_tag, logged_key
+    ):
+        run_dir = write_run(
+            tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": artifact_tag}]
+        )
+        write_review_log(
+            run_dir, [{"statement_key": logged_key, "novelty_verdict": "N1"}]
+        )
+        report = cvfn_report(run_dir)
+        assert (report.denominator, report.awaiting_review) == (1, 0)
+
+    def test_a_verdict_is_read_whatever_its_case(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": "003T"}])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": " n1"}]
+        )
+        assert cvfn_report(run_dir).denominator == 1
+
+    @pytest.mark.parametrize("verdict", ["INCONCLUSIVE", "maybe", "N9"])
+    def test_an_unknown_verdict_leaves_it_awaiting_review(self, tmp_path, verdict):
+        run_dir = write_run(tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": "003T"}])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": verdict}]
+        )
+        report = cvfn_report(run_dir)
+        assert (report.denominator, report.awaiting_review) == (0, 1)
+
+    def test_n4_counts(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": "003T"}])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": "N4"}]
+        )
+        assert cvfn_report(run_dir).denominator == 1

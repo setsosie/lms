@@ -820,12 +820,13 @@ def make_artifact(lean_code: str | None) -> Artifact:
 
 
 class TestNoveltyGate:
-    def test_decisive_n1_counts_as_novel(self):
+    def test_decisive_n1_waits_on_d4(self):
         decision = apply_novelty_gate(
             make_artifact(NOVEL), NoveltyClassifier(four_empty_stages())
         )
-        assert decision.counts_as_novel is True
-        assert decision.needs_human_review is False
+        assert decision.result.confidence == pytest.approx(0.9)
+        assert decision.counts_as_novel is False
+        assert decision.needs_human_review is True
 
     def test_n0_fails_gate(self):
         name = RecordedBackend(
@@ -1124,7 +1125,8 @@ class TestMeasureDensity:
         assert report["counts"] == {"N0": 1, "N1": 1, "INCONCLUSIVE": 0}
         assert report["n1_density"] == pytest.approx(0.5)
         assert report["n1_density_decisive"] == pytest.approx(0.5)
-        assert report["needs_review"] == []
+        # Decisive or not, no N1 counts without D4, so it is in the queue.
+        assert report["needs_review"] == ["s2"]
         assert report["mathlib_rev"] == "r1"
 
     def test_confidence_distribution_sums_to_total(self):
@@ -1414,11 +1416,11 @@ class TestNearHit:
         assert decision.needs_human_review is True
         assert counts_as_novel(artifact.to_dict()) is False
 
-    def test_a_decisive_n1_still_reaches_cvfn(self):
+    def test_a_decisive_n1_reaches_cvfn_only_through_d4(self):
         artifact = make_artifact(NOVEL)
         decision = apply_novelty_gate(artifact, NoveltyClassifier(four_empty_stages()))
-        assert decision.counts_as_novel is True
-        assert counts_as_novel(artifact.to_dict()) is True
+        assert decision.counts_as_novel is False
+        assert counts_as_novel(artifact.to_dict()) is False
 
     def test_the_gate_stamps_candidates_on_the_artifact(self):
         artifact = make_artifact(RESTATEMENT)
@@ -1620,6 +1622,59 @@ class TestSemanticRule:
     def test_no_recorded_hit_reaches_n0(self):
         levels = {replay(row).level for row in RECORDED_HITS.values()}
         assert NoveltyLevel.N0 not in levels
+
+
+#: Arc statements that read N1 at 0.90 in Gate 4's configuration with the name,
+#: Loogle and `exact?` stages empty. By hand reading, 6 of the 8 are in the
+#: library, so a search coming up empty is not enough to count one.
+UNREVIEWED_N1_AT_GATE_4 = [
+    "core-13",
+    "core-15",
+    "core-17",
+    "core-20",
+    "ram-04",
+    "ram-05",
+    "ram-14",
+    "ram-17",
+]
+
+
+def through_gate_4(prefix: str) -> tuple[Artifact, object]:
+    """A recorded statement as an artifact, through Gate 4's own configuration."""
+    row = recorded(prefix)
+    statement = ARC_STATEMENTS[row["arc"]][row["id"]]
+    artifact = make_artifact(statement["lean_statement"])
+    artifact.natural_language = statement.get("informal") or ""
+    hits = [SearchHit(name=h["name"], type_signature=h["sig"]) for h in row["hits"]]
+    key = StatementQuery.from_lean(
+        artifact.lean_code or "", informal=artifact.natural_language
+    ).display_name
+    semantic = RecordedBackend(
+        "semantic", {key: StageOutcome("semantic", True, hits=hits)}
+    )
+    ladder = [*(empty_backend(s) for s in ALL_FOUR), semantic]
+    return artifact, apply_novelty_gate(artifact, NoveltyClassifier(ladder))
+
+
+class TestNoN1CountsWithoutReview:
+    """During calibration an N1 is a candidate for D4, never a count by itself."""
+
+    @pytest.mark.parametrize("prefix", UNREVIEWED_N1_AT_GATE_4)
+    def test_a_confident_n1_waits_on_d4(self, prefix: str):
+        artifact, decision = through_gate_4(prefix)
+        # What the search measured is unchanged; only what counts is.
+        assert decision.result.level is NoveltyLevel.N1
+        assert decision.result.confidence == pytest.approx(0.9)
+        assert decision.counts_as_novel is False
+        assert decision.needs_human_review is True
+        assert counts_as_novel(artifact.to_dict()) is False
+
+    @pytest.mark.parametrize("level", ["N2", "N3"])
+    def test_a_d4_verdict_counts(self, level: str):
+        assert (
+            counts_as_novel({"novelty_level": level, "novelty_confidence": None})
+            is True
+        )
 
 
 # ------------------------------------------------- recorded live fixtures

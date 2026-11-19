@@ -47,6 +47,7 @@
 | `lms/novelty/__init__.py` | MODIFY | What can read decisive |
 | `lms/gates/novelty.py` | MODIFY | Gate 4's configuration, if the choice needs it |
 | `lms/accounting.py` | MODIFY | Only if the choice changes what counts |
+| `lms/arms.py` | MODIFY | The arm comparison reads the same D4 verdicts as the CVFN report (added 2026-11-18, when the user chose that a reviewed N1 counts) |
 | `tests/test_novelty.py` | MODIFY | The 8 statements in Gate 4's configuration |
 | `specs/faithfulness_protocol.md` | MODIFY | What a decisive N1 means, if the choice changes it |
 
@@ -106,3 +107,15 @@ From the independent review at the final gate of `26Q4-HARN-09` (2026-11-06, at 
 
 - **Binder case can flip a verdict to decisive N1.** `extract_identifiers` drops a dotted name with a lowercase head. `theorem t (R : Type) [CommRing R] (P : Ideal R) (hP : P.IsPrime) : (P.comap (RingHom.id R)).IsPrime := sorry` with hit `Ideal.IsPrime.comap`, in Gate 4's configuration with the other stages empty, reads INCONCLUSIVE 0.5. Renaming `P` to `p` loses the `is` and `prime` tokens and reads N1 0.90, counted without review. "Renaming a binder changes no verdict" holds only for capital-to-capital renames.
 - **Real-data impact:** none seen. Lowercasing every capital single-letter binder used dotted, across the 15 core and ramification statements in the recorded-hits fixture, flipped nothing in either configuration.
+- **Built 2026-11-18, option (a)**, by changing what counts, not by capping the classifier's confidence (the Implementation Note's suggestion). The user chose this on 2026-11-18.
+  - `apply_novelty_gate` never counts an N1 and sends every N1 to D4. `counts_as_novel` counts only N2/N3 D4 verdicts.
+  - The classifier's confidences, the densities and the decisive line are unchanged. So the novelty control and the arc densities still measure what the search found, and D3's control bar keeps its meaning.
+  - All 8 statements above still read N1 0.90 at Gate 4 and now count for nothing until D4.
+- **Consequence for Gate 4 (Decision Gates: "the choice working"):** it can no longer pass anything on its own. Society only stamps the labels, so promotion and what a run keeps are unchanged.
+- **The pre-merge review (2026-11-18) found that, as first built, a D4-reviewed N1 could never count.** On the user's choice, D4's verdict now comes from the run's `review_log.json`:
+  - The format is an entry `{"statement_key": …, "novelty_verdict": "N0"…"N4"}`, in the file the CVFN report already read for review minutes. Keys are matched without the tag's quotes or spaces, and a verdict naming no level is ignored.
+  - Until a review tool writes that file, D4 writes the entries by hand, one log per run directory; a paired comparison needs the verdict in every run's log. `26Q3-HARN-06`'s review view, unbuilt, plans faithfulness verdicts, so it will have to add `novelty_verdict`.
+  - A verdict of N1–N3 counts and N0 does not.
+  - The CVFN report and the arm comparison both read it. A statement with a verdict is no longer counted as awaiting review.
+  - Until verdicts are written, the novel denominator, and every Phase C arm's distinct-statement count, read 0.
+  - `measure_density` now queues decisive N1s for D4 too; its decisive count is unchanged.

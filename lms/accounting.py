@@ -36,12 +36,17 @@ from typing import Any
 #: Statement key for spend that cannot be attributed to any statement.
 OVERHEAD_KEY = "__overhead__"
 
-#: Novelty levels that count toward the CVFN denominator (populated by the
-#: HARN-04 classifier; absent on runs predating it).
-NOVEL_LEVELS = frozenset({"N1", "N2", "N3"})
+#: Novelty levels that count toward the CVFN denominator once D4 has signed
+#: them off. The classifier proposes N0, N1 or INCONCLUSIVE; absent on runs
+#: predating it.
+NOVEL_LEVELS = frozenset({"N1", "N2", "N3", "N4"})
 
-#: An N1 below this confidence waits on D4 sign-off instead of counting. Mirrors
-#: `lms.novelty.DECISIVE_CONFIDENCE`, which this module cannot import.
+#: The levels a D4 verdict may name (`specs/faithfulness_protocol.md` §6.1).
+D4_VERDICT_LEVELS = frozenset({"N0"}) | NOVEL_LEVELS
+
+#: Where the search's N1 is called decisive in reports. It no longer decides
+#: what counts: no N1 does without D4. Mirrors `lms.novelty.DECISIVE_CONFIDENCE`,
+#: which this module cannot import.
 DECISIVE_N1_CONFIDENCE = 0.8
 
 _DECL_RE = re.compile(
@@ -335,19 +340,70 @@ def _forbidden_mathlib(run_dir: Path) -> list[str] | None:
     ]
 
 
-def counts_as_novel(artifact: dict[str, Any]) -> bool:
-    """Whether an artifact's novelty label clears Gate 4.
+def load_d4_verdicts(run_dir: Path) -> dict[str, str]:
+    """D4's novelty verdict per statement key, from the run's `review_log.json`.
 
-    A decisive N1, or an N2/N3 D4 verdict. Readers outside this module call
-    this rather than restating the rule.
+    Reads the entries `_load_review_minutes` reads; an entry with a
+    `novelty_verdict` (`N0`..`N4`, any case) records D4's call on that
+    statement, and a later entry for the same key overrides an earlier one.
+    Keys are normalized as artifacts' are, so `tag:"003T"` (the ledger's form
+    when an agent quoted the tag) finds `003T`. Entries with only minutes, or a
+    verdict that names no level, are no verdict: the statement stays in the
+    review queue rather than leaving it uncounted.
     """
+    path = Path(run_dir) / "review_log.json"
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text())
+    if isinstance(data, dict):
+        data = data.get("entries", [])
+    verdicts: dict[str, str] = {}
+    for entry in data:
+        key, verdict = entry.get("statement_key"), entry.get("novelty_verdict")
+        if not isinstance(key, str) or not isinstance(verdict, str):
+            continue
+        level = verdict.strip().upper()
+        if level in D4_VERDICT_LEVELS:
+            verdicts[_normalized_key(key)] = level
+    return verdicts
+
+
+def _normalized_key(key: str) -> str:
+    """A statement key with the tag's quotes and surrounding spaces dropped."""
+    key = key.strip()
+    if key.startswith("tag:"):
+        return "tag:" + key[len("tag:") :].strip().strip("\"'").strip()
+    return key
+
+
+def _artifact_statement_key(artifact: dict[str, Any]) -> str:
+    """The statement key D4 verdicts are recorded under, for one artifact."""
+    return _normalized_key(
+        statement_key(
+            artifact.get("stacks_tag"),
+            artifact.get("lean_code"),
+            artifact.get("natural_language"),
+        )
+    )
+
+
+def counts_as_novel(
+    artifact: dict[str, Any], d4_verdicts: dict[str, str] | None = None
+) -> bool:
+    """Whether an artifact counts as novel, which only D4 can decide.
+
+    D4's verdict for the artifact's statement, when the review log has one,
+    decides. Otherwise only an N2-N4 label counts, since only D4 assigns those.
+    During calibration an N1 from the search is a proposal, however
+    confident: on recorded hits, statements in the library read N1 at 0.90.
+    Readers outside this module call this rather than restating the rule.
+    """
+    if d4_verdicts:
+        verdict = d4_verdicts.get(_artifact_statement_key(artifact))
+        if verdict is not None:
+            return verdict in NOVEL_LEVELS
     level = artifact.get("novelty_level")
-    if level not in NOVEL_LEVELS:
-        return False
-    if level != "N1":
-        return True  # N2/N3 are D4 verdicts, already signed off
-    confidence = artifact.get("novelty_confidence")
-    return confidence is not None and confidence >= DECISIVE_N1_CONFIDENCE
+    return level in NOVEL_LEVELS and level != "N1"
 
 
 _counts_as_novel = counts_as_novel
@@ -360,7 +416,7 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
     the society totals in `results.json`, which were always complete even when
     attribution was not. Novelty labels are honored when the artifacts carry
     them; without them the denominator is the unfiltered verified count and is
-    labelled as such. Only a decisive N1 counts, as at Gate 4; the rest are
+    labelled as such. No N1 counts without D4, as at Gate 4; the N1s are
     reported as awaiting D4 review.
 
     A goal that forbids part of Mathlib makes agents rebuild it from scratch,
@@ -401,13 +457,14 @@ def cvfn_report(run_dir: Path) -> CVFNReport:
     has_novelty = any(a.get("novelty_level") for a in artifacts)
     awaiting_review = 0
     if has_novelty:
-        denominator = sum(1 for a in verified if _counts_as_novel(a))
+        verdicts = load_d4_verdicts(run_dir)
+        denominator = sum(1 for a in verified if _counts_as_novel(a, verdicts))
         denominator_kind = "verified_novel"
         awaiting_review = sum(
             1
             for a in verified
             if a.get("novelty_level") in ("N1", "INCONCLUSIVE")
-            and not _counts_as_novel(a)
+            and _artifact_statement_key(a) not in verdicts
         )
     else:
         denominator = len(verified)
