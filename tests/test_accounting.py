@@ -694,3 +694,51 @@ class TestD4VerdictsCount:
         assert report.denominator == 0
         assert report.awaiting_review == 1
         assert report.review_minutes == 2.0
+
+
+class TestD4VerdictKeys:
+    """A verdict finds its artifact however the tag was quoted, and an unknown one is no verdict."""
+
+    @pytest.mark.parametrize(
+        ("artifact_tag", "logged_key"),
+        [
+            ("003T", 'tag:"003T"'),
+            ('"003T"', "tag:003T"),
+            ("003T ", "tag:003T"),
+            ("003T", " tag:003T"),
+        ],
+    )
+    def test_quotes_and_spaces_do_not_lose_a_verdict(
+        self, tmp_path, artifact_tag, logged_key
+    ):
+        run_dir = write_run(
+            tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": artifact_tag}]
+        )
+        write_review_log(
+            run_dir, [{"statement_key": logged_key, "novelty_verdict": "N1"}]
+        )
+        report = cvfn_report(run_dir)
+        assert (report.denominator, report.awaiting_review) == (1, 0)
+
+    def test_a_verdict_is_read_whatever_its_case(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": "003T"}])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": " n1"}]
+        )
+        assert cvfn_report(run_dir).denominator == 1
+
+    @pytest.mark.parametrize("verdict", ["INCONCLUSIVE", "maybe", "N9"])
+    def test_an_unknown_verdict_leaves_it_awaiting_review(self, tmp_path, verdict):
+        run_dir = write_run(tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": "003T"}])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": verdict}]
+        )
+        report = cvfn_report(run_dir)
+        assert (report.denominator, report.awaiting_review) == (0, 1)
+
+    def test_n4_counts(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [{**DECISIVE_N1, "stacks_tag": "003T"}])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": "N4"}]
+        )
+        assert cvfn_report(run_dir).denominator == 1
