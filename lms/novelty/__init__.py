@@ -490,8 +490,9 @@ def measure_density(
         "n1_density": (counts[NoveltyLevel.N1] / total) if total else 0.0,
         # The share the classifier cannot rule out as already in the library.
         "n1_or_inconclusive_density": (n1_or_inconclusive / total) if total else 0.0,
-        # Only N1 labels confident enough to stand without D4. That says the search
-        # found nothing, not that the statement is novel, so this bounds nothing.
+        # Only N1 labels the search reached at the decisive line. That says the
+        # search found nothing, not that the statement is novel, so this bounds
+        # nothing; during calibration no N1 counts without D4 either way.
         "n1_density_decisive": (decisive_n1 / total) if total else 0.0,
         # The ceiling on any N1 verdict this ladder can return. Below
         # DECISIVE_CONFIDENCE, a decisive density of 0 is a property of the

@@ -39,7 +39,10 @@ OVERHEAD_KEY = "__overhead__"
 #: Novelty levels that count toward the CVFN denominator once D4 has signed
 #: them off. The classifier proposes N0, N1 or INCONCLUSIVE; absent on runs
 #: predating it.
-NOVEL_LEVELS = frozenset({"N1", "N2", "N3"})
+NOVEL_LEVELS = frozenset({"N1", "N2", "N3", "N4"})
+
+#: The levels a D4 verdict may name (`specs/faithfulness_protocol.md` §6.1).
+D4_VERDICT_LEVELS = frozenset({"N0"}) | NOVEL_LEVELS
 
 #: Where the search's N1 is called decisive in reports. It no longer decides
 #: what counts: no N1 does without D4. Mirrors `lms.novelty.DECISIVE_CONFIDENCE`,
@@ -341,9 +344,12 @@ def load_d4_verdicts(run_dir: Path) -> dict[str, str]:
     """D4's novelty verdict per statement key, from the run's `review_log.json`.
 
     Reads the entries `_load_review_minutes` reads; an entry with a
-    `novelty_verdict` (`N0`..`N3`) records D4's call on that statement, and a
-    later entry for the same key overrides an earlier one. Entries with only
-    minutes are no verdict.
+    `novelty_verdict` (`N0`..`N4`, any case) records D4's call on that
+    statement, and a later entry for the same key overrides an earlier one.
+    Keys are normalized as artifacts' are, so `tag:"003T"` (the ledger's form
+    when an agent quoted the tag) finds `003T`. Entries with only minutes, or a
+    verdict that names no level, are no verdict: the statement stays in the
+    review queue rather than leaving it uncounted.
     """
     path = Path(run_dir) / "review_log.json"
     if not path.exists():
@@ -354,17 +360,30 @@ def load_d4_verdicts(run_dir: Path) -> dict[str, str]:
     verdicts: dict[str, str] = {}
     for entry in data:
         key, verdict = entry.get("statement_key"), entry.get("novelty_verdict")
-        if key and verdict:
-            verdicts[key] = verdict
+        if not isinstance(key, str) or not isinstance(verdict, str):
+            continue
+        level = verdict.strip().upper()
+        if level in D4_VERDICT_LEVELS:
+            verdicts[_normalized_key(key)] = level
     return verdicts
+
+
+def _normalized_key(key: str) -> str:
+    """A statement key with the tag's quotes and surrounding spaces dropped."""
+    key = key.strip()
+    if key.startswith("tag:"):
+        return "tag:" + key[len("tag:") :].strip().strip("\"'").strip()
+    return key
 
 
 def _artifact_statement_key(artifact: dict[str, Any]) -> str:
     """The statement key D4 verdicts are recorded under, for one artifact."""
-    return statement_key(
-        (artifact.get("stacks_tag") or "").strip("\"'") or None,
-        artifact.get("lean_code"),
-        artifact.get("natural_language"),
+    return _normalized_key(
+        statement_key(
+            artifact.get("stacks_tag"),
+            artifact.get("lean_code"),
+            artifact.get("natural_language"),
+        )
     )
 
 
@@ -374,7 +393,7 @@ def counts_as_novel(
     """Whether an artifact counts as novel, which only D4 can decide.
 
     D4's verdict for the artifact's statement, when the review log has one,
-    decides. Otherwise only an N2/N3 label counts, since only D4 assigns those.
+    decides. Otherwise only an N2-N4 label counts, since only D4 assigns those.
     During calibration an N1 from the search is a proposal, however
     confident: on recorded hits, statements in the library read N1 at 0.90.
     Readers outside this module call this rather than restating the rule.
