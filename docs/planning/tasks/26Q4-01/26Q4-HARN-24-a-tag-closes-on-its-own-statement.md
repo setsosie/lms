@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING: rule A chosen 2026-11-13 |
+| **Status** | 🔄 IN REVIEW: rule A, built 2026-11-18 |
 | **Branch** | `26Q4-HARN-24-a-tag-closes-on-its-own-statement` |
 | **Dependencies** | None for rule A. A later move to option C needs `26Q3-HARN-28` (theorem cards and statement pinning) |
 | **Gate** | full |
@@ -58,12 +58,12 @@ Known limits, to work up over time: abbreviations shorter than 3 letters (`op` f
 
 #### Acceptance Criteria
 
-- [ ] In committee mode, a verified, promoted artifact closes its group's tag in both the dependency graph and the goal only if rule A matches; otherwise the tag returns to available and the run log prints the `[goal] … not closed by …` line
-- [ ] The same rule applies where flat and iterative modes close a tag from the artifact's own `stacks_tag`
-- [ ] Fixtures from r6: `CategoryDef` on 0014 and `Functor` on 0015 close nothing; a `Functor` on 0014 and a `NatTrans` on 0015 close their tags
-- [ ] Kernel-track fixtures: a `CatOverC` structure on "definition categories over C" closes it; a lemma `comp_cartesian` on "lemma composition cartesian" closes it
-- [ ] A refused closure still promotes the artifact to the foundation
-- [ ] `tests/test_tag_closure.py` covers each item above
+- [x] In committee mode, a verified, promoted artifact closes its group's tag in both the dependency graph and the goal only if rule A matches; otherwise the tag returns to available and the run log prints the `[goal] … not closed by …` line
+- [x] The same rule applies where flat and iterative modes close a tag from the artifact's own `stacks_tag`
+- [x] Fixtures from r6: `CategoryDef` on 0014 and `Functor` on 0015 close nothing; a `Functor` on 0014 and a `NatTrans` on 0015 close their tags
+- [x] Kernel-track fixtures: a `CatOverC` structure on "definition categories over C" closes it; a lemma `comp_cartesian` on "lemma composition cartesian" closes it
+- [x] A refused closure still promotes the artifact to the foundation
+- [x] `tests/test_tag_closure.py` covers each item above
 
 ---
 
@@ -82,3 +82,5 @@ Known limits, to work up over time: abbreviations shorter than 3 letters (`op` f
 
 - Iterative (non-committee) mode reads `stacks_tag` from the agent's own artifact header, so the same question applies there with a different source of the claim. Check it under the same rule.
 - Results: `docs/results/2026-11-13-batch-q1.md`, section r6.
+- Built 2026-11-18. The rule was replayed on all 31 artifacts batches q3 and q4 verified, each against its own tag: all 31 match, so rule A refuses none of the closures those runs made. All 146 tag names in the 7 goals keep at least one word after the drops, so no tag is unclosable.
+- A tag with no known name (neither in the goal nor in the task graph) closes as before.

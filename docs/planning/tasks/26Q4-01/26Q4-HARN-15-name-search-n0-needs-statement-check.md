@@ -8,7 +8,7 @@
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔲 PENDING: option (c) chosen 2026-11-18 |
 | **Branch** | `26Q4-HARN-15-name-search-n0-needs-statement-check` |
 | **Dependencies** | 26Q4-HARN-09 |
 | **Gate** | full |
@@ -48,7 +48,7 @@ A stubbed Loogle answer `Nat.add_comm` on that false statement reads N0 0.9.
 
 #### Acceptance Criteria
 
-- [ ] The user has chosen, and the choice is recorded in this card, between: (a) a name or Loogle hit reads INCONCLUSIVE with the hit as evidence, never N0; (b) it reads N0 only when Lean confirms the hit proves the statement; (c) option (a) now, with (b) as a later card — accepted via Outcome Demo
+- [x] The user has chosen, and the choice is recorded in this card. **Chosen 2026-11-18: (c), a name or Loogle hit reads INCONCLUSIVE with the hit as evidence now; N0 on Lean confirmation is a later card.** The options were: (a) a name or Loogle hit reads INCONCLUSIVE with the hit as evidence, never N0; (b) it reads N0 only when Lean confirms the hit proves the statement; (c) option (a) now, with (b) as a later card — accepted via Outcome Demo
 - [ ] `StatementQuery.from_lean` takes its name from comment-stripped source: a test in `tests/test_novelty.py` covers the docblock case above
 - [ ] The false `add_comm` statement above can't read N0 from a name or Loogle hit: `tests/test_novelty.py` covers both stages
 - [ ] A name hit on the first of several declarations can't read N0: `tests/test_novelty.py` covers `lemma aux`, then a second declaration

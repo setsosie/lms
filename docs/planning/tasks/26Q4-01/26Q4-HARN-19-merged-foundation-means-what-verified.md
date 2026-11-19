@@ -8,9 +8,9 @@
 |-------|-------|
 | **Story Points** | 3 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING |
+| **Status** | 🔲 PENDING: section approach chosen 2026-11-18 |
 | **Branch** | `26Q4-HARN-19-merged-foundation-means-what-verified` |
-| **Dependencies** | 26Q4-HARN-16, 26Q4-HARN-17 |
+| **Dependencies** | 26Q4-HARN-16, 26Q4-HARN-17, 26Q4-HARN-31 (#107: the per-artifact `section` this card extends) |
 | **Gate** | full |
 | **PR Size Target** | <500 lines (max 1000) |
 | **Parts** | single PR |
@@ -42,7 +42,7 @@ Neighbours for a card of their own, from the same reviews:
 
 #### Acceptance Criteria
 
-- [ ] **Choose the approach (user's call):** give every artifact its own `section` with the universe context the verifier used, and no file-level `universe` line, or compare each statement's elaborated type alone and merged after the build, and drop those that differ. A `section` also stops `variable` and `open` leaking, and keeps a discarded preamble possible to keep. The comparison also catches shadowing and a changed instance when it shows in the type, costs more per build, and misses a change in value only, such as the `Inhabited` case.
+- [x] **Choose the approach (user's call). Chosen 2026-11-18: every artifact gets its own `section` with the universe context the verifier used, extending the per-artifact `section` that `26Q4-HARN-31` (#107) writes for an artifact's preamble.** The options were: give every artifact its own `section` with the universe context the verifier used, and no file-level `universe` line, or compare each statement's elaborated type alone and merged after the build, and drop those that differ. A `section` also stops `variable` and `open` leaking, and keeps a discarded preamble possible to keep. The comparison also catches shadowing and a changed instance when it shows in the type, costs more per build, and misses a change in value only, such as the `Inhabited` case.
 - [ ] The silent cases above either compile with the verified meaning or are dropped with a reason in the log
 - [ ] Real Lean compiles the fixtures in the CI job that has a toolchain
 

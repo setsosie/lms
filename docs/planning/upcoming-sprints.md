@@ -194,7 +194,9 @@ could not fit, then runs the calibration itself. Detail in
   Was Sprint 3's goal; moved here by the capacity re-scope of 2026-08-12.
 - **`26Q4-HARN-13`** (2) and **`26Q4-HARN-14`** (2) — before the harness freezes:
   what a decisive N1 means at Gate 4, and telling an exhausted `exact?` from a
-  miss. CVFN counts decisive N1s, so both change the number Phase C reads.
+  miss. Both change the number Phase C reads. (`-13` decided 2026-11-18: during
+  calibration no N1 counts without D4; CVFN and the arm comparison count only
+  statements D4 signed off in each run's review log.)
 - **`26Q4-HARN-15`** (3) — also before the freeze: a matching name stops being
   enough to read N0. All 10 control N0s at the 2026-11-04 run came from name
   search, so this also changes what the control can show.
