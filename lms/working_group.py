@@ -509,7 +509,7 @@ references, and notes fields."""
         content = self._extract_content(response)
         open_conversation(
             self.trace_store, member_id, self.generation, outcome, system_prompt
-        ).add_exchange(prompt, content, usage)
+        ).add_exchange(prompt, content, usage, getattr(response, "thinking", ""))
         return content
 
     def _extract_content(self, response) -> str:

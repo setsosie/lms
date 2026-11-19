@@ -1,5 +1,6 @@
 """Configuration management for LMS."""
 
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,44 @@ def _max_tokens_from_env(var: str) -> int:
     return value
 
 
+#: How long one request may wait for its reply, in seconds. The server sends
+#: nothing until a non-streamed reply is finished, so this caps how long a
+#: reply can be: at about 100 tokens/s, 300 s is about 30,000 tokens.
+DEFAULT_REQUEST_TIMEOUT_S = 300.0
+
+#: The OpenAI SDK's own default. A timed-out request is sent again this many
+#: times, each one waiting the full timeout, before the error reaches the run.
+DEFAULT_MAX_RETRIES = 2
+
+
+def _timeout_from_env(var: str) -> float:
+    """Read a request timeout in seconds; blank is unset, as for max tokens."""
+    raw = os.getenv(var) or None
+    if raw is None:
+        return DEFAULT_REQUEST_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{var} must be a number of seconds, got {raw!r}") from None
+    if not (math.isfinite(value) and value > 0):
+        raise ValueError(f"{var} must be positive and finite, got {raw!r}")
+    return value
+
+
+def _retries_from_env(var: str) -> int:
+    """Read a retry count; blank is unset. 0 means one attempt only."""
+    raw = os.getenv(var) or None
+    if raw is None:
+        return DEFAULT_MAX_RETRIES
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{var} must be an integer, got {raw!r}") from None
+    if value < 0:
+        raise ValueError(f"{var} must be 0 or more, got {value}")
+    return value
+
+
 #: Seeds are drawn from, and wrap within, [0, SEED_SPACE): what a 32-bit signed
 #: integer holds, which every OpenAI-compatible server accepts.
 SEED_SPACE = 2**31
@@ -52,6 +91,12 @@ class ProviderConfig:
     # it; None sends none. A local server otherwise samples from its own engine
     # seed, so two runs against freshly started servers come out identical.
     seed: int | None = None
+    # Most thinking tokens a reply may spend before the server makes the model
+    # answer. None leaves thinking unbounded. Needs a server started with a
+    # reasoning parser; one without refuses every request that carries it.
+    thinking_budget: int | None = None
+    request_timeout_s: float = DEFAULT_REQUEST_TIMEOUT_S
+    max_retries: int = DEFAULT_MAX_RETRIES
 
 
 @dataclass
@@ -110,6 +155,8 @@ class Config:
                 max_tokens=_max_tokens_from_env("LMS_OPENAI_MAX_TOKENS"),
                 # Blank here would hand the SDK a relative URL.
                 base_url=os.getenv("LMS_OPENAI_BASE_URL") or None,
+                request_timeout_s=_timeout_from_env("LMS_OPENAI_TIMEOUT"),
+                max_retries=_retries_from_env("LMS_OPENAI_MAX_RETRIES"),
             )
 
         # Load Google config

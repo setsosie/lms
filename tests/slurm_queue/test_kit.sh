@@ -48,12 +48,12 @@ fb_new one; install_demo
 go "$(cut -c1-8 "$D/sha_main")"
 rc_is 0
 has "$D/out" "== pin $(cut -c1-8 "$D/sha_main") is on origin"
-has "$D/out" "Queued lms-demo-a: job 701, pin $(cut -c1-8 "$D/sha_main")"
-has "$D/out" "Queued lms-demo-b: job 702, pin $(cut -c1-8 "$D/sha_main"), after job 701"
+has "$D/out" "Queued lms-demo-a: job 701, lane 1, pin $(cut -c1-8 "$D/sha_main")"
+has "$D/out" "Queued lms-demo-b: job 702, lane 1, pin $(cut -c1-8 "$D/sha_main"), after job 701"
 count_is "$(log)" "--job-name=lms-demo-" 2
 if grep '^701 ' "$(log)" | grep -q -- '--dependency'; then bad "first job has a dependency with an empty queue"; else ok "first job waits for nothing"; fi
 has "$(log)" "--dependency=afterany:701"
-has "$(log)" "--gres=gpu:nvidia_h100_nvl:2 --mem=128G --cpus-per-task=16 --time=01:00:00"
+has "$(log)" "--gres=gpu:nvidia_h100_nvl:1 --mem=96G --cpus-per-task=16 --time=01:00:00"
 has "$(log)" "--chdir=$W --output=$W/logs/%x-%j.out"
 has "$D/slurm/env.701" "LMS_Q_PIN=\"$(cat "$D/sha_main")\""
 has "$D/slurm/env.701" 'RUN_TAG="demo_a"'
@@ -61,8 +61,13 @@ has "$D/slurm/env.701" "REPO=\"$W\""
 has "$D/slurm/env.701" 'UV_FROZEN="1"'
 has "$D/slurm/env.701" 'MODEL_REPO="Qwen/Qwen3.6-27B-FP8"'
 has "$D/slurm/env.701" 'EXTRA="--x 1,2 --y"'
+has "$D/slurm/env.701" 'TP_SIZE="1"'
+has "$D/slurm/env.701" 'LMS_Q_LANE="1"'
+has "$D/slurm/env.701" 'PORT="8051"'
+hasnt "$D/slurm/env.701" 'VLLM_CACHE_ROOT'
+has "$D/slurm/env.701" "LMS_Q_LOCK=\"$H/lms_q.lock\""
 has "$D/slurm/env.702" 'AGENTS="9"'
-has "$H/lms_demo.jobs" "job=701 name=lms-demo-a tag=demo_a pin=$(cut -c1-8 "$D/sha_main") after=-"
+has "$H/lms_demo.jobs" "job=701 name=lms-demo-a tag=demo_a pin=$(cut -c1-8 "$D/sha_main") after=- lane=1"
 has "$H/lms_demo.jobs" "job=702 name=lms-demo-b tag=demo_b pin=$(cut -c1-8 "$D/sha_main") after=701"
 [[ "$(git -C "$W" rev-parse HEAD)" == "$(cat "$D/sha_main")" ]] && ok "go did not move the worktree" || bad "go moved the worktree"
 
@@ -76,10 +81,11 @@ echo "== 3. new jobs wait for the newest lms- job already in the queue, and only
 fb_new tail; install_demo
 fb_queue_add 640 lms-r6-run RUNNING; fb_queue_add 655 lms-arms-s1 PENDING; fb_queue_add 660 btm-rebuild PENDING
 fb_queue_add 662 lmsfree-thr-ladder PENDING; fb_queue_add 650_3 lms-array-x PENDING
+fb_queue_add 670 lms-other-lane PENDING "$H/code/lms-box-l2"
 go "$(cat "$D/sha_main")"
 rc_is 0
 has "$(log)" "--dependency=afterany:655"
-has "$D/out" "Queued lms-demo-a: job 701, pin $(cut -c1-8 "$D/sha_main"), after job 655"
+has "$D/out" "Queued lms-demo-a: job 701, lane 1, pin $(cut -c1-8 "$D/sha_main"), after job 655"
 has "$(log)" "--dependency=afterany:701"
 
 echo "== 4. a commit that is not on origin is refused"
@@ -117,7 +123,7 @@ go "$(cat "$D/sha_main")"; rc_is 0; count_is "$H/lms_demo.jobs" "job=" 2
 echo "== 8. an existing run is never overwritten; missing setup stops with what to do"
 fb_new guard; install_demo
 mkdir -p "$W/experiments/demo_b"; echo '{}' > "$W/experiments/demo_b/results.json"
-go "$(cat "$D/sha_main")"; rc_is 1; has "$D/out" "STOP: experiments/demo_b already exists and holds a run"
+go "$(cat "$D/sha_main")"; rc_is 1; has "$D/out" "STOP: experiments/demo_b already exists in lane 1 and holds a run"
 rm -rf "$W/experiments/demo_b"; rm -rf "$D/scratch/hf"
 go "$(cat "$D/sha_main")"; rc_is 1; has "$D/out" "STOP: no weights"
 mkdir -p "$D/scratch/hf/hub/models--Qwen--Qwen3.6-27B-FP8/snapshots"; rm "$H/lms_q_job.sbatch"
@@ -140,7 +146,8 @@ fb_new jobs; install_demo
 go "$(cat "$D/sha_feat")" "$(cat "$D/sha_main")"
 rc_is 0
 fb_run_job 701
-has "$J" "=== queued job: round=demo job=701 pin=$(cut -c1-8 "$D/sha_feat") run=lms_run.sbatch tag=demo_a ==="
+has "$J" "=== queued job: round=demo job=701 pin=$(cut -c1-8 "$D/sha_feat") run=lms_run.sbatch tag=demo_a lane=1 ==="
+hasnt "$J" "shared library"
 has "$J" "RUN SCRIPT feat tag=demo_a agents=3 extra=--x 1,2 --y"
 [[ "$(cat "$D/job.701.rc")" == 0 ]] && ok "job 701 exit 0" || bad "job 701 exit $(cat "$D/job.701.rc")"
 [[ "$(git -C "$W" rev-parse HEAD)" == "$(cat "$D/sha_feat")" ]] && ok "worktree at feat" || bad "worktree not at feat"
@@ -285,5 +292,118 @@ mkdir -p "$D/scratch/lms-runs/demo_a"
 fb_run lms_demo_collect.sh; rc_is 0
 has "$D/out" "SERVER demo_a: 3 reports, peak 9 running and 4 waiting (waiting in 1 reports), KV cache peak 12.5%, prefix cache hit 61.5% at the end, generation mean 100 peak 150 tokens/s"
 hasnt "$D/out" "SERVER demo_b"
+
+echo "== 19. lanes: q_lanes makes worktrees whose Lean trees link lane 1's library; each lane is its own line"
+cat > "$FB_ROOT/lms_demo_lanes.sh" <<'GO'
+#!/bin/bash
+set -euo pipefail
+source "$HOME/lms_q_lib.sh"
+q_init demo
+q_require_box gpu
+q_round_guard
+q_pin "${1:?usage}"
+q_lanes "${LANES:-3}"
+q_tag_free demo_a demo_b demo_c demo_d
+q_lane 2
+q_submit a demo_a "${Q_GPU[@]}" --time=01:00:00 -- AGENTS=3
+q_submit b demo_b "${Q_GPU[@]}" --time=01:00:00 -- AGENTS=9
+q_lane 3
+q_submit c demo_c "${Q_GPU_ALL[@]}" --time=01:00:00 -- TP_SIZE=4
+q_lane 1
+q_submit d demo_d "${Q_GPU[@]}" --time=01:00:00 --
+GO
+cat > "$FB_ROOT/lms_demo_lanes_only.sh" <<'GO'
+#!/bin/bash
+set -euo pipefail
+source "$HOME/lms_q_lib.sh"
+q_init other
+q_lanes "${1:?}"
+[[ -z "${2:-}" ]] || q_lane "$2"
+GO
+cat > "$FB_ROOT/lms_demo_lanes_collect.sh" <<'COLLECT'
+#!/bin/bash
+set -uo pipefail
+source "$HOME/lms_q_lib.sh"
+q_init demo
+q_collect_begin
+while read -r line; do
+    q_section "$(q_field "$line" name)"
+    q_key_lines "$(q_job_wt "$line")/logs/$(q_field "$line" name)-$(q_field "$line" job).out"
+    q_copy_run "$line"
+done < <(q_jobs)
+COLLECT
+install_lanes() { install_demo; fb_install "$FB_ROOT/lms_demo_lanes.sh" "$FB_ROOT/lms_demo_lanes_only.sh" "$FB_ROOT/lms_demo_lanes_collect.sh"; }
+fb_new lanes; install_lanes
+L2="$H/code/lms-box-l2"; L3="$H/code/lms-box-l3"
+fb_queue_add 690 lms-older-lane2 PENDING "$L2"
+fb_run lms_demo_lanes.sh "$(cat "$D/sha_main")"
+rc_is 0
+has "$D/out" "== lane 2: made $L2, Lean tree $D/scratch/lms-lanes/l2/lake, library linked from lane 1"
+has "$D/out" "== lane 3: made $L3"
+has "$D/out" "== lanes 1 to 3 are ready"
+[[ -L "$L2/lean/.lake" ]] && ok "lane 2's Lean tree is a link" || bad "lane 2's Lean tree is not a link"
+[[ "$(readlink -f "$L2/lean/.lake/packages")" == "$(readlink -f "$D/lake/packages")" ]] && ok "lane 2 reads lane 1's library" || bad "lane 2's library is not lane 1's"
+[[ "$(readlink -f "$L2/lean/.lake")" != "$(readlink -f "$D/lake")" ]] && ok "lane 2 builds in its own tree" || bad "lane 2 shares lane 1's tree"
+[[ -d "$L2/.venv" && -d "$L3/.venv" ]] && ok "lanes have a .venv" || bad "a lane has no .venv"
+[[ ! -e "$H/code/lms-box-l4" ]] && ok "no fourth lane was made" || bad "lane 4 was made"
+has "$D/out" "Queued lms-demo-a: job 701, lane 2, pin $(cut -c1-8 "$D/sha_main"), after job 690"
+has "$D/out" "Queued lms-demo-b: job 702, lane 2, pin $(cut -c1-8 "$D/sha_main"), after job 701"
+has "$D/out" "Queued lms-demo-c: job 703, lane 3, pin $(cut -c1-8 "$D/sha_main")"
+hasnt "$D/out" "Queued lms-demo-c: job 703, lane 3, pin $(cut -c1-8 "$D/sha_main"), after"
+has "$D/out" "Queued lms-demo-d: job 704, lane 1, pin $(cut -c1-8 "$D/sha_main")"
+hasnt "$D/out" "Queued lms-demo-d: job 704, lane 1, pin $(cut -c1-8 "$D/sha_main"), after"
+has "$(log)" "--chdir=$L2 --output=$L2/logs/%x-%j.out"
+has "$D/slurm/env.701" "REPO=\"$L2\""
+has "$D/slurm/env.701" 'LMS_Q_LANE="2"'
+has "$D/slurm/env.701" 'PORT="8052"'
+has "$D/slurm/env.703" 'PORT="8053"'
+has "$D/slurm/env.701" "VLLM_CACHE_ROOT=\"$D/scratch/cache/vllm-l2\""
+has "$D/slurm/env.701" "LMS_Q_LOCK=\"$H/lms_q-l2.lock\""
+has "$D/slurm/env.701" 'TP_SIZE="1"'
+has "$D/slurm/env.703" 'TP_SIZE="4"'
+has "$(log)" "--gres=gpu:nvidia_h100_nvl:4 --mem=128G --cpus-per-task=16 --time=01:00:00"
+has "$H/lms_demo.jobs" "job=702 name=lms-demo-b tag=demo_b pin=$(cut -c1-8 "$D/sha_main") after=701 lane=2"
+has "$H/lms_demo.jobs" "job=704 name=lms-demo-d tag=demo_d pin=$(cut -c1-8 "$D/sha_main") after=- lane=1"
+fb_run lms_demo_lanes_only.sh 3; rc_is 0; hasnt "$D/out" "made"; has "$D/out" "== lanes 1 to 3 are ready"
+fb_run lms_demo_lanes_only.sh 5; rc_is 1; has "$D/out" "STOP: q_lanes 5: there are 1 to 4 lanes"
+fb_run lms_demo_lanes_only.sh 3 4; rc_is 1; has "$D/out" "STOP: lane 4 has no worktree at $H/code/lms-box-l4; q_lanes makes it"
+rm -rf "$L3/lean/.lake"; ln -s "$D/lake" "$L3/lean/.lake"
+fb_run lms_demo_lanes_only.sh 3; rc_is 1; has "$D/out" "STOP: lane 3 shares lane 1's Lean tree"
+
+echo "== 20. a lane's job runs in its own worktree, under its own lock, after asking Lake about the library"
+fb_run_job 701
+has "$J" "=== queued job: round=demo job=701 pin=$(cut -c1-8 "$D/sha_main") run=lms_run.sbatch tag=demo_a lane=2 ==="
+has "$J" "lane 2: the shared library is up to date"
+has "$J" "RUN SCRIPT main tag=demo_a agents=3"
+[[ "$(cat "$D/job.701.rc")" == 0 ]] && ok "job 701 exit 0" || bad "job 701 exit $(cat "$D/job.701.rc")"
+( exec 9> "$H/lms_q.lock"; flock 9; sleep 3 ) &
+sleep 0.5
+fb_run_job 702
+hasnt "$J" "another LMS job holds"
+has "$J" "RUN SCRIPT main tag=demo_b agents=9"
+wait
+sed -i 's/^declare -x LMS_Q_PIN=/declare -x FAKE_LAKE_STALE="1"\ndeclare -x LMS_Q_PIN=/' "$D/slurm/env.702"
+fb_run_job 702
+has "$J" "FATAL: lane 2: Lake would rebuild the library this lane shares with lane 1; not running"
+hasnt "$J" "RUN SCRIPT"
+[[ "$(cat "$D/job.702.rc")" == 1 ]] && ok "exit 1" || bad "exit $(cat "$D/job.702.rc")"
+fb_run_job 704
+hasnt "$J" "shared library"
+has "$J" "RUN SCRIPT main tag=demo_d"
+
+echo "== 21. collect reads each job from its own lane, and a tag held in any lane is refused"
+fb_new lanecollect; install_lanes
+L2="$H/code/lms-box-l2"
+fb_run lms_demo_lanes.sh "$(cat "$D/sha_main")"; rc_is 0
+fb_run_job 701
+for id in 701 702 703 704; do fb_finish "$id"; done
+mkdir -p "$L2/experiments/demo_a"; echo '{}' > "$L2/experiments/demo_a/results.json"
+fb_run lms_demo_lanes_collect.sh; rc_is 0
+has "$D/out" "=== queued job: round=demo job=701"
+has "$D/out" "COPIED demo_a: COMPLETED, 1 of 9 run files"
+[[ -f "$H/lms_demo/demo_a/logs/lms-demo-a-701.out" ]] && ok "lane 2's job log copied" || bad "lane 2's job log not copied"
+rm "$H/lms_demo.jobs"
+fb_run lms_demo_lanes.sh "$(cat "$D/sha_main")"; rc_is 1
+has "$D/out" "STOP: experiments/demo_a already exists in lane 2 and holds a run"
 
 fb_done

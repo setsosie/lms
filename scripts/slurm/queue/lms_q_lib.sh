@@ -2,17 +2,23 @@
 # LMS queue kit: what every queued round's go and collect scripts share. Source it, don't run it:
 #   source "$HOME/lms_q_lib.sh"; q_init <round>
 #
-# The rounds share one worktree on the server (~/code/lms-box) and one Lean tree inside it, so no
-# two LMS jobs may run at once. Two rules keep that true however many rounds are queued:
-#   1. every job is submitted through q_submit, which makes it wait for the last LMS job in the
-#      queue (sbatch --dependency=afterany), so the jobs form one line;
-#   2. every job runs ~/lms_q_job.sbatch, which checks out that job's own commit when it starts.
-# So rounds pinned to different commits can sit in the queue together.
+# A run rewrites its worktree's foundation and builds in its Lean tree, so no two LMS jobs may run
+# in one worktree at once. Jobs therefore run in lanes: lane 1 is ~/code/lms-box, and lanes 2 to 4
+# are ~/code/lms-box-l2 to -l4, each with its own Lean tree that links to lane 1's built library.
+# Three rules keep one job per lane however many rounds are queued:
+#   1. every job is submitted through q_submit, which makes it wait for the last LMS job queued in
+#      its lane (sbatch --dependency=afterany), so each lane's jobs form one line;
+#   2. every job runs ~/lms_q_job.sbatch, which takes its lane's lock and checks out that job's own
+#      commit when it starts;
+#   3. a job asks for one GPU (Q_GPU) or all four (Q_GPU_ALL), never two: a two-GPU job tends to
+#      leave the other two idle, and a pair without an NVLink bridge hangs vLLM's start.
+# So rounds pinned to different commits can sit in the queue together, and up to four lanes run
+# side by side on one GPU each.
 #
-# go side:      q_init, q_require_box, q_require_files, q_round_guard, q_pin, q_pin_has, q_tag_free,
-#               q_submit, q_submit_free, q_show_queue
-# collect side: q_init, q_collect_begin, q_jobs, q_field, q_state, q_scrub, q_section, q_key_lines,
-#               q_server_load, q_copy_run
+# go side:      q_init, q_require_box, q_require_files, q_round_guard, q_pin, q_pin_has, q_lanes,
+#               q_lane, q_tag_free, q_submit, q_submit_free, q_show_queue
+# collect side: q_init, q_collect_begin, q_jobs, q_field, q_job_wt, q_state, q_scrub, q_section,
+#               q_key_lines, q_server_load, q_copy_run
 # shellcheck shell=bash
 
 # q_stop MESSAGE: print it and exit 1. If this go has already queued jobs, they are cancelled
@@ -34,8 +40,13 @@ q_init() {
     Q_JOBS="$HOME/lms_${Q_ROUND}.jobs"
     Q_OUT="$HOME/lms_${Q_ROUND}"
     Q_KIT_JOB="$HOME/lms_q_job.sbatch"
-    # Two of the box's four GPUs, which is what round R5e served on.
-    Q_GPU=(--gres=gpu:nvidia_h100_nvl:2 --mem=128G --cpus-per-task=16)
+    # One GPU, served at TP=1 (q_submit passes TP_SIZE=1), so no NCCL start can hang. Q_GPU_ALL is
+    # the whole box, for a job that sets TP_SIZE=4 among its variables.
+    Q_GPU=(--gres=gpu:nvidia_h100_nvl:1 --mem=96G --cpus-per-task=16)
+    Q_GPU_ALL=(--gres=gpu:nvidia_h100_nvl:4 --mem=128G --cpus-per-task=16)
+    Q_TP=1
+    Q_LANES_MAX=4
+    Q_LANE=1
     Q_PIN=""
     Q_TAIL=""
     Q_TAIL_KNOWN=""
@@ -93,20 +104,80 @@ q_pin_has() {
     grep -qE -- "$2" <<< "$body" || q_stop "${Q_PIN:0:8} lacks $3; nothing is queued"
 }
 
-# q_tag_free TAG...: a run tag that already holds a run is never overwritten.
+# --- lanes ---------------------------------------------------------------------------------------
+
+# q_lane_wt K / q_lane_lock K: lane K's worktree and lock file. Lane 1 keeps the names it had
+# before there were lanes.
+q_lane_wt() {
+    if [[ "$1" == 1 ]]; then echo "$HOME/code/lms-box"; else echo "$HOME/code/lms-box-l$1"; fi
+}
+q_lane_lock() {
+    if [[ "$1" == 1 ]]; then echo "$HOME/lms_q.lock"; else echo "$HOME/lms_q-l$1.lock"; fi
+}
+
+# q_lanes N: makes lanes 2..N where they are missing, and checks every one. A new lane is a
+# detached worktree of ~/code/lms whose lean/.lake is its own directory under $SCRATCH/lms-lanes,
+# holding a link to lane 1's packages: each lane builds its own foundation, and all of them read
+# the one built library. Running it again changes nothing.
+q_lanes() {
+    local n="${1:?q_lanes needs a lane count}" k wt lake pkgs lane_lake
+    [[ "$n" =~ ^[1-9]$ ]] && ((n <= Q_LANES_MAX)) || q_stop "q_lanes $n: there are 1 to $Q_LANES_MAX lanes"
+    lake="$(readlink -f "$(q_lane_wt 1)/lean/.lake")" || q_stop "lane 1 has no Lean tree"
+    pkgs="$lake/packages"
+    [[ -d "$pkgs" ]] || q_stop "lane 1's Lean tree has no packages at $pkgs; round R4 builds it"
+    for ((k = 2; k <= n; k++)); do
+        wt="$(q_lane_wt "$k")"
+        lane_lake="$SCRATCH/lms-lanes/l$k/lake"
+        if [[ ! -e "$wt" ]]; then
+            git -C "$MAIN" worktree add -q --detach "$wt" "$(git -C "$MAIN" rev-parse HEAD)" ||
+                q_stop "lane $k: could not make the worktree $wt"
+            mkdir -p "$lane_lake" "$wt/logs" "$wt/experiments"
+            [[ -e "$lane_lake/packages" ]] || ln -s "$pkgs" "$lane_lake/packages"
+            ln -s "$lane_lake" "$wt/lean/.lake" || q_stop "lane $k: could not link its Lean tree"
+            echo "== lane $k: made $wt, Lean tree $lane_lake, library linked from lane 1"
+        fi
+        [[ -L "$wt/lean/.lake" ]] || q_stop "lane $k: $wt/lean/.lake is not a link"
+        [[ "$(readlink -f "$wt/lean/.lake")" != "$lake" ]] || q_stop "lane $k shares lane 1's Lean tree"
+        [[ "$(readlink -f "$wt/lean/.lake/packages")" == "$(readlink -f "$pkgs")" ]] ||
+            q_stop "lane $k: its library is not lane 1's ($pkgs)"
+        if [[ ! -d "$wt/.venv" ]]; then
+            (cd "$wt" && PATH="$HOME/.local/bin:$PATH" UV_FROZEN=1 uv sync -q) || q_stop "lane $k: uv sync failed"
+            [[ -d "$wt/.venv" ]] || q_stop "lane $k: uv sync made no .venv"
+        fi
+    done
+    echo "== lanes 1 to $n are ready"
+    sinfo -h -N -o 'node %N: %m MB of memory, %c CPUs, %G' 2> /dev/null | sort -u || true
+}
+
+# q_lane K: the jobs submitted next go to lane K, each waiting for the last LMS job in that lane.
+q_lane() {
+    local k="${1:?q_lane needs a lane}" wt
+    [[ "$k" =~ ^[1-9]$ ]] && ((k <= Q_LANES_MAX)) || q_stop "lane $k: there are 1 to $Q_LANES_MAX lanes"
+    wt="$(q_lane_wt "$k")"
+    [[ -L "$wt/lean/.lake" && -d "$wt/.venv" ]] || q_stop "lane $k has no worktree at $wt; q_lanes makes it"
+    Q_LANE="$k"
+    WT="$wt"
+    Q_TAIL=""
+    Q_TAIL_KNOWN=""
+}
+
+# q_tag_free TAG...: a run tag that already holds a run, in any lane, is never overwritten.
 q_tag_free() {
-    local tag
+    local tag k
     for tag in "$@"; do
-        [[ ! -e "$WT/experiments/$tag/results.json" ]] ||
-            q_stop "experiments/$tag already exists and holds a run; tell me before replacing it"
+        for ((k = 1; k <= Q_LANES_MAX; k++)); do
+            [[ ! -e "$(q_lane_wt "$k")/experiments/$tag/results.json" ]] ||
+                q_stop "experiments/$tag already exists in lane $k and holds a run; tell me before replacing it"
+        done
     done
 }
 
-# The newest LMS job still queued or running, or nothing. New jobs wait for it.
+# The newest LMS job still queued or running in this lane, or nothing. New jobs wait for it. A
+# job's lane is the directory it runs in, so jobs queued before lanes existed belong to lane 1.
 q_tail() {
     local queue
-    queue="$(squeue -h -u "$ME" -o '%i %j %T')" || return 1
-    awk '$2 ~ /^lms-/ { split($1, a, "_"); if (a[1] + 0 > m) m = a[1] + 0 } END { if (m) print m }' <<< "$queue"
+    queue="$(squeue -h -u "$ME" -o '%i %j %T %Z')" || return 1
+    awk -v wt="$WT" '$2 ~ /^lms-/ && $4 == wt { split($1, a, "_"); if (a[1] + 0 > m) m = a[1] + 0 } END { if (m) print m }' <<< "$queue"
 }
 
 # Cancels what this go queued so far and takes those jobs' lines out of the jobs file. Lines an
@@ -133,16 +204,17 @@ q_undo() {
 }
 
 q_record() {
-    printf 'job=%s name=%s tag=%s pin=%s after=%s\n' "$1" "$2" "$3" "$4" "$5" >> "$Q_JOBS"
+    printf 'job=%s name=%s tag=%s pin=%s after=%s lane=%s\n' "$1" "$2" "$3" "$4" "$5" "${6:--}" >> "$Q_JOBS"
     Q_SUBMITTED+=("$1")
     Q_LAST="$1"
 }
 
 # q_submit NAME TAG [sbatch options...] -- [VAR=VALUE...]
-# Queues ~/lms_q_job.sbatch at the current pin, behind the last LMS job. The job is named
-# lms-<round>-<NAME>, runs in the worktree, and by default runs scripts/slurm/lms_run.sbatch from
-# the pinned commit (set LMS_Q_RUN=<path> among the variables for another script). VAR=VALUE pairs
-# become the job's environment; values may hold spaces and commas.
+# Queues ~/lms_q_job.sbatch at the current pin, behind the last LMS job in the current lane (q_lane;
+# lane 1 unless set). The job is named lms-<round>-<NAME>, runs in its lane's worktree, and by
+# default runs scripts/slurm/lms_run.sbatch from the pinned commit (set LMS_Q_RUN=<path> among the
+# variables for another script). VAR=VALUE pairs become the job's environment; values may hold
+# spaces and commas. TP_SIZE is 1 unless the variables set it.
 q_submit() {
     local name="${1:?}" tag="${2:?}" opts=() vars=() dep=() id jobname
     shift 2
@@ -158,10 +230,15 @@ q_submit() {
         Q_TAIL_KNOWN=1
     fi
     [[ -n "$Q_TAIL" ]] && dep=(--dependency="afterany:$Q_TAIL")
+    # Lanes run side by side on one node: each serves on its own port, and lanes 2 to 4 compile
+    # into their own vLLM cache, so two servers starting at once never write the same files.
+    local lane_env=()
+    [[ "$Q_LANE" == 1 ]] || lane_env=("VLLM_CACHE_ROOT=$SCRATCH/cache/vllm-l$Q_LANE")
     jobname="lms-$Q_ROUND-$name"
     mkdir -p "$WT/logs"
     id="$(env "REPO=$WT" UV_FROZEN=1 "LMS_Q_PIN=$Q_PIN" "LMS_Q_ROUND=$Q_ROUND" "RUN_TAG=$tag" "MODEL_REPO=$MODEL" \
-        ${vars[@]+"${vars[@]}"} \
+        "LMS_Q_LANE=$Q_LANE" "LMS_Q_LOCK=$(q_lane_lock "$Q_LANE")" "TP_SIZE=$Q_TP" "PORT=$((8050 + Q_LANE))" \
+        ${lane_env[@]+"${lane_env[@]}"} ${vars[@]+"${vars[@]}"} \
         sbatch --parsable --export=ALL --job-name="$jobname" --chdir="$WT" \
         --output="$WT/logs/%x-%j.out" --error="$WT/logs/%x-%j.err" \
         ${dep[@]+"${dep[@]}"} ${opts[@]+"${opts[@]}"} "$Q_KIT_JOB")" || {
@@ -173,8 +250,8 @@ q_submit() {
         q_undo
         q_stop "sbatch gave no job id for $jobname ('$id'); nothing is queued for this round"
     }
-    q_record "$id" "$jobname" "$tag" "${Q_PIN:0:8}" "${Q_TAIL:--}"
-    echo "Queued $jobname: job $id, pin ${Q_PIN:0:8}${Q_TAIL:+, after job $Q_TAIL}"
+    q_record "$id" "$jobname" "$tag" "${Q_PIN:0:8}" "${Q_TAIL:--}" "$Q_LANE"
+    echo "Queued $jobname: job $id, lane $Q_LANE, pin ${Q_PIN:0:8}${Q_TAIL:+, after job $Q_TAIL}"
     Q_TAIL="$id"
 }
 
@@ -223,6 +300,15 @@ q_jobs() {
 # q_field LINE KEY: one value from a q_jobs line.
 q_field() {
     sed -n "s/.*\b$2=\([^ ]*\).*/\1/p" <<< "$1"
+}
+
+# q_job_wt LINE: the worktree the job ran in. A line without a lane was written before lanes
+# existed, when every job ran in lane 1.
+q_job_wt() {
+    local lane
+    lane="$(q_field "$1" lane)"
+    [[ "$lane" =~ ^[1-9]$ ]] || lane=1
+    q_lane_wt "$lane"
 }
 
 # q_collect_begin [pending-ok]: stops while any of this round's jobs is queued or running, because
@@ -327,15 +413,16 @@ Q_RUN_FILES=(results.json artifacts.json attempts.json metadata.json conversatio
 # q_copy_run LINE: copies one run job's logs and result files into ~/lms_<round>/<tag>/ and prints
 # "COPIED <tag>: <state>, N of M run files". Carries on past anything missing.
 q_copy_run() {
-    local line="$1" id name tag run_dir log_dir dest got=0 f
+    local line="$1" id name tag wt run_dir log_dir dest got=0 f
     id="$(q_field "$line" job)"
     name="$(q_field "$line" name)"
     tag="$(q_field "$line" tag)"
-    run_dir="$WT/experiments/$tag"
+    wt="$(q_job_wt "$line")"
+    run_dir="$wt/experiments/$tag"
     log_dir="$SCRATCH/lms-runs/$tag"
     dest="$Q_OUT/$tag"
     mkdir -p "$dest/logs" "$dest/run"
-    for f in "$WT/logs/$name-$id.out" "$WT/logs/$name-$id.err"; do
+    for f in "$wt/logs/$name-$id.out" "$wt/logs/$name-$id.err"; do
         [[ -f "$f" ]] && q_scrub < "$f" > "$dest/logs/$(basename "$f")"
     done
     [[ -f "$log_dir/run.log" ]] && q_scrub < "$log_dir/run.log" > "$dest/logs/run.log"
