@@ -61,8 +61,8 @@ __all__ = [
     "measure_density",
 ]
 
-# An N0 claim at or above this confidence short-circuits the ladder; an N1
-# below it routes to D4 review instead of being counted as novel.
+# An N0 claim at or above this confidence short-circuits the ladder. An N1 at
+# or above it is reported as decisive, but no N1 counts as novel without D4.
 DECISIVE_CONFIDENCE = 0.8
 
 # Confidence granted to an "absent from Mathlib" (N1) verdict, by how many
@@ -132,7 +132,11 @@ class NoveltyResult:
 
     @property
     def needs_review(self) -> bool:
-        """True when this result must not be counted without D4 sign-off."""
+        """True when the search itself was not decisive: INCONCLUSIVE, or a weak N1.
+
+        Not what decides counting: during calibration no N1 counts without
+        D4, decisive or not (`lms.gates.novelty`, `lms.accounting`).
+        """
         if self.level is NoveltyLevel.INCONCLUSIVE:
             return True
         return self.level is NoveltyLevel.N1 and self.confidence < DECISIVE_CONFIDENCE
@@ -460,7 +464,8 @@ def measure_density(
         counts[result.level] += 1
         if result.level is NoveltyLevel.N1 and not result.needs_review:
             decisive_n1 += 1
-        if result.needs_review:
+        # Every N1 waits on D4, so a decisive one is queued too.
+        if result.needs_review or result.level is NoveltyLevel.N1:
             review_queue.append(stmt["id"])
         results.append({"id": stmt["id"], "name": stmt.get("name"), **result.to_dict()})
 

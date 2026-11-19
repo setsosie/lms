@@ -62,7 +62,7 @@ class NoveltyGateDecision:
     """What Gate 4 concluded about one artifact."""
 
     result: NoveltyResult
-    # True only for decisive N1: this artifact may count toward CVFN.
+    # Always False during calibration: only D4 makes a statement count.
     counts_as_novel: bool
     # True when the label cannot stand without D4 sign-off.
     needs_human_review: bool
@@ -103,10 +103,10 @@ def apply_novelty_gate(
         reason = (
             f"N0 — found in Mathlib: {'; '.join(result.evidence[:2]) or 'see evidence'}"
         )
-    elif needs_review:
-        reason = f"{result.level.value} at confidence {result.confidence:.2f} — routed to D4 review"
     else:
-        reason = f"{result.level.value} (confidence {result.confidence:.2f})"
+        # The classifier returns only N0, N1 and INCONCLUSIVE, and the last two
+        # both wait on D4.
+        reason = f"{result.level.value} at confidence {result.confidence:.2f} — routed to D4 review"
 
     return NoveltyGateDecision(
         result=result,
