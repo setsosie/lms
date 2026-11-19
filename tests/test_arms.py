@@ -287,3 +287,14 @@ def test_cli_prints_arms_and_pairs_and_writes_the_same_as_json(tmp_path, capsys)
     assert data["arms"][1]["distinct_statements"] == 2
     assert len(data["pairs"]) == 1 and "mcnemar_p" in data["pairs"][0]
     assert data["pairs"][0]["a_kind"] == "verified_novel"
+
+
+def test_an_unreviewed_n1_is_not_an_arm_outcome_until_d4_signs_it_off(tmp_path):
+    n1 = novel("003T", novelty_level="N1", novelty_confidence=0.9)
+    run = write_run(tmp_path / "run", [n1], tags=["003T"])
+    assert statement_outcomes(run) == {"tag:003T": False}
+    (run / "review_log.json").write_text(
+        json.dumps([{"statement_key": "tag:003T", "novelty_verdict": "N1"}])
+    )
+    assert statement_outcomes(run) == {"tag:003T": True}
+    assert arm_report("C9", [run]).distinct_statements == 1

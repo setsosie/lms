@@ -655,3 +655,42 @@ class TestLedgerPersistence:
         )
         assert resumed.ledger.total_tokens == society.ledger.total_tokens
         assert len(resumed.ledger) == len(society.ledger)
+
+
+def write_review_log(run_dir, entries):
+    """D4 verdicts for a run, as the review log records them."""
+    (run_dir / "review_log.json").write_text(json.dumps(entries))
+    return run_dir
+
+
+class TestD4VerdictsCount:
+    """An N1 counts once D4 signs it off in the run's review log, and only then."""
+
+    TAGGED_N1 = {**DECISIVE_N1, "stacks_tag": "003T"}
+
+    def test_a_reviewed_n1_counts(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [self.TAGGED_N1])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": "N1"}]
+        )
+        report = cvfn_report(run_dir)
+        assert report.denominator == 1
+        assert report.awaiting_review == 0
+
+    def test_d4_calling_it_n0_keeps_it_out(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [self.TAGGED_N1])
+        write_review_log(
+            run_dir, [{"statement_key": "tag:003T", "novelty_verdict": "N0"}]
+        )
+        report = cvfn_report(run_dir)
+        assert report.denominator == 0
+        # Reviewed, so no longer waiting on D4.
+        assert report.awaiting_review == 0
+
+    def test_review_minutes_alone_are_no_verdict(self, tmp_path):
+        run_dir = write_run(tmp_path / "run", [self.TAGGED_N1])
+        write_review_log(run_dir, [{"statement_key": "tag:003T", "minutes": 2.0}])
+        report = cvfn_report(run_dir)
+        assert report.denominator == 0
+        assert report.awaiting_review == 1
+        assert report.review_minutes == 2.0

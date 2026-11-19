@@ -1125,7 +1125,8 @@ class TestMeasureDensity:
         assert report["counts"] == {"N0": 1, "N1": 1, "INCONCLUSIVE": 0}
         assert report["n1_density"] == pytest.approx(0.5)
         assert report["n1_density_decisive"] == pytest.approx(0.5)
-        assert report["needs_review"] == []
+        # Decisive or not, no N1 counts without D4, so it is in the queue.
+        assert report["needs_review"] == ["s2"]
         assert report["mathlib_rev"] == "r1"
 
     def test_confidence_distribution_sums_to_total(self):
