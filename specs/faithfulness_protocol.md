@@ -159,7 +159,11 @@ failed exactly here. Protocol:
 
 **What counts during calibration (decided 2026-11-18).**
 - **The search ladder proposes an N1; it never makes one count.** On recorded hits, statements in the library read N1 at confidence 0.90 whenever the stages that could find a differently named statement came up empty.
-- **So no N1 counts toward CVFN without D4 sign-off**, however confident the search was. Gate 4 sends every N1 to D4. The CVFN report lists N1s as awaiting D4 review, and counts only D4 verdicts.
+- **So no N1 counts toward CVFN without D4 sign-off**, however confident the search was. Gate 4 sends every N1 to D4.
+- **D4 records its call in the run's `review_log.json`,** as an entry `{"statement_key": "tag:003T", "novelty_verdict": "N1"}`.
+  - A verdict of N1, N2 or N3 counts; N0 does not, whatever the search said.
+  - The CVFN report and the arm comparison both read it.
+  - A statement with no verdict yet is listed as awaiting D4 review.
 - **The confidence is still recorded and reported.** The densities, including the decisive line at 0.8, keep measuring what the search found.
 
 ### 6.2 Certification requirements by level

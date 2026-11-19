@@ -110,7 +110,10 @@ From the independent review at the final gate of `26Q4-HARN-09` (2026-11-06, at 
   - `apply_novelty_gate` never counts an N1 and sends every N1 to D4. `counts_as_novel` counts only N2/N3 D4 verdicts.
   - The classifier's confidences, the densities and the decisive line are unchanged. So the novelty control and the arc densities still measure what the search found, and D3's control bar keeps its meaning.
   - All 8 statements above still read N1 0.90 at Gate 4 and now count for nothing until D4.
-- **Consequence for Gate 4 (Decision Gates: "the choice working"):** it can no longer pass anything on its own.
-  - D4 sign-offs aren't recorded anywhere yet; the review log is `26Q3-HARN-06`'s.
-  - Until they are, the CVFN novel denominator reads 0 and "awaiting D4 review" is the number to read.
-  - Society only stamps the labels, so promotion and what a run keeps are unchanged.
+- **Consequence for Gate 4 (Decision Gates: "the choice working"):** it can no longer pass anything on its own. Society only stamps the labels, so promotion and what a run keeps are unchanged.
+- **The pre-merge review (2026-11-18) found that, as first built, a D4-reviewed N1 could never count.** On the user's choice, D4's verdict now comes from the run's `review_log.json`:
+  - The format is an entry `{"statement_key": …, "novelty_verdict": "N0"…"N3"}`. That is the file the CVFN report already read for review minutes, and the one `26Q3-HARN-06`'s review view writes.
+  - A verdict of N1–N3 counts and N0 does not.
+  - The CVFN report and the arm comparison both read it. A statement with a verdict is no longer counted as awaiting review.
+  - Until verdicts are written, the novel denominator, and every Phase C arm's distinct-statement count, read 0.
+  - `measure_density` now queues decisive N1s for D4 too; its decisive count is unchanged.
