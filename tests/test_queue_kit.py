@@ -42,7 +42,7 @@ def run(script: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.mark.parametrize(
-    "script", ["lms_q_lib.sh", "lms_q_job.sbatch", "lms_all_run.sh"]
+    "script", ["lms_q_lib.sh", "lms_q_job.sbatch", "lms_q_pack.sh", "lms_all_run.sh"]
 )
 def test_the_kit_parses(script: str) -> None:
     subprocess.run(["bash", "-n", str(KIT / script)], check=True)
@@ -62,5 +62,11 @@ def test_a_pin_check_finds_what_is_there_under_pipefail() -> None:
 
 def test_the_master_runner_tries_every_round_and_reports_each() -> None:
     result = run("test_all.sh")
+    assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-2000:]
+    assert "failed: 0" in result.stdout
+
+
+def test_a_pack_serves_three_runs_from_one_gpu_each_in_its_own_worktree() -> None:
+    result = run("test_pack.sh")
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-2000:]
     assert "failed: 0" in result.stdout

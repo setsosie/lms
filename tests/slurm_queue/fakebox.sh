@@ -6,7 +6,8 @@
 #   fb_new NAME            build a fresh fake server; sets D (its root), H (HOME), W (the worktree)
 #   fb_install FILE...     copy files into the fake ~/ (the kit is already there)
 #   fb_run SCRIPT ARGS...  run ~/SCRIPT as the user would; output in $D/out, exit code in $D/rc
-#   fb_run_job ID          run a queued job as Slurm would (its script, directory and environment);
+#   fb_run_job ID          run a queued job as Slurm would (its script, directory, environment and
+#                          SLURM_JOB_ID/SLURM_JOB_NAME);
 #                          sets J to its output file (where --output pointed), exit code in $D/job.<id>.rc
 #   fb_finish ID [STATE]   take a job out of the queue (default COMPLETED)
 #   ok / bad / has FILE TEXT / hasnt FILE TEXT / count_is FILE TEXT N / rc_is N
@@ -133,6 +134,7 @@ STUB
     printf '#!/bin/bash\n' > "$D/bin/nvidia-smi"
     chmod +x "$D/bin/"* "$D/scratch/vllm-env/bin/"*
     cp "$FB_KIT/lms_q_lib.sh" "$FB_KIT/lms_q_job.sbatch" "$H/"
+    if [[ -f "$FB_KIT/lms_q_pack.sh" ]]; then cp "$FB_KIT/lms_q_pack.sh" "$H/"; fi
 }
 
 fb_install() { cp "$@" "$H/"; }
@@ -173,7 +175,7 @@ fb_run_job() {
         # shellcheck disable=SC1090
         source "$D/slurm/env.$id"
         cd "$dir" || exit 97
-        SLURM_JOB_ID="$id" bash "$script"
+        SLURM_JOB_ID="$id" SLURM_JOB_NAME="$(cat "$D/slurm/name.$id")" bash "$script"
     ) > "$J" 2> "${J%.out}.err"
     echo $? > "$D/job.$id.rc"
 }

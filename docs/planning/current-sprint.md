@@ -89,6 +89,7 @@ near the measured committed-scope rate, not the mean.
 | 26Q4-HARN-31: The foundation keeps the `open` and `variable` lines its entries verified under | 2 | HIGH | HARN | 🔄 IN REVIEW | #107 | From batch q3: track B kept 0 of 25. Stacked on #105 |
 | 26Q4-HARN-32: A verified artifact is read against its statement, part by part | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Attempted after the committed scope; carries to Sprint 6 if not landed |
 | 26Q4-HARN-33: A statement covered in part stays open, and the next group extends it | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Needs `-32` and `-24`. Attempted after the committed scope; carries to Sprint 6 if not landed |
+| 26Q4-CHORE-07: Three runs share one GPU, each in its own worktree | 2 | HIGH | CHORE | 🔄 IN REVIEW | — | From batches q3/q4: a run used ≤10% of its GPU. Batch q5 runs on it |
 
 Found work is not committed scope. `-32` and `-33` come from the user's D4
 call on batch q4's 003T artifact (partial credit: the opening and condition
@@ -104,6 +105,7 @@ in the foundation as a step, rather than close its statement or be lost.
 | arms2 | Phase C arms rehearsal: C9, I9 ×9, S1, R9 with per-run seeds | 4 | ✅ READ | The runs are distinct (`26Q4-HARN-22` works) and only one `Category` class is left (`-23` works). The arms sit at the floor: C9 1, R9 1, the rest 0 |
 | D2 | §7 density run | 1 | 🔲 PENDING | See the decision table |
 | q3 | Batch q3: 7 runs in lanes, at pin `38da6dde` | — | ✅ READ | 2026-11-17, write-up #108. Track B kept 0 of 25 (promotion dropped the preamble), fixed by `26Q4-HARN-31` |
+| q5 | Batch q5: §7 density (D2); track B in five arms, 48 runs three to a GPU (carried and reset at 16 seeds, 6 agents at 8, thinking 2K and 4K at 4 each); thr4 (MTP), at pin `68345cb6` | 1, — | 🔲 READY | Verdicts fixed before the run: ratchet (carried vs reset), population (6 vs 3 agents), and batch q4's kept/built-on read for the carried runs |
 | q4 | Batch q4: the keep test, 4 × track B, 10 generations, at pin `a0c98b77` | — | ✅ READ | 2026-11-18, write-up not yet opened. The foundation keeps work (checks pass; 27/27 q3 artifacts build on real Mathlib). The pre-committed read is KEPT AND BUILT ON, on one artifact that D4 gave partial credit. That led to `26Q4-HARN-32`/`-33` |
 
 ## Definition of Done
