@@ -44,6 +44,10 @@ Two things forced that:
    NVLink bridge hangs vLLM's start (batch q2: 4 of 4 such jobs hung; a single
    GPU uses no NCCL at all).
 
+A *pack* job (see *Packs*) is still one job on one GPU in one lane. It serves
+up to three runs from one vLLM server, each in its own worktree, so rule 1's
+"one job per lane" still means one Lean tree per run.
+
 A job that uses neither the worktree nor the Lean tree (a serving benchmark,
 say) is submitted with `q_submit_free`. It is named `lmsfree-…`, waits for
 nothing, and nothing waits for it.
@@ -54,10 +58,11 @@ nothing, and nothing waits for it.
 |---|---|---|
 | `scripts/slurm/queue/lms_q_lib.sh` | sourced by every `go` and `collect` | pin check, chaining, the jobs file, collecting a run |
 | `scripts/slurm/queue/lms_q_job.sbatch` | the job itself | lock, restore, checkout, run |
+| `scripts/slurm/queue/lms_q_pack.sh` | a pack job, run by `lms_q_job.sbatch` | one server, up to three runs, each in its slot |
 | `scripts/slurm/queue/lms_all_run.sh` | once, on the server | runs every round's `go`, or every round's `collect`, from a plan file |
 | `tests/slurm_queue/fakebox.sh` | locally | a fake server for testing a round: fake `HOME`, origin, worktree, Slurm stubs with a queue |
 
-The first three are copied to the server's `~/` with each batch of rounds. They
+The four scripts are copied to the server's `~/` with each batch of rounds. They
 are not read from the server's checkout, because the job that needs them runs
 before any checkout.
 
@@ -137,6 +142,60 @@ with lock `~/lms_q-l<k>.lock`.
   other lanes are reading; the job stops instead.
 - `q_tag_free` refuses a tag that holds a run in any lane.
 
+## Packs
+
+A run uses little of a GPU: in batches q3 and q4 each track-B run peaked at 3
+requests and at most ~10% of one H100's KV cache, and a one-GPU server gave
+55 output tokens/s per request at 9 requests against 58 at 3. A pack puts up
+to three runs on one GPU and one server, so one GPU-hour buys about three runs
+instead of one, at about 5% of each run's speed.
+
+- **Slots.** `q_slots LANES SLOTS` makes slots 2..SLOTS (at most 3) in lanes
+  1..LANES where missing. Slot 1 is the lane's worktree; slot *j* is the
+  lane's worktree with `-s<j>` after it (`~/code/lms-box-s2`,
+  `~/code/lms-box-l3-s3`). A slot is made as a lane is: a detached worktree,
+  its `lean/.lake` its own directory under `$SCRATCH/lms-lanes/l<k>s<j>`
+  holding a link to lane 1's packages, and its own `.venv`. Running it again
+  changes nothing. `q_tag_free` checks every slot.
+- **The pack file.** One line per run, tab-separated:
+  `SLOT TAG [VAR=VALUE]...`. The pairs are that run's own knobs (seed,
+  agents, budget, `RESUME=1`) and override the job's. The server's settings
+  (`PORT`, `MODEL_REPO`, `MAX_MODEL_LEN`, `LMS_EXTRA_VLLM_ARGS`, ...) come
+  from the job's variables only; a pack line that sets one is refused. The
+  file must stay where it is until the job has run (a round keeps them in
+  `~/lms_<round>.packs/`).
+- **`q_submit_pack NAME PACKFILE [sbatch options] -- [VAR=VALUE]...`** queues
+  one job in the current lane, as `q_submit` does: behind the lane's last LMS
+  job, at the pin, named `lms-<round>-<NAME>`, with `RUN_TAG=<round>_<NAME>`
+  naming the pack's own log folder. Pass `"${Q_GPU_PACK[@]}"` (1 GPU, 160 GB,
+  24 CPUs). It runs `~/lms_q_pack.sh`, or `LMS_Q_RUN` if the variables set it:
+  a round's gate script, which must end by `exec`ing `~/lms_q_pack.sh`. The
+  jobs file gets one line per run, all with the pack's job id and each with
+  its `slot=`.
+- **The job.** `lms_q_job.sbatch` takes the lane's lock (it covers the lane's
+  slots) and readies slot 1 as for any job. `lms_q_pack.sh` then readies slots
+  2 and 3 the same way (foundation put back, pin checked out, Lake asked
+  whether the shared library is up to date), makes `lms_run.sbatch`'s checks
+  for each run, starts one server with `lms_run.sbatch`'s command and
+  settings, and starts every run at once. Each run does what
+  `lms_run.sbatch`'s *Run* section does, with its log at
+  `<slot>/logs/<job name>-<job id>.<tag>.out` and its `vllm.log` naming the
+  pack's server log. It ends with one `PACK <tag>: slot <j>, exit <n>` line
+  per run. A run whose slot or settings fail is left out with a `FATAL` line
+  and the others still run; if none can run, the model is never loaded. TERM
+  (cancel, walltime) stops every run and the server together.
+- **Collect.** `q_job_wt`, `q_job_log` and `q_copy_run` read a run of a pack
+  from its slot; `q_pack_log` is the pack job's own log, in the lane's
+  worktree. `q_copy_run` copies the run's log as `logs/<name>-<id>.out` (as a
+  job of its own would be) and the pack's as `logs/pack-<name>-<id>.log`.
+- **Resume.** A run's checkpoint is in its slot, so a run continues in the
+  same lane and slot: a resume pack holds at most one run per slot.
+- **The pack copies `lms_run.sbatch`.** It cannot run that script, which
+  starts its own server, so it has its own copy of the script's run steps.
+  `tests/slurm_queue/test_pack.sh` runs both on the fake server and requires
+  the same `lms.run` call, directory and environment, run for run; a round
+  should also `q_pin_has` the lines the copy was made from.
+
 ## Queueing several rounds
 
 `~/lms_all_plan.txt` has one command per line as `round<TAB>phase<TAB>command`,
@@ -177,6 +236,9 @@ printed say what each round did.
 
 ## Limits
 
+- Packs are new as of batch q5 and were tested only on the fake server. Three
+  runs at once is what q3's speed curve supports; more per GPU has not been
+  measured. A pack's walltime must cover its slowest run.
 - Lanes are new as of batch q3 and were tested only on the fake server. The
   first use of each lane should be a short run. Whether four jobs fit at once
   depends on the node's memory (96 GB each); a job held back for memory shows
