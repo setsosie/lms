@@ -89,7 +89,7 @@ near the measured committed-scope rate, not the mean.
 | 26Q4-HARN-31: The foundation keeps the `open` and `variable` lines its entries verified under | 2 | HIGH | HARN | 🔄 IN REVIEW | #107 | From batch q3: track B kept 0 of 25. Stacked on #105 |
 | 26Q4-HARN-32: A verified artifact is read against its statement, part by part | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Attempted after the committed scope; carries to Sprint 6 if not landed |
 | 26Q4-HARN-33: A statement covered in part stays open, and the next group extends it | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Needs `-32` and `-24`. Attempted after the committed scope; carries to Sprint 6 if not landed |
-| 26Q4-CHORE-07: Three runs share one GPU, each in its own worktree | 2 | HIGH | CHORE | 🔄 IN REVIEW | — | From batches q3/q4: a run used ≤10% of its GPU. Batch q5 runs on it |
+| 26Q4-CHORE-07: Three runs share one GPU, each in its own worktree | 2 | HIGH | CHORE | 🔄 IN REVIEW | #112 | From batches q3/q4: a run used ≤10% of its GPU. Batch q5 runs on it |
 
 Found work is not committed scope. `-32` and `-33` come from the user's D4
 call on batch q4's 003T artifact (partial credit: the opening and condition
