@@ -8,7 +8,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔲 PENDING: option (a) chosen 2026-11-18 |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-13-decisive-n1-meaning-gate-4` |
 | **Dependencies** | 26Q4-HARN-09 |
 | **Gate** | full |
