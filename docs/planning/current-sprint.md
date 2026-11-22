@@ -44,7 +44,8 @@ near the measured committed-scope rate, not the mean.
 | Metric | Value |
 |--------|-------|
 | Committed points | 11 |
-| Server runs | batch q2 (4 rounds) + §7 density, unpointed |
+| Delivered | 4 of 11 committed (HARN-13, -24); found work 8 more (CHORE-06, HARN-29, -30, -31) |
+| Server runs | batches q2, q3, q4 read; q5 (§7 density + 48 runs) ready, unpointed |
 | Human read | D4 queue, 37 + 10 statements, unpointed |
 | Stretch | 0 |
 | Window | 2026-11-16 → 2026-11-27 |
@@ -64,10 +65,10 @@ near the measured committed-scope rate, not the mean.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (a) chosen 2026-11-18:** during calibration no N1 counts without D4 review. Built in #111: Gate 4 now passes nothing on its own (the card's "choice working"). D4 verdicts, written per run in `review_log.json`, are what count, so CVFN and every Phase C arm read 0 until they exist |
+| 26Q4-HARN-13: Decide what a decisive N1 means at Gate 4 | 2 | HIGH | HARN | ✅ DONE | #111 | Before the freeze. **Option (a) chosen 2026-11-18:** during calibration no N1 counts without D4 review. Built in #111: Gate 4 now passes nothing on its own (the card's "choice working"). D4 verdicts, written per run in `review_log.json`, are what count, so CVFN and every Phase C arm read 0 until they exist |
 | 26Q4-HARN-15: Name search can't read N0 without checking the statement | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Option (c) chosen 2026-11-18:** a name or Loogle hit reads INCONCLUSIVE now; N0 on Lean confirmation is a later card. All 10 control N0s came from name search, so D3's bar likely becomes "decisive N1 = 0". The card's Notes record a neighbouring `.{u}` label-token leak from #82's review |
 | 26Q4-HARN-19: The merged foundation means what each artifact verified alone | 3 | HIGH | HARN | 🔲 PENDING | — | Before the freeze. **Section approach chosen 2026-11-18:** each artifact's own `section` carries its universe context, extending `26Q4-HARN-31`'s (#107). Starts after #105 and #107 merge |
-| 26Q4-HARN-24: A tag closes only on an artifact that is that tag's statement | 2 | HIGH | HARN | 🔲 PENDING | — | From r6 (batch q1). Rule A (name match) chosen 2026-11-13; spec in the card |
+| 26Q4-HARN-24: A tag closes only on an artifact that is that tag's statement | 2 | HIGH | HARN | ✅ DONE | #110 | From r6 (batch q1). Rule A (name match) chosen 2026-11-13; spec in the card. A renamed `Category` still passes rule A on 20 of track B's 40 tags; the coverage read (`-32`/`-33`) is what catches it |
 | 26Q3-HARN-25: Proof sketches become open leaves | 5 | MEDIUM | HARN | ⏭ Sprint 6 | — | Not committed here. Phase C preparation |
 | 26Q3-HARN-28: Theorem cards and statement pinning | 5 | MEDIUM | HARN | ⏭ Sprint 6 | — | Not committed here. Holds the ANT arc → goal converter; no ANT goal exists without it |
 
@@ -83,10 +84,10 @@ near the measured committed-scope rate, not the mean.
 
 | Task | Points | Priority | Epic | Status | PR / Branch | Notes |
 |------|--------|----------|------|--------|-------------|-------|
-| 26Q4-CHORE-06: LMS jobs run on one GPU each, in up to four lanes | 2 | HIGH | CHORE | 🔄 IN REVIEW | #104 | Batch q3 and q4 ran on it (pins `38da6dde`, `a0c98b77`) |
-| 26Q4-HARN-29: The foundation keeps the imports its entries verified with | 2 | HIGH | HARN | 🔄 IN REVIEW | #105 | From batch q2: 13 of 15 verified artifacts rolled back |
-| 26Q4-HARN-30: Thinking is recorded, and its budget is a setting | 2 | HIGH | HARN | 🔄 IN REVIEW | #106 | From batch q2: thinking was ~80% of output, unbounded |
-| 26Q4-HARN-31: The foundation keeps the `open` and `variable` lines its entries verified under | 2 | HIGH | HARN | 🔄 IN REVIEW | #107 | From batch q3: track B kept 0 of 25. Stacked on #105 |
+| 26Q4-CHORE-06: LMS jobs run on one GPU each, in up to four lanes | 2 | HIGH | CHORE | ✅ DONE | #104 | Batch q3 and q4 ran on it (pins `38da6dde`, `a0c98b77`) |
+| 26Q4-HARN-29: The foundation keeps the imports its entries verified with | 2 | HIGH | HARN | ✅ DONE | #105 | From batch q2: 13 of 15 verified artifacts rolled back |
+| 26Q4-HARN-30: Thinking is recorded, and its budget is a setting | 2 | HIGH | HARN | ✅ DONE | #106 | From batch q2: thinking was ~80% of output, unbounded |
+| 26Q4-HARN-31: The foundation keeps the `open` and `variable` lines its entries verified under | 2 | HIGH | HARN | ✅ DONE | #107 | From batch q3: track B kept 0 of 25. Stacked on #105 |
 | 26Q4-HARN-32: A verified artifact is read against its statement, part by part | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Attempted after the committed scope; carries to Sprint 6 if not landed |
 | 26Q4-HARN-33: A statement covered in part stays open, and the next group extends it | 3 | HIGH | HARN | 🔲 PENDING | — | From batch q4. Needs `-32` and `-24`. Attempted after the committed scope; carries to Sprint 6 if not landed |
 | 26Q4-CHORE-07: Three runs share one GPU, each in its own worktree | 2 | HIGH | CHORE | 🔄 IN REVIEW | #112 | From batches q3/q4: a run used ≤10% of its GPU. Batch q5 runs on it |
@@ -103,10 +104,10 @@ in the foundation as a step, rather than close its statement or be lost.
 | q2 | Batch q2: r7b, arms2, thr2, hang, at pin `05aebc22` on `batch/q2-pins` | 4 | ✅ READ | 2026-11-16, write-up #103. Promotion dropped artifact imports (13 of 15 verified rolled back), fixed by `26Q4-HARN-29` |
 | R7 | Three groups on three tags (`stacks-kernel-track-b`), as q2's r7b | 4 | ✅ PASS | r7b's check passes: the chair listed three different tags and the groups worked them. q4's four runs pass it too |
 | arms2 | Phase C arms rehearsal: C9, I9 ×9, S1, R9 with per-run seeds | 4 | ✅ READ | The runs are distinct (`26Q4-HARN-22` works) and only one `Category` class is left (`-23` works). The arms sit at the floor: C9 1, R9 1, the rest 0 |
-| D2 | §7 density run | 1 | 🔲 PENDING | See the decision table |
+| D2 | §7 density run | 1 | 🔲 PENDING | See the decision table. Runs as round n1d in batch q5 |
 | q3 | Batch q3: 7 runs in lanes, at pin `38da6dde` | — | ✅ READ | 2026-11-17, write-up #108. Track B kept 0 of 25 (promotion dropped the preamble), fixed by `26Q4-HARN-31` |
 | q5 | Batch q5: §7 density (D2); track B in five arms, 48 runs three to a GPU (carried and reset at 16 seeds, 6 agents at 8, thinking 2K and 4K at 4 each); thr4 (MTP), at pin `68345cb6` | 1, — | 🔲 READY | Verdicts fixed before the run: ratchet (carried vs reset), population (6 vs 3 agents), and batch q4's kept/built-on read for the carried runs |
-| q4 | Batch q4: the keep test, 4 × track B, 10 generations, at pin `a0c98b77` | — | ✅ READ | 2026-11-18, write-up not yet opened. The foundation keeps work (checks pass; 27/27 q3 artifacts build on real Mathlib). The pre-committed read is KEPT AND BUILT ON, on one artifact that D4 gave partial credit. That led to `26Q4-HARN-32`/`-33` |
+| q4 | Batch q4: the keep test, 4 × track B, 10 generations, at pin `a0c98b77` | — | ✅ READ | 2026-11-18, write-up #113. The foundation keeps work (checks pass; 27/27 q3 artifacts build on real Mathlib). The pre-committed read is KEPT AND BUILT ON, on one artifact that D4 gave partial credit. That led to `26Q4-HARN-32`/`-33` |
 
 ## Definition of Done
 
@@ -155,6 +156,11 @@ the planning tooling). Cards for this sprint live under
 
 ## Sync Log
 
+- **2026-11-22** — 6 tasks reconciled from merged PRs: `26Q4-HARN-13` (#111) and `-24` (#110)
+  ✅, committed 0 → 4 of 11 pts; found work `26Q4-CHORE-06`, `HARN-29`, `-30`, `-31`
+  (#104–#107) ✅, 8 pts. `26Q4-CHORE-07` in review (#112). Batch q4's write-up is #113; batch
+  q5 (§7 density, 48 track-B runs three to a GPU, MTP retry) is ready at main `68345cb6`.
+
 - **2026-11-18** — Batch q2, q3 and q4 read. Their fixes are found-work,
   in review as #104–#107. The user chose rules for `26Q4-HARN-13` (a), `-15`
   (c) and `-19` (section). From q4's D4 call came `26Q4-HARN-32`/`-33`, found
@@ -169,4 +175,4 @@ the planning tooling). Cards for this sprint live under
 
 ---
 
-*Last Updated: 2026-11-18*
+*Last Updated: 2026-11-22*

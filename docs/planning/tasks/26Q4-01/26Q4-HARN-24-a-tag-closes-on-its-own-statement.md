@@ -6,7 +6,7 @@
 |-------|-------|
 | **Story Points** | 2 |
 | **Priority** | HIGH |
-| **Status** | 🔄 IN REVIEW: rule A, built 2026-11-18 |
+| **Status** | ✅ DONE |
 | **Branch** | `26Q4-HARN-24-a-tag-closes-on-its-own-statement` |
 | **Dependencies** | None for rule A. A later move to option C needs `26Q3-HARN-28` (theorem cards and statement pinning) |
 | **Gate** | full |
@@ -84,3 +84,4 @@ Known limits, to work up over time: abbreviations shorter than 3 letters (`op` f
 - Results: `docs/results/2026-11-13-batch-q1.md`, section r6.
 - Built 2026-11-18. The rule was replayed on all 31 artifacts batches q3 and q4 verified, each against its own tag: all 31 match, so rule A refuses none of the closures those runs made. All 146 tag names in the 7 goals keep at least one word after the drops, so no tag is unclosable.
 - A tag with no known name (neither in the goal nor in the task graph) closes as before.
+- Track B (2026-11-22): a renamed copy of `Category` (`CategoryDef`, `MyCategory`, `Category'`) passes rule A on 20 of the goal's 40 tags, every tag whose name keeps "category" after the drops. Rule A stops the r6 cases, not this one. The coverage read and PARTIAL status (`26Q4-HARN-32`/`-33`) are where it gets caught: they compare the artifact with the statement, not the name.
